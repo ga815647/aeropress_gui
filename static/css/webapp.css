@@ -776,7 +776,13 @@ body.timer-open {
   }
 
   .controls .field[data-help-key="brewer"],
-  .controls .field[data-help-key="roast"] {
+  .controls .field[data-help-key="roast"],
+  .controls .field[data-help-key="gh"],
+  .controls .field[data-help-key="kh"],
+  .controls .field[data-help-key="mg_frac"],
+  .controls .field[data-help-key="top"],
+  .controls .field[data-help-key="t_env"],
+  .controls .field[data-help-key="tds_floor"] {
     grid-column: auto;
   }
 
