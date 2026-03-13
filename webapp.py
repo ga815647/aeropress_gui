@@ -82,7 +82,7 @@ def create_app() -> Flask:
             mg_frac=payload.get("mg_frac"),
             preset=payload.get("preset"),
         )
-        roast_code = payload.get("roast", "M")
+        roast_code = str(payload.get("roast", "M"))
         results = optimize(
             roast_code=roast_code,
             brewer_size=payload.get("brewer", "xl"),
@@ -123,4 +123,4 @@ def build_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     args = build_parser().parse_args()
-    app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=False)
+    app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=True)

@@ -108,6 +108,16 @@
   };
 
   function showHelp(key) {
+    if (key === "preset") {
+      const selected = presetSelect.value;
+      const preset = presets[selected];
+      if (selected && preset) {
+        tooltipTitle.textContent = "水質預設";
+        tooltipBody.textContent = preset.note || "自動填入 GH、KH 與 Mg 比例。";
+        tooltipMeta.textContent = "已套用預設。若想微調，可手動修改下方數值。";
+        return;
+      }
+    }
     const entry = fieldHelp[key];
     if (!entry) return;
     tooltipTitle.textContent = entry.title;
@@ -278,18 +288,21 @@
     
     const elapsedSec = timer.elapsedMs / 1000;
     let currentMilestone = timer.milestones[0];
-    let nextMilestoneIdx = 1;
+    let nextMilestone = null;
 
     for (let i = timer.milestones.length - 1; i >= 0; i--) {
       if (elapsedSec >= timer.milestones[i].time) {
         currentMilestone = timer.milestones[i];
-        nextMilestoneIdx = Math.min(i + 1, timer.milestones.length - 1);
+        nextMilestone = timer.milestones[i + 1] || null;
         break;
       }
     }
 
     if (elapsedSec >= timer.totalTimeSec) {
       actionText.textContent = "萃取完成！請享用咖啡。";
+    } else if (nextMilestone && nextMilestone.time > elapsedSec) {
+      const timeLeft = Math.ceil(nextMilestone.time - elapsedSec);
+      actionText.textContent = `${currentMilestone.action} (剩餘 ${timeLeft} 秒)`;
     } else {
       actionText.textContent = currentMilestone.action;
     }
