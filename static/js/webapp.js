@@ -455,24 +455,23 @@
     const cards = results.map((r, index) => {
       const isSelected = index === currentDetailIndex;
       const borderStyle = isSelected ? "border: 2px solid #bb5f2a;" : "border: 1px solid #e4d7cb;";
-      const btnHtml = isSelected 
-        ? `<button class="btn btn-sm w-100 mt-2" type="button" disabled style="width: 100%; margin-top: 0.5rem; background-color: #f1ece6; border: 1px solid #e4d7cb; border-radius: 4px; padding: 6px; color: #6d6358; cursor: default;">📍 目前顯示</button>`
-        : `<button class="btn btn-sm btn-outline-primary w-100 mt-2" type="button" data-select-recipe="${index}" style="width: 100%; margin-top: 0.5rem;">👉 選擇此配方</button>`;
+      const cursorStyle = isSelected ? "cursor: default;" : "cursor: pointer;";
+      const currentIndicator = isSelected ? `<span style="font-size: 0.8em; color: #bb5f2a; font-weight: bold; background: #fdf3ed; padding: 2px 6px; border-radius: 4px; border: 1px solid #bb5f2a;">📍 目前顯示</span>` : ``;
 
       return `
-      <div class="recipe-card" style="min-width: 280px; scroll-snap-align: start; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; ${borderStyle} transition: border-color 0.2s;">
+      <div class="recipe-card" data-select-recipe="${index}" style="min-width: 280px; scroll-snap-align: start; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; ${borderStyle} ${cursorStyle} transition: border-color 0.2s, background-color 0.2s;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
           <div>
             <div class="muted" style="font-size: 0.85em; font-weight: bold;">Rank ${index + 1}</div>
             <h3 style="margin: 0; font-size: 1.1em; color: #4e6b5b;">Score ${r.score.toFixed(1)}</h3>
           </div>
+          ${currentIndicator}
         </div>
-        <div style="font-size: 0.9em; margin-bottom: 0.5rem; color: #6d6358; line-height: 1.4;">
+        <div style="font-size: 0.9em; color: #6d6358; line-height: 1.4;">
           <strong>Temp ${r.temp}C / Dial ${r.dial} / Dose ${r.dose}g</strong><br>
           Contact: ${formatTime(r.total_contact_sec)}<br>
           TDS ${r.tds.toFixed(2)}% | EY ${r.ey.toFixed(1)}%
         </div>
-        ${btnHtml}
       </div>
       `;
     }).join("");
@@ -655,9 +654,15 @@
         if (activeTimers[currentDetailIndex] && activeTimers[currentDetailIndex].isRunning) {
           activeTimers[currentDetailIndex].isRunning = false;
         }
+        // save scroll position before re-render
+        const scrollContainer = resultsNode.querySelector(".scroll-container");
+        const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
         currentDetailIndex = newIndex;
         if (latestPayload?.results?.length) {
           renderResultContent(latestPayload.results, latestPayload.meta);
+          // restore scroll position after re-render
+          const newScrollContainer = resultsNode.querySelector(".scroll-container");
+          if (newScrollContainer) newScrollContainer.scrollLeft = savedScrollLeft;
           setTimeout(() => {
             const detailView = document.getElementById("detail-view");
             if (detailView) {
