@@ -173,7 +173,7 @@
         key: "steep",
         label: "浸泡",
         durationMs: clampTimerMs(result.steep_sec * 1000),
-        action: "注水後蓋上上蓋，先不要下壓，讓咖啡粉持續浸泡萃取。",
+        action: "注完水還沒蓋蓋子（此時按下碼表），等待一段時間後塞入活塞建立負壓，讓咖啡粉持續浸泡。",
       },
       {
         key: "swirl",
@@ -591,6 +591,9 @@
     `;
 
     const swirlRows = [
+      row(compareLabelCell("碼表按下時機", "Timer Start"), (result) => compareValueCell(result, result ? "還沒蓋蓋子 (注完水)" : "-")),
+      row(compareLabelCell("SWIRL 開始時間", "Swirl Start"), (result) => compareValueCell(result, result ? formatTime(result.steep_sec) : "-")),
+      row(compareLabelCell("WAIT 開始時間", "Wait Start"), (result) => compareValueCell(result, result ? formatTime(result.steep_sec + result.swirl_sec) : "-")),
       row(compareLabelCell("Swirl", "操作時間"), (result) => compareValueCell(result, result ? `${result.swirl_sec}s` : "-")),
       row(compareLabelCell("Swirl Wait", "靜置沉降"), (result) => compareValueCell(result, result ? `${result.swirl_wait_sec}s` : "-")),
       row(compareLabelCell("Swirl Phase", "Swirl + Wait"), (result) => compareValueCell(result, result ? `${result.swirl_sec + result.swirl_wait_sec}s` : "-")),
@@ -653,7 +656,67 @@
   }
 
   function renderDetailCards(results) {
-    return results.map((result, index) => `
+    return results.map((result, index) => {
+      let currentSec = 0;
+      const v_drip = result.v_drip || result.pre_seal_drip_ml || 0;
+      
+      const timelineHtml = `
+        <div class="timeline-wrap" style="margin-top: 1.5rem; border-top: 1px solid #e4d7cb; padding-top: 1rem;">
+          <h4 style="margin: 0 0 0.75rem 0; font-size: 1.05rem; color: #4e6b5b;">實戰沖煮指南 (Timeline)</h4>
+          <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse;">
+            <tbody>
+              <tr style="border-bottom: 1px solid #f1ece6;">
+                <td style="padding: 0.5rem 0.25rem; font-weight: bold; width: 60px; vertical-align: top;">${formatTime(currentSec)}</td>
+                <td style="padding: 0.5rem 0.25rem;">
+                  <strong>注水與封閉</strong><br>
+                  <span style="color: #6d6358;">注水至 ${result.water_ml} ml (水溫 ${result.temp}°C)，隨後塞入活塞建立負壓 (預估初期漏水約 ${v_drip.toFixed(1)} ml)。</span>
+                </td>
+              </tr>
+              ${(() => {
+                currentSec = result.steep_sec;
+                return `
+              <tr style="border-bottom: 1px solid #f1ece6;">
+                <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
+                <td style="padding: 0.5rem 0.25rem;">
+                  <strong>旋轉與靜置</strong><br>
+                  <span style="color: #6d6358;">帶著活塞輕柔搖晃杯身 5 秒，隨後放著靜置 ${result.swirl_wait_sec} 秒以建立粉床。</span>
+                </td>
+              </tr>
+                `;
+              })()}
+              ${(() => {
+                currentSec += (5 + result.swirl_wait_sec);
+                const pressWarning = (result.press_sec_internal && result.press_sec_internal > 60) || result.press_sec > 60 
+                  ? ' <span class="badge bg-danger" style="background-color: #bb5f2a; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 4px;">阻力崩潰折算</span>' 
+                  : '';
+                return `
+              <tr style="border-bottom: 1px solid #f1ece6;">
+                <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
+                <td style="padding: 0.5rem 0.25rem;">
+                  <strong>開始下壓</strong><br>
+                  <span style="color: #6d6358;">穩定下壓，預計耗時 ${result.press_sec} 秒。${pressWarning}</span>
+                </td>
+              </tr>
+                `;
+              })()}
+              ${(() => {
+                currentSec += result.press_sec;
+                return `
+              <tr>
+                <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
+                <td style="padding: 0.5rem 0.25rem;">
+                  <strong>萃取完成</strong><br>
+                  <span style="color: #6d6358;">總接觸時間完成！享受咖啡。</span>
+                </td>
+              </tr>
+                `;
+              })()}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      return `
       <article class="result-card">
         <div class="result-head">
           <div>
@@ -661,6 +724,11 @@
             <h2 style="margin:4px 0 0">Temp ${result.temp}C / Dial ${result.dial} / Dose ${result.dose}g</h2>
           </div>
           <div class="score">${result.score.toFixed(1)}</div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><strong>碼表按下</strong><div style="font-size: 0.85em; margin-top: 4px;">還沒蓋蓋子</div></div>
+          <div class="metric"><strong>SWIRL 開始</strong><div>${formatTime(result.steep_sec)}</div></div>
+          <div class="metric"><strong>WAIT 開始</strong><div>${formatTime(result.steep_sec + result.swirl_sec)}</div></div>
         </div>
         <div class="metrics">
           <div class="metric"><strong>Steep</strong><div>${formatTime(result.steep_sec)}</div></div>
@@ -683,8 +751,10 @@
         <div class="compound-grid">
           ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
         </div>
+        ${timelineHtml}
       </article>
-    `).join("");
+      `;
+    }).join("");
   }
 
   function syncViewModeUI() {
