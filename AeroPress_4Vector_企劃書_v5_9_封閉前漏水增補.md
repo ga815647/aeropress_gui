@@ -31,7 +31,7 @@
 建立：
 
 ```text
-V_drip = min(k_drip * t_drip * (DIAL_BASE / dial)^eta, water_ml * r_max)
+V_drip = min(k_drip * t_drip * (dial / DIAL_BASE)^eta, water_ml * r_max)
 ```
 
 其中：
@@ -40,10 +40,10 @@ V_drip = min(k_drip * t_drip * (DIAL_BASE / dial)^eta, water_ml * r_max)
 - `eta = PRE_SEAL_DRIP_DIAL_EXP`
 - `r_max = PRE_SEAL_DRIP_MAX_RATIO`
 
-物理解讀：
+物理解讀（達西定律）：
 
 - 與總漏水時間成正比：時間越長，漏水越多。
-- 與研磨度成反比：越細，床層阻力越高以外的毛細滲漏/靜水壓路徑更長期存在；在本模型中以 `1 / dial` 型近似處理。
+- 與研磨度成正比：粒徑越大（粗研磨、dial 越大）粉床阻力越低，相同靜水壓下流速越高，漏水量越多；`dial = DIAL_BASE` 時修正項為 1。
 - 加上上限 `r_max`，避免在極細研磨或極長延遲下出現不合理的漏水量。
 
 ### 3.3 封閉段自由溶劑修正
@@ -64,19 +64,13 @@ free_water_main = water_ml - V_drip - dose * retention
 
 ### 3.4 封閉段主流萃取
 
-封閉段仍沿用原本的雙粒徑解析式：
+封閉段沿用雙粒徑解析式，以 `free_water_main` 輸入：
 
 ```text
 EY_main = EY_closed_form(free_water_main, t_kinetic)
 ```
 
-但再乘上一個主流損失項：
-
-```text
-EY_main' = EY_main * (1 - lambda_main * V_drip / water_ml)
-```
-
-原因是：先流失的那一小段液體，帶走了部分最早形成的可溶物與熱量，不應完全視為仍留在封閉段液相中。
+批次平衡 `brew_capacity = free_water_main / (free_water_main + dose×K_d)` 已完整建模 V_drip 造成的溶劑減少；不再額外乘 `(1 - λ×V_drip/water_ml)`，否則構成雙重計算。
 
 ### 3.5 漏水支流的低 TDS 滴濾效應
 
@@ -98,7 +92,7 @@ EY_drip = epsilon_psd * EY_drip_raw
 因此總萃取率為：
 
 ```text
-EY_total = GH_adjust(EY_main' + EY_drip)
+EY_total = GH_adjust(EY_main + EY_drip)
 ```
 
 這裡保留了使用者要求的三個核心現象：
@@ -187,9 +181,10 @@ predict_compounds(..., press_equiv=0, pour_offset=0, water_ml=400, seal_delay=SE
 
 v5.9 已可直接上線，但仍需明確承認以下近似：
 
-1. `calc_drip_volume` 仍是靜態經驗式，尚未顯式建模濾紙阻力、粉層高度、翻轉角度。
-2. `EY_drip` 以低效率因子 `epsilon_psd` 吸收了真實的床層停留時間分布，尚非完整流體模型。
-3. `predict_compounds` 的 Pre-Seal 支流偏置目前是物理方向正確的一階混合，仍需以折射儀 + 杯測反推最佳乘數。
+1. `calc_drip_volume` 採 `(dial/DIAL_BASE)^eta` 與達西定律方向一致；仍是靜態經驗式，尚未顯式建模濾紙阻力、粉層高度、翻轉角度。
+2. 主流程式僅以 `free_water_main` 輸入 `EY_closed_form`，不再乘 `(1 - λ×V_drip/water_ml)`，因 brew_capacity 路徑已完整建模溶劑減少，額外乘項構成雙重計算。
+3. `EY_drip` 以低效率因子 `epsilon_psd` 吸收了真實的床層停留時間分布，尚非完整流體模型。
+4. `predict_compounds` 的 Pre-Seal 支流偏置目前是物理方向正確的一階混合，仍需以折射儀 + 杯測反推最佳乘數。
 
 這些限制不影響本版整合決策，因為它們屬參數精修，不屬方程結構錯誤。
 

@@ -10,7 +10,7 @@ def calc_drip_volume(water_ml: float, dial: float, drip_time: float) -> float:
         return 0.0
 
     dial_c = max(dial, 0.1)
-    dial_mult = (constants.DIAL_BASE / dial_c) ** constants.PRE_SEAL_DRIP_DIAL_EXP
+    dial_mult = (dial_c / constants.DIAL_BASE) ** constants.PRE_SEAL_DRIP_DIAL_EXP
     raw_volume = constants.PRE_SEAL_DRIP_RATE_REF * drip_time * dial_mult
     capped_volume = min(raw_volume, water_ml * constants.PRE_SEAL_DRIP_MAX_RATIO)
     return round(max(0.0, capped_volume), 3)

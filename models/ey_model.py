@@ -84,7 +84,6 @@ def calc_ey(
     drip_volume = calc_drip_volume(water_ml, dial, drip_time)
     main_free_water = max(water_ml - drip_volume - retention_water, 1.0)
     main_ey = _calc_phase_ey(roast_code, t_slurry, dial, t_kinetic, dose, main_free_water)
-    main_ey *= 1.0 - constants.PRE_SEAL_MAIN_LOSS_MULT * (drip_volume / max(water_ml, 1.0))
 
     drip_contact_time = drip_time * constants.PRE_SEAL_CONTACT_FRACTION
     drip_ey = _calc_phase_ey(
