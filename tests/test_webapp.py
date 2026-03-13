@@ -28,3 +28,4 @@ def test_webapp_routes() -> None:
     assert payload["meta"]["roast_code"] == "M"
     assert len(payload["results"]) == 1
     assert "compounds_abs" in payload["results"][0]
+    assert "swirl_wait_sec" in payload["results"][0]

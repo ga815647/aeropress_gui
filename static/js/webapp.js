@@ -175,31 +175,10 @@
     const size = 420;
     const center = size / 2;
     const radius = 142;
+    const rings = [0.25, 0.5, 0.75, 1.0];
     const maxByKey = Object.fromEntries(
       keys.map((key) => [key, Math.max(...results.map((item) => item.compounds_abs[key]), 1e-8)]),
     );
-    const rings = [0.25, 0.5, 0.75, 1.0];
-
-    const series = results.slice(0, 3).map((result, index) => {
-      const points = keys.map((key, idx) => {
-        const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
-        const normalized = result.compounds_abs[key] / maxByKey[key];
-        const x = center + Math.cos(angle) * radius * normalized;
-        const y = center + Math.sin(angle) * radius * normalized;
-        return `${x},${y}`;
-      }).join(" ");
-      const color = ["#bb5f2a", "#4e6b5b", "#8f4667"][index] || "#555";
-      return `<polygon points="${points}" fill="${color}22" stroke="${color}" stroke-width="2"></polygon>`;
-    }).join("");
-
-    const spokes = keys.map((key, idx) => {
-      const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
-      const x = center + Math.cos(angle) * radius;
-      const y = center + Math.sin(angle) * radius;
-      const lx = center + Math.cos(angle) * (radius + 28);
-      const ly = center + Math.sin(angle) * (radius + 28);
-      return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line><text x="${lx}" y="${ly}" text-anchor="middle" font-size="13" fill="#6d6358">${key}</text>`;
-    }).join("");
 
     const ringSvg = rings.map((ring) => {
       const points = keys.map((_, idx) => {
@@ -209,6 +188,30 @@
         return `${x},${y}`;
       }).join(" ");
       return `<polygon points="${points}" fill="none" stroke="#e4d7cb"></polygon>`;
+    }).join("");
+
+    const spokes = keys.map((key, idx) => {
+      const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+      const x = center + Math.cos(angle) * radius;
+      const y = center + Math.sin(angle) * radius;
+      const lx = center + Math.cos(angle) * (radius + 28);
+      const ly = center + Math.sin(angle) * (radius + 28);
+      return `
+        <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line>
+        <text x="${lx}" y="${ly}" text-anchor="middle" font-size="13" fill="#6d6358">${key}</text>
+      `;
+    }).join("");
+
+    const series = results.slice(0, 3).map((result, index) => {
+      const color = ["#bb5f2a", "#4e6b5b", "#8f4667"][index] || "#555";
+      const points = keys.map((key, idx) => {
+        const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+        const normalized = result.compounds_abs[key] / maxByKey[key];
+        const x = center + Math.cos(angle) * radius * normalized;
+        const y = center + Math.sin(angle) * radius * normalized;
+        return `${x},${y}`;
+      }).join(" ");
+      return `<polygon points="${points}" fill="${color}22" stroke="${color}" stroke-width="2"></polygon>`;
     }).join("");
 
     return `<svg viewBox="0 0 ${size} ${size}">${ringSvg}${spokes}${series}</svg>`;
@@ -300,6 +303,14 @@
         </div>
         <div class="metrics">
           <div class="metric"><strong>Steep</strong><div>${formatTime(result.steep_sec)}</div></div>
+          <div class="metric"><strong>Swirl</strong><div>${result.swirl_sec}s</div></div>
+                    <div class="ratio"><strong>Swirl Wait</strong><div>${result.swirl_wait_sec}s</div></div>
+          <div class="ratio"><strong>Swirl Phase</strong><div>${result.swirl_sec + result.swirl_wait_sec}s</div></div>
+          <div class="metric"><strong>Wait</strong><div>${result.swirl_wait_sec}s</div></div>
+          <div class="metric"><strong>Press</strong><div>${result.press_sec}s</div></div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><strong>Contact</strong><div>${formatTime(result.total_contact_sec)}</div></div>
           <div class="metric"><strong>EY</strong><div>${result.ey.toFixed(3)}%</div></div>
           <div class="metric"><strong>TDS</strong><div>${result.tds.toFixed(4)}%</div></div>
           <div class="metric"><strong>T_slurry</strong><div>${result.t_slurry.toFixed(1)}C</div></div>
@@ -307,8 +318,7 @@
         <div class="metrics">
           <div class="ratio"><strong>AC/SW</strong><div>${result.ratios.ac_sw_actual} / ideal ${result.ratios.ac_sw_ideal}</div></div>
           <div class="ratio"><strong>PS/Bitter</strong><div>${result.ratios.ps_bitter_actual} / ideal ${result.ratios.ps_bitter_ideal}</div></div>
-          <div class="ratio"><strong>Press</strong><div>${result.press_sec}s</div></div>
-          <div class="ratio"><strong>Contact</strong><div>${formatTime(result.total_contact_sec)}</div></div>
+
         </div>
         <div class="compound-grid">
           ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
@@ -429,5 +439,6 @@
     }
   });
 
+  syncViewModeUI();
   showHelp("brewer");
 })();
