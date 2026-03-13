@@ -322,7 +322,7 @@
   function closeBrewTimer() {
     resetBrewTimerState();
     if (latestPayload?.results?.length && currentViewMode === "compare") {
-      renderResultContent(latestPayload.results);
+      renderResultContent(latestPayload.results, latestPayload.meta);
     }
   }
 
@@ -655,7 +655,7 @@
     `;
   }
 
-  function renderDetailCards(results) {
+  function renderDetailCards(results, meta) {
     return results.map((result, index) => {
       let currentSec = 0;
       const v_drip = result.v_drip || result.pre_seal_drip_ml || 0;
@@ -663,6 +663,13 @@
       const timelineHtml = `
         <div class="timeline-wrap" style="margin-top: 1.5rem; border-top: 1px solid #e4d7cb; padding-top: 1rem;">
           <h4 style="margin: 0 0 0.75rem 0; font-size: 1.05rem; color: #4e6b5b;">實戰沖煮指南 (Timeline)</h4>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem;">
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🔥 焙度: ${meta.roast_name}</span>
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🌡️ 水溫: ${result.temp}°C</span>
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">⚙️ 刻度: Dial ${result.dial}</span>
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">⚖️ 粉量: ${result.dose}g</span>
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">💧 水量: ${result.water_ml}ml</span>
+          </div>
           <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse;">
             <tbody>
               <tr style="border-bottom: 1px solid #f1ece6;">
@@ -766,10 +773,10 @@
       : "逐項附上參數與風味說明，適合細讀。";
   }
 
-  function renderResultContent(results) {
+  function renderResultContent(results, meta) {
     resultsNode.innerHTML = currentViewMode === "compare"
       ? renderCompareTable(results)
-      : renderDetailCards(results);
+      : renderDetailCards(results, meta);
     syncBrewTimerViewportState();
     if (currentViewMode === "compare") {
       syncBrewTimerPanel();
@@ -798,7 +805,7 @@
 
     viewModeBar.hidden = false;
     syncViewModeUI();
-    renderResultContent(results);
+    renderResultContent(results, meta);
     updateRadarTrigger(results);
   }
 
@@ -837,7 +844,7 @@
       currentViewMode = button.dataset.viewMode;
       syncViewModeUI();
       if (latestPayload?.results?.length) {
-        renderResultContent(latestPayload.results);
+        renderResultContent(latestPayload.results, latestPayload.meta);
       }
     });
   });
@@ -853,7 +860,7 @@
         return;
       }
       openBrewTimer(index, result);
-      renderResultContent(latestPayload.results);
+      renderResultContent(latestPayload.results, latestPayload.meta);
       syncBrewTimerPanel();
       return;
     }
