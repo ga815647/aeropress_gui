@@ -117,13 +117,13 @@ python main.py --roast MD --brewer xl --gh 60 --kh 20 --mg-frac 0.7 --output csv
 啟動方式：
 
 ```bash
-python webapp.py
+py webapp.py
 ```
 
 預設會以 `0.0.0.0:8000` 啟動，且 `debug=True`。若只想在本機開啟：
 
 ```bash
-python webapp.py --host 127.0.0.1 --port 8000 --no-debug
+py webapp.py --host 127.0.0.1 --port 8000 --no-debug
 ```
 
 ### API

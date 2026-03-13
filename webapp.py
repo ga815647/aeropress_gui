@@ -61,7 +61,6 @@ def create_app() -> Flask:
                     "roast": "M",
                     "top": 3,
                     "t_env": 25.0,
-                    "tds_floor": 0.80,
                     "altitude": 0.0,
                     "gh": 50.0,
                     "kh": 30.0,
@@ -73,9 +72,8 @@ def create_app() -> Flask:
     @app.post("/api/optimize")
     def optimize_route():
         payload = request.get_json(silent=True) or {}
-        used_default_floor = apply_environment_settings(
+        apply_environment_settings(
             float(payload.get("t_env", 25.0)),
-            payload.get("tds_floor"),
             float(payload.get("altitude", 0.0)),
         )
         water_gh, water_kh, water_mg_frac, water_source = resolve_water_profile(
@@ -102,8 +100,6 @@ def create_app() -> Flask:
                     "water_kh": water_kh,
                     "water_mg_frac": water_mg_frac,
                     "water_source": water_source,
-                    "used_default_tds_floor": used_default_floor,
-                    "tds_floor": constants.TDS_BROWN_WATER_FLOOR,
                 },
                 "results": [_serialize_result(item, roast_code) for item in results],
             }

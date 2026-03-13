@@ -20,7 +20,6 @@ def test_webapp_routes() -> None:
             "mg_frac": 0.40,
             "top": 1,
             "t_env": 25,
-            "tds_floor": 0.80,
             "altitude": 0,
         },
     )

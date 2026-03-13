@@ -9,9 +9,7 @@
   const submitButton = document.getElementById("submit-button");
   const summary = document.getElementById("summary");
   const resultsNode = document.getElementById("results");
-  const viewModeBar = document.getElementById("view-mode-bar");
-  const viewModeButtons = document.querySelectorAll("[data-view-mode]");
-  const viewModeNote = document.getElementById("view-mode-note");
+
   const radarModal = document.getElementById("radar-modal");
   const radarClose = document.getElementById("radar-close");
   const radarNode = document.getElementById("radar");
@@ -27,7 +25,7 @@
   const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
   const mobileControlsQuery = window.matchMedia("(max-width: 640px)");
 
-  let currentViewMode = "compare";
+  let currentDetailIndex = 0;
   let latestPayload = null;
   let latestRadarResults = [];
   let mobileControlsHidden = false;
@@ -75,11 +73,7 @@
       body: "環境溫度會影響實際 slurry 溫度，進而影響模型中的萃取預估。",
       meta: "冬天與夏天差異明顯時，這個值值得調整。",
     },
-    tds_floor: {
-      title: "TDS Floor",
-      body: "限制過低 TDS 的組合，避免推薦雖然乾淨但過薄的結果。",
-      meta: "若你想找更輕盈的配方，可試著微幅下修。",
-    },
+
     altitude: {
       title: "海拔",
       body: "海拔會影響沸點與實際水溫上限，因此會改變可行的沖煮溫度範圍。",
@@ -457,85 +451,42 @@
     }
   }
 
-  function renderCompareTable(results) {
-    const topResults = results.slice(0, 3);
-    const columns = [0, 1, 2].map((index) => renderRankHeader(topResults[index], index)).join("");
+  function renderMasterCards(results) {
+    const cards = results.map((r, index) => {
+      const isSelected = index === currentDetailIndex;
+      const borderStyle = isSelected ? "border: 2px solid #bb5f2a;" : "border: 1px solid #e4d7cb;";
+      const btnHtml = isSelected 
+        ? `<button class="btn btn-sm w-100 mt-2" type="button" disabled style="width: 100%; margin-top: 0.5rem; background-color: #f1ece6; border: 1px solid #e4d7cb; border-radius: 4px; padding: 6px; color: #6d6358; cursor: default;">📍 目前顯示</button>`
+        : `<button class="btn btn-sm btn-outline-primary w-100 mt-2" type="button" data-select-recipe="${index}" style="width: 100%; margin-top: 0.5rem;">👉 選擇此配方</button>`;
 
-    const row = (label, formatter) => `
-      <tr>
-        <td>${label}</td>
-        ${[0, 1, 2].map((index) => formatter(topResults[index])).join("")}
-      </tr>
-    `;
-
-    const swirlRows = [
-      row(compareLabelCell("碼表按下時機", "Timer Start"), (result) => compareValueCell(result, result ? "還沒蓋蓋子 (注完水)" : "-")),
-      row(compareLabelCell("SWIRL 開始時間", "Swirl Start"), (result) => compareValueCell(result, result ? formatTime(result.steep_sec) : "-")),
-      row(compareLabelCell("WAIT 開始時間", "Wait Start"), (result) => compareValueCell(result, result ? formatTime(result.steep_sec + result.swirl_sec) : "-")),
-      row(compareLabelCell("Swirl", "操作時間"), (result) => compareValueCell(result, result ? `${result.swirl_sec}s` : "-")),
-      row(compareLabelCell("Swirl Wait", "靜置沉降"), (result) => compareValueCell(result, result ? `${result.swirl_wait_sec}s` : "-")),
-      row(compareLabelCell("Swirl Phase", "Swirl + Wait"), (result) => compareValueCell(result, result ? `${result.swirl_sec + result.swirl_wait_sec}s` : "-")),
-    ].join("");
-
-    const compoundRows = keys.map((key) => {
-      const maxValue = Math.max(
-        ...topResults
-          .filter(Boolean)
-          .map((result) => result.compounds_abs[key]),
-      );
-
-      return row(compareLabelCell(key, compoundHelp[key].label), (result) => {
-        if (!result) {
-          return compareValueCell(result, "-");
-        }
-        const isHighest = result.compounds_abs[key] === maxValue;
-        return compareValueCell(
-          result,
-          result.compounds_abs[key].toFixed(4),
-          "",
-          isHighest ? "compare-cell-highlight" : "",
-          isHighest ? "compare-rank-highlight" : "",
-        );
-      });
+      return `
+      <div class="recipe-card" style="min-width: 280px; scroll-snap-align: start; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; ${borderStyle} transition: border-color 0.2s;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+          <div>
+            <div class="muted" style="font-size: 0.85em; font-weight: bold;">Rank ${index + 1}</div>
+            <h3 style="margin: 0; font-size: 1.1em; color: #4e6b5b;">Score ${r.score.toFixed(1)}</h3>
+          </div>
+        </div>
+        <div style="font-size: 0.9em; margin-bottom: 0.5rem; color: #6d6358; line-height: 1.4;">
+          <strong>Temp ${r.temp}C / Dial ${r.dial} / Dose ${r.dose}g</strong><br>
+          Contact: ${formatTime(r.total_contact_sec)}<br>
+          TDS ${r.tds.toFixed(2)}% | EY ${r.ey.toFixed(1)}%
+        </div>
+        ${btnHtml}
+      </div>
+      `;
     }).join("");
 
     return `
-      <section class="compare-card">
-        <div class="compare-head">
-          <h2>Top 3 核心比較</h2>
-        </div>
-        <div class="compare-table-wrap">
-          <table class="compare-table">
-            <thead>
-              <tr>
-                <th>比較項目</th>
-                ${columns}
-              </tr>
-            </thead>
-            <tbody>
-              ${compareSection("配方")}
-              ${row(compareLabelCell("沖煮", "溫度 / 刻度 / 粉量"), (result) => compareValueCell(result, result ? `${result.temp}C / Dial ${result.dial}` : "-", result ? `Dose ${result.dose}g` : ""))}
-              ${row(compareLabelCell("時間", "浸泡 / 下壓 / 接觸"), (result) => compareValueCell(result, result ? `Steep ${formatTime(result.steep_sec)}` : "-", result ? `Press ${result.press_sec}s / Contact ${formatTime(result.total_contact_sec)}` : ""))}
-              ${swirlRows}
-              ${compareSection("萃取")}
-              ${row(compareLabelCell("EY", "萃取率"), (result) => compareValueCell(result, result ? `${result.ey.toFixed(3)}%` : "-"))}
-              ${row(compareLabelCell("TDS", "濃度"), (result) => compareValueCell(result, result ? `${result.tds.toFixed(4)}%` : "-"))}
-              ${row(compareLabelCell("Slurry", "粉床溫度"), (result) => compareValueCell(result, result ? `${result.t_slurry.toFixed(1)}C` : "-"))}
-              ${compareSection("比例")}
-              ${row(compareLabelCell("AC/SW", "酸甜比"), (result) => compareValueCell(result, result ? result.ratios.ac_sw_actual : "-", result ? `ideal ${result.ratios.ac_sw_ideal}` : ""))}
-              ${row(compareLabelCell("PS/Bitter", "香氣苦味比"), (result) => compareValueCell(result, result ? result.ratios.ps_bitter_actual : "-", result ? `ideal ${result.ratios.ps_bitter_ideal}` : ""))}
-              ${compareSection("六維向量")}
-              ${compoundRows}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <div class="scroll-container" style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 16px; padding: 0 24px 16px 24px; margin-top: 1rem;">
+        ${cards}
+      </div>
     `;
   }
 
-  function renderDetailCards(results, meta) {
-    return results.map((result, index) => {
-      let currentSec = 0;
+  function renderSingleDetail(result, meta, index) {
+    if (!result) return "";
+    let currentSec = 0;
       const v_drip = result.v_drip || result.pre_seal_drip_ml || 0;
       
       const timelineHtml = `
@@ -547,8 +498,10 @@
             <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">⚙️ 刻度: Dial ${result.dial}</span>
             <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">⚖️ 粉量: ${result.dose}g</span>
             <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">💧 水量: ${result.water_ml}ml</span>
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">💧 水質: GH ${meta.water_gh} / KH ${meta.water_kh}</span>
+            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🧪 Mg 比例: ${meta.water_mg_frac}</span>
           </div>
-          <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse;">
+          <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse; table-layout: fixed; word-wrap: break-word;">
             <tbody>
               <tr id="timeline-row-${index}-1" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
                 <td style="padding: 0.5rem 0.25rem; font-weight: bold; width: 60px; vertical-align: top;">${formatTime(currentSec)}</td>
@@ -603,7 +556,7 @@
       `;
 
       return `
-      <article class="result-card" id="recipe-card-${index}">
+      <article class="result-card" id="recipe-card-${index}" style="min-width: 0; overflow-x: hidden;">
         <div class="result-head">
           <div>
             <div class="muted">Rank ${index + 1}</div>
@@ -621,34 +574,24 @@
 
         ${timelineHtml}
 
-        <div class="compound-grid" style="margin-top: 1.5rem;">
+        <div class="compound-grid" style="margin-top: 1.5rem; min-width: 0;">
           ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
         </div>
       </article>
       `;
-    }).join("");
-  }
-
-  function syncViewModeUI() {
-    viewModeButtons.forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.viewMode === currentViewMode);
-    });
-    viewModeNote.textContent = currentViewMode === "compare"
-      ? "聚焦前三名的核心數據差異。"
-      : "逐項附上參數與風味說明，適合細讀。";
   }
 
   function renderResultContent(results, meta) {
-    resultsNode.innerHTML = currentViewMode === "compare"
-      ? renderCompareTable(results)
-      : renderDetailCards(results, meta);
+    resultsNode.innerHTML = `
+      <div id="master-view" style="min-width: 0;">
+        ${renderMasterCards(results)}
+      </div>
+      <div id="detail-view" style="margin-top: 2rem; min-width: 0; overflow-x: hidden;">
+        ${results[currentDetailIndex] ? renderSingleDetail(results[currentDetailIndex], meta, currentDetailIndex) : ''}
+      </div>
+    `;
 
-    // Initialize UI on mode switch
-    if (currentViewMode === "detail") {
-      for (const idxStr of Object.keys(activeTimers)) {
-          syncInlineTimerUI(Number(idxStr));
-      }
-    }
+    syncInlineTimerUI(currentDetailIndex);
   }
 
   function renderResults(payload) {
@@ -662,23 +605,14 @@
     }
     activeTimers = {};
 
-    summary.innerHTML = [
-      metricCard("焙度", `${meta.roast_name} (${meta.roast_code})`),
-      metricCard("水質", `GH ${meta.water_gh} / KH ${meta.water_kh}`),
-      metricCard("Mg 比例", meta.water_mg_frac),
-      metricCard("TDS Floor", meta.tds_floor),
-    ].join("");
-
     if (!results.length) {
       setMobileControlsHidden(false);
-      viewModeBar.hidden = true;
       resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
       updateRadarTrigger([]);
       return;
     }
 
-    viewModeBar.hidden = false;
-    syncViewModeUI();
+    currentDetailIndex = 0;
     renderResultContent(results, meta);
     updateRadarTrigger(results);
   }
@@ -712,33 +646,28 @@
   });
 
 
-  viewModeButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.dataset.viewMode === currentViewMode) return;
-      currentViewMode = button.dataset.viewMode;
-      syncViewModeUI();
-      if (latestPayload?.results?.length) {
-        renderResultContent(latestPayload.results, latestPayload.meta);
-      }
-    });
-  });
-
   resultsNode.addEventListener("click", (event) => {
-    const detailScrollTrigger = event.target.closest("[data-scroll-to-recipe]");
-    if (detailScrollTrigger) {
-      const index = Number(detailScrollTrigger.dataset.scrollToRecipe);
-      
-      // Select the 'detail' view mode programmatically
-      const detailBtn = document.querySelector('[data-view-mode="detail"]');
-      if (detailBtn) detailBtn.click();
-
-      // Scroll to respective detail card
-      setTimeout(() => {
-        const targetElement = document.getElementById(`recipe-card-${index}`);
-        if (targetElement) {
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const selectTrigger = event.target.closest("[data-select-recipe]");
+    if (selectTrigger) {
+      const newIndex = Number(selectTrigger.dataset.selectRecipe);
+      if (newIndex !== currentDetailIndex) {
+        // clear old timer if running
+        if (activeTimers[currentDetailIndex] && activeTimers[currentDetailIndex].isRunning) {
+          activeTimers[currentDetailIndex].isRunning = false;
         }
-      }, 50); // Small delay to allow renderResultContent to finish replacing DOM
+        currentDetailIndex = newIndex;
+        if (latestPayload?.results?.length) {
+          renderResultContent(latestPayload.results, latestPayload.meta);
+          setTimeout(() => {
+            const detailView = document.getElementById("detail-view");
+            if (detailView) {
+                const yOffset = -20; 
+                const y = detailView.getBoundingClientRect().top + window.scrollY + yOffset;
+                window.scrollTo({top: y, behavior: 'smooth'});
+            }
+          }, 50);
+        }
+      }
       return;
     }
 
@@ -788,7 +717,7 @@
     submitButton.textContent = "計算中...";
 
     const payload = Object.fromEntries(new FormData(form).entries());
-    ["gh", "kh", "mg_frac", "top", "t_env", "tds_floor", "altitude"].forEach((key) => {
+    ["gh", "kh", "mg_frac", "top", "t_env", "altitude"].forEach((key) => {
       payload[key] = payload[key] === "" ? null : Number(payload[key]);
     });
 
@@ -802,7 +731,6 @@
       renderResults(data);
     } catch (error) {
       setMobileControlsHidden(false);
-      viewModeBar.hidden = true;
       resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
       updateRadarTrigger([]);
     } finally {
@@ -811,7 +739,6 @@
     }
   });
 
-  syncViewModeUI();
   showHelp("brewer");
   syncControlsPanelState();
 })();

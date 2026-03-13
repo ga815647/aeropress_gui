@@ -87,13 +87,7 @@
               </div>
               <input id="t_env" name="t_env" type="number" step="0.1" value="25">
             </div>
-            <div class="field" data-help-key="tds_floor">
-              <div class="label-row">
-                <label for="tds_floor">TDS Floor</label>
-                <button class="hint-button" type="button" data-help-target="tds_floor">?</button>
-              </div>
-              <input id="tds_floor" name="tds_floor" type="number" step="0.01" value="0.80">
-            </div>
+
             <div class="field full" data-help-key="altitude">
               <div class="label-row">
                 <label for="altitude">海拔 m</label>
@@ -118,14 +112,9 @@
         <div class="hero">
           <span class="eyebrow">AeroPress 4-Vector</span>
           <h1>把 CLI 變成可視化沖煮台</h1>
-          <div id="summary" class="summary"></div>
         </div>
 
-        <div id="view-mode-bar" class="view-mode-bar" hidden>
-          <button class="view-mode-button is-active" type="button" data-view-mode="compare">三個 Rank 比較</button>
-          <button class="view-mode-button" type="button" data-view-mode="detail">參數詳解</button>
-          <span id="view-mode-note" class="view-mode-note">聚焦前三名的核心數據差異。</span>
-        </div>
+
 
         <div id="results" class="results">
           <div class="empty">尚未執行最佳化。</div>

@@ -66,29 +66,7 @@ def test_export_json_csv_and_radar(tmp_path: Path) -> None:
     assert rows[0]["compounds_AC"] == "0.5"
 
 
-def test_main_uses_preset_and_default_tds_floor_message(monkeypatch, capsys) -> None:
-    import main
 
-    captured = {}
-
-    def fake_optimize(**kwargs):
-        captured["kwargs"] = kwargs
-        return []
-
-    def fake_terminal(results, roast_code, water_gh, water_kh):
-        captured["terminal"] = (results, roast_code, water_gh, water_kh)
-
-    monkeypatch.setattr(main, "optimize", fake_optimize)
-    monkeypatch.setattr(main, "print_terminal", fake_terminal)
-
-    exit_code = main.main(["--roast", "M", "--preset", "aquacode_7l"])
-    stderr = capsys.readouterr().err
-
-    assert exit_code == 0
-    assert "TDS_BROWN_WATER_FLOOR 使用預設值 0.80%" in stderr
-    assert captured["kwargs"]["water_gh"] == 65
-    assert captured["kwargs"]["water_kh"] == 5
-    assert captured["kwargs"]["water_mg_frac"] == 0.73
 
 
 def test_cli_reference_command_ranges(tmp_path: Path) -> None:
@@ -108,8 +86,6 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
         "25",
         "--altitude",
         "0",
-        "--tds-floor",
-        "0.80",
         "--top",
         "1",
     ]

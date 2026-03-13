@@ -4,13 +4,9 @@ import constants
 from data.water_presets import get_water_preset
 
 
-def apply_environment_settings(t_env: float, tds_floor: float | None, altitude: float) -> bool:
+def apply_environment_settings(t_env: float, altitude: float) -> None:
     constants.T_ENV = t_env
     constants.TEMP_BOILING_POINT = 100.0 - altitude / 300.0
-    if tds_floor is not None:
-        constants.TDS_BROWN_WATER_FLOOR = tds_floor
-        return False
-    return True
 
 
 def resolve_water_profile(
