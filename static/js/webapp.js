@@ -162,6 +162,13 @@
     return `<tr class="compare-section-row"><td colspan="4">${title}</td></tr>`;
   }
 
+  function compareLabelCell(label, sublabel = "") {
+    return `
+      <span class="compare-label">${label}</span>
+      ${sublabel ? `<span class="compare-label-sub">${sublabel}</span>` : ""}
+    `;
+  }
+
   function buildRadarSvg(results) {
     if (!results.length) return "";
 
@@ -250,6 +257,9 @@
 
     return `
       <section class="compare-card">
+        <div class="compare-head">
+          <h2>Top 3 核心比較</h2>
+        </div>
         <div class="compare-table-wrap">
           <table class="compare-table">
             <thead>
@@ -260,17 +270,17 @@
             </thead>
             <tbody>
               ${compareSection("配方")}
-              ${row("沖煮設定", (result) => compareValueCell(result, result ? `Temp ${result.temp}C / Dial ${result.dial}` : "-", result ? `Dose ${result.dose}g` : ""))}
-              ${row("時間配置", (result) => compareValueCell(result, result ? `Steep ${formatTime(result.steep_sec)}` : "-", result ? `Press ${result.press_sec}s / Contact ${formatTime(result.total_contact_sec)}` : ""))}
-              ${compareSection("萃取數值")}
-              ${row("EY", (result) => compareValueCell(result, result ? `${result.ey.toFixed(3)}%` : "-"))}
-              ${row("TDS", (result) => compareValueCell(result, result ? `${result.tds.toFixed(4)}%` : "-"))}
-              ${row("T_slurry", (result) => compareValueCell(result, result ? `${result.t_slurry.toFixed(1)}C` : "-"))}
-              ${compareSection("風味比例")}
-              ${row("AC/SW", (result) => compareValueCell(result, result ? result.ratios.ac_sw_actual : "-", result ? `ideal ${result.ratios.ac_sw_ideal}` : ""))}
-              ${row("PS/Bitter", (result) => compareValueCell(result, result ? result.ratios.ps_bitter_actual : "-", result ? `ideal ${result.ratios.ps_bitter_ideal}` : ""))}
+              ${row(compareLabelCell("沖煮", "溫度 / 刻度 / 粉量"), (result) => compareValueCell(result, result ? `${result.temp}C / Dial ${result.dial}` : "-", result ? `Dose ${result.dose}g` : ""))}
+              ${row(compareLabelCell("時間", "浸泡 / 下壓 / 接觸"), (result) => compareValueCell(result, result ? `Steep ${formatTime(result.steep_sec)}` : "-", result ? `Press ${result.press_sec}s / Contact ${formatTime(result.total_contact_sec)}` : ""))}
+              ${compareSection("萃取")}
+              ${row(compareLabelCell("EY", "萃取率"), (result) => compareValueCell(result, result ? `${result.ey.toFixed(3)}%` : "-"))}
+              ${row(compareLabelCell("TDS", "濃度"), (result) => compareValueCell(result, result ? `${result.tds.toFixed(4)}%` : "-"))}
+              ${row(compareLabelCell("Slurry", "粉床溫度"), (result) => compareValueCell(result, result ? `${result.t_slurry.toFixed(1)}C` : "-"))}
+              ${compareSection("比例")}
+              ${row(compareLabelCell("AC/SW", "酸甜比"), (result) => compareValueCell(result, result ? result.ratios.ac_sw_actual : "-", result ? `ideal ${result.ratios.ac_sw_ideal}` : ""))}
+              ${row(compareLabelCell("PS/Bitter", "香氣苦味比"), (result) => compareValueCell(result, result ? result.ratios.ps_bitter_actual : "-", result ? `ideal ${result.ratios.ps_bitter_ideal}` : ""))}
               ${compareSection("六維向量")}
-              ${keys.map((key) => row(`${key} (${compoundHelp[key].label})`, (result) => compareValueCell(result, result ? result.compounds_abs[key].toFixed(4) : "-"))).join("")}
+              ${keys.map((key) => row(compareLabelCell(key, compoundHelp[key].label), (result) => compareValueCell(result, result ? result.compounds_abs[key].toFixed(4) : "-"))).join("")}
             </tbody>
           </table>
         </div>

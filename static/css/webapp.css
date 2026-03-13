@@ -412,35 +412,38 @@ input:focus {
 }
 
 .compare-table-wrap {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .compare-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 760px;
+  table-layout: fixed;
 }
 
 .compare-table th,
 .compare-table td {
   border-bottom: 1px solid rgba(216, 199, 183, 0.9);
-  padding: 10px 12px;
+  padding: 8px 10px;
   text-align: left;
   vertical-align: top;
   background: rgba(255, 255, 255, 0.56);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .compare-table th {
   position: sticky;
   top: 0;
   background: rgba(247, 234, 221, 0.98);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .compare-table td:first-child,
 .compare-table th:first-child {
-  min-width: 150px;
+  width: 18%;
+  min-width: 0;
 }
 
 .compare-section-row td {
@@ -454,14 +457,31 @@ input:focus {
   display: block;
   font-weight: 700;
   color: var(--ink);
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .compare-sub {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.compare-label {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
   font-size: 12px;
-  line-height: 1.4;
+}
+
+.compare-label-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
 }
 
 .empty {
@@ -491,6 +511,11 @@ input:focus {
     grid-template-columns: 1fr;
   }
 
+  .compare-table th,
+  .compare-table td {
+    padding: 8px;
+  }
+
   .summary,
   .metrics,
   .compound-grid {
@@ -518,6 +543,10 @@ input:focus {
   .modal-body {
     padding-left: 18px;
     padding-right: 18px;
+  }
+
+  .compare-table {
+    font-size: 12px;
   }
 
   .grid,
