@@ -9,7 +9,6 @@
   const submitButton = document.getElementById("submit-button");
   const summary = document.getElementById("summary");
   const resultsNode = document.getElementById("results");
-  const radarTrigger = document.getElementById("radar-trigger");
   const viewModeBar = document.getElementById("view-mode-bar");
   const viewModeButtons = document.querySelectorAll("[data-view-mode]");
   const viewModeNote = document.getElementById("view-mode-note");
@@ -159,7 +158,19 @@
   }
 
   function compareSection(title) {
-    return `<tr class="compare-section-row"><td colspan="4">${title}</td></tr>`;
+    const radarLink = title === "六維向量"
+      ? `<a href="#radar-modal" class="compare-section-link" data-open-radar>查看風味雷達圖</a>`
+      : "";
+    return `
+      <tr class="compare-section-row">
+        <td colspan="4">
+          <div class="compare-section-cell">
+            <span>${title}</span>
+            ${radarLink}
+          </div>
+        </td>
+      </tr>
+    `;
   }
 
   function compareLabelCell(label, sublabel = "") {
@@ -232,7 +243,6 @@
 
   function updateRadarTrigger(results) {
     latestRadarResults = results.slice(0, 3);
-    radarTrigger.hidden = !latestRadarResults.length;
     if (!latestRadarResults.length) {
       closeRadarModal();
       return;
@@ -258,6 +268,12 @@
       </tr>
     `;
 
+    const swirlRows = [
+      row(compareLabelCell("Swirl", "操作時間"), (result) => compareValueCell(result, result ? `${result.swirl_sec}s` : "-")),
+      row(compareLabelCell("Swirl Wait", "靜置沉降"), (result) => compareValueCell(result, result ? `${result.swirl_wait_sec}s` : "-")),
+      row(compareLabelCell("Swirl Phase", "Swirl + Wait"), (result) => compareValueCell(result, result ? `${result.swirl_sec + result.swirl_wait_sec}s` : "-")),
+    ].join("");
+
     return `
       <section class="compare-card">
         <div class="compare-head">
@@ -275,6 +291,7 @@
               ${compareSection("配方")}
               ${row(compareLabelCell("沖煮", "溫度 / 刻度 / 粉量"), (result) => compareValueCell(result, result ? `${result.temp}C / Dial ${result.dial}` : "-", result ? `Dose ${result.dose}g` : ""))}
               ${row(compareLabelCell("時間", "浸泡 / 下壓 / 接觸"), (result) => compareValueCell(result, result ? `Steep ${formatTime(result.steep_sec)}` : "-", result ? `Press ${result.press_sec}s / Contact ${formatTime(result.total_contact_sec)}` : ""))}
+              ${swirlRows}
               ${compareSection("萃取")}
               ${row(compareLabelCell("EY", "萃取率"), (result) => compareValueCell(result, result ? `${result.ey.toFixed(3)}%` : "-"))}
               ${row(compareLabelCell("TDS", "濃度"), (result) => compareValueCell(result, result ? `${result.tds.toFixed(4)}%` : "-"))}
@@ -304,9 +321,8 @@
         <div class="metrics">
           <div class="metric"><strong>Steep</strong><div>${formatTime(result.steep_sec)}</div></div>
           <div class="metric"><strong>Swirl</strong><div>${result.swirl_sec}s</div></div>
-                    <div class="ratio"><strong>Swirl Wait</strong><div>${result.swirl_wait_sec}s</div></div>
+          <div class="ratio"><strong>Swirl Wait</strong><div>${result.swirl_wait_sec}s</div></div>
           <div class="ratio"><strong>Swirl Phase</strong><div>${result.swirl_sec + result.swirl_wait_sec}s</div></div>
-          <div class="metric"><strong>Wait</strong><div>${result.swirl_wait_sec}s</div></div>
           <div class="metric"><strong>Press</strong><div>${result.press_sec}s</div></div>
         </div>
         <div class="metrics">
@@ -398,7 +414,12 @@
     });
   });
 
-  radarTrigger.addEventListener("click", openRadarModal);
+  resultsNode.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-open-radar]");
+    if (!trigger) return;
+    event.preventDefault();
+    openRadarModal();
+  });
   radarClose.addEventListener("click", closeRadarModal);
   radarModal.addEventListener("click", (event) => {
     if (event.target === radarModal) {
