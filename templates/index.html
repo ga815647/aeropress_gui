@@ -8,12 +8,18 @@
   </head>
   <body>
     <main class="shell">
-      <section class="panel controls">
-        <span class="eyebrow">Local Web UI</span>
-        <h2 class="section-title">沖煮參數設定</h2>
-        <p class="muted">設定焙度、水質與環境條件，直接取得最佳化組合與風味向量比較。</p>
+      <section class="panel controls" data-controls-panel>
+        <div class="controls-topbar">
+          <div>
+            <span class="eyebrow">Local Web UI</span>
+            <h2 class="section-title">沖煮參數設定</h2>
+          </div>
+          <button class="controls-toggle" type="button" data-controls-toggle hidden>收起設定</button>
+        </div>
+        <div class="controls-body" data-controls-body>
+          <p class="muted">設定焙度、水質與環境條件，直接取得最佳化組合與風味向量比較。</p>
 
-        <form id="optimize-form">
+          <form id="optimize-form">
           <div class="grid">
             <div class="field" data-help-key="brewer">
               <div class="label-row">
@@ -101,13 +107,14 @@
           </div>
 
           <button id="submit-button" class="primary-button" type="submit">開始最佳化</button>
-        </form>
+          </form>
 
-        <aside id="tooltip-card" class="tooltip-card" aria-live="polite">
-          <h3 id="tooltip-title">欄位說明</h3>
-          <p id="tooltip-body">點選任一欄位或右側問號，可查看該參數的用途與建議範圍。</p>
-          <div id="tooltip-meta" class="tooltip-meta">提示會跟著目前聚焦的欄位更新。</div>
-        </aside>
+          <aside id="tooltip-card" class="tooltip-card" aria-live="polite">
+            <h3 id="tooltip-title">欄位說明</h3>
+            <p id="tooltip-body">點選任一欄位或右側問號，可查看該參數的用途與建議範圍。</p>
+            <div id="tooltip-meta" class="tooltip-meta">提示會跟著目前聚焦的欄位更新。</div>
+          </aside>
+        </div>
       </section>
 
       <section class="panel">

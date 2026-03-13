@@ -47,6 +47,29 @@ body {
   align-self: start;
 }
 
+.controls-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.controls-body {
+  display: grid;
+}
+
+.controls-toggle {
+  display: none;
+  border: 1px solid rgba(187, 95, 42, 0.18);
+  border-radius: 999px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .hero {
   padding: 22px 24px 18px;
 }
@@ -410,8 +433,155 @@ input:focus {
 .compare-table th {
   position: sticky;
   top: 0;
+  z-index: 2;
   background: rgba(247, 234, 221, 0.98);
   font-size: 12px;
+}
+
+.compare-rank-head {
+  position: relative;
+}
+
+.rank-header-button {
+  width: 100%;
+  border: 1px solid rgba(187, 95, 42, 0.16);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--ink);
+  text-align: left;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rank-header-button.is-active {
+  border-color: rgba(187, 95, 42, 0.5);
+  box-shadow: 0 10px 26px rgba(88, 55, 33, 0.12);
+}
+
+.rank-header-button .compare-sub {
+  margin-top: 5px;
+}
+
+.rank-timer-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(340px, calc(100vw - 48px));
+  padding: 14px;
+  border: 1px solid rgba(187, 95, 42, 0.22);
+  border-radius: 20px;
+  background: rgba(255, 250, 240, 0.98);
+  box-shadow: 0 22px 40px rgba(88, 55, 33, 0.18);
+  z-index: 5;
+}
+
+body.timer-open {
+  overflow-x: hidden;
+}
+
+.rank-timer-layout {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.rank-timer-clock-card,
+.rank-timer-step-card {
+  border: 1px solid rgba(216, 199, 183, 0.9);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.rank-timer-status,
+.rank-timer-total,
+.rank-timer-step-next {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.rank-timer-clock {
+  margin: 6px 0 4px;
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+
+.rank-timer-step-label {
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.rank-timer-step-text {
+  margin: 6px 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.rank-timer-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.rank-timer-step-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(216, 199, 183, 0.28);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rank-timer-step-chip.is-active {
+  background: rgba(187, 95, 42, 0.14);
+  color: var(--accent);
+}
+
+.rank-timer-step-chip.is-complete {
+  background: rgba(78, 107, 91, 0.16);
+  color: #315244;
+}
+
+.rank-timer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rank-timer-action-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #cb6d34, #9f471f);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rank-timer-action-button.is-secondary {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(187, 95, 42, 0.18);
+  color: var(--ink);
+}
+
+.rank-timer-action-button.is-ghost {
+  background: transparent;
+  border: 1px dashed rgba(109, 99, 88, 0.45);
+  color: var(--muted);
 }
 
 .compare-table td:first-child,
@@ -530,6 +700,100 @@ input:focus {
 }
 
 @media (max-width: 640px) {
+  .controls {
+    padding: 16px 18px;
+  }
+
+  .controls-topbar {
+    align-items: center;
+  }
+
+  .controls .eyebrow {
+    margin-bottom: 8px;
+  }
+
+  .controls .section-title {
+    font-size: 1rem;
+    margin-bottom: 0;
+  }
+
+  .controls-body {
+    margin-top: 12px;
+    gap: 12px;
+  }
+
+  .controls-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    flex-shrink: 0;
+  }
+
+  .controls.is-collapsed {
+    padding: 10px 12px;
+    border-radius: 18px;
+  }
+
+  .controls.is-collapsed .controls-topbar {
+    align-items: center;
+    gap: 10px;
+  }
+
+  .controls.is-collapsed .controls-topbar > div {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .controls.is-collapsed .eyebrow {
+    margin-bottom: 0;
+    padding: 5px 10px;
+  }
+
+  .controls.is-collapsed .section-title {
+    display: none;
+  }
+
+  .controls.is-collapsed .controls-toggle {
+    min-height: 34px;
+    padding: 8px 12px;
+  }
+
+  .controls .muted {
+    margin: 0;
+    font-size: 13px;
+  }
+
+  .controls .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .controls .field {
+    grid-column: 1 / -1;
+    margin-bottom: 8px;
+  }
+
+  .controls .field[data-help-key="brewer"],
+  .controls .field[data-help-key="roast"] {
+    grid-column: auto;
+  }
+
+  .controls select,
+  .controls input {
+    padding: 10px 11px;
+  }
+
+  .controls .primary-button {
+    padding: 12px 14px;
+  }
+
+  .controls .tooltip-card {
+    margin-top: 0;
+    padding: 12px;
+  }
+
   .hero,
   .result-card,
   .compare-card {
@@ -549,6 +813,97 @@ input:focus {
 
   .compare-table {
     font-size: 12px;
+    min-width: 620px;
+  }
+
+  .compare-table-wrap {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rank-timer-layout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .rank-timer-popover {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    transform: none;
+    width: auto;
+    max-width: 420px;
+    max-height: min(78vh, 560px);
+    margin: 0 auto;
+    padding: 16px;
+    border-radius: 24px;
+    z-index: 40;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .rank-timer-popover::before {
+    content: "";
+    display: block;
+    width: 42px;
+    height: 4px;
+    margin: 0 auto 12px;
+    border-radius: 999px;
+    background: rgba(109, 99, 88, 0.24);
+  }
+
+  .rank-header-button {
+    min-height: 68px;
+    padding: 12px 14px;
+  }
+
+  .rank-timer-clock-card,
+  .rank-timer-step-card {
+    padding: 14px;
+  }
+
+  .rank-timer-clock {
+    font-size: 2.4rem;
+  }
+
+  .rank-timer-progress {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(92px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rank-timer-step-chip {
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .rank-timer-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .rank-timer-action-button {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .rank-timer-actions [data-rank-timer-action="toggle"],
+  .rank-timer-actions [data-rank-timer-action="close"] {
+    grid-column: 1 / -1;
+  }
+
+  body.timer-open .results {
+    padding-bottom: 260px;
   }
 
   .grid,

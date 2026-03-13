@@ -19,13 +19,27 @@
   const tooltipTitle = document.getElementById("tooltip-title");
   const tooltipBody = document.getElementById("tooltip-body");
   const tooltipMeta = document.getElementById("tooltip-meta");
+  const controlsPanel = document.querySelector("[data-controls-panel]");
+  const controlsBody = document.querySelector("[data-controls-body]");
+  const controlsToggle = document.querySelector("[data-controls-toggle]");
 
   const presets = window.APP_PRESETS || {};
   const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
+  const mobileControlsQuery = window.matchMedia("(max-width: 640px)");
 
   let currentViewMode = "compare";
   let latestPayload = null;
   let latestRadarResults = [];
+  let mobileControlsHidden = false;
+  let brewTimer = {
+    openRankIndex: null,
+    steps: [],
+    stepIndex: 0,
+    remainingMs: 0,
+    isRunning: false,
+    endAtMs: 0,
+    tickHandle: null,
+  };
 
   const fieldHelp = {
     brewer: {
@@ -115,9 +129,258 @@
     tooltipMeta.textContent = entry.meta;
   }
 
+  function syncControlsPanelState() {
+    if (!controlsPanel || !controlsBody || !controlsToggle) return;
+    const isMobile = mobileControlsQuery.matches;
+    const hiddenOnMobile = isMobile && mobileControlsHidden;
+
+    controlsPanel.hidden = hiddenOnMobile;
+    controlsPanel.classList.remove("is-collapsed");
+    controlsToggle.hidden = true;
+    controlsToggle.setAttribute("aria-expanded", "true");
+    controlsBody.hidden = false;
+  }
+
+  function setMobileControlsHidden(nextValue, { scrollToResults = false } = {}) {
+    if (!mobileControlsQuery.matches) return;
+    mobileControlsHidden = nextValue;
+    syncControlsPanelState();
+
+    if (nextValue && scrollToResults) {
+      requestAnimationFrame(() => {
+        summary.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }
+
   function formatTime(seconds) {
     const total = Math.round(seconds);
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
+
+  function clampTimerMs(value) {
+    return Math.max(0, Math.round(value));
+  }
+
+  function formatTimerClock(ms) {
+    const totalSeconds = Math.ceil(clampTimerMs(ms) / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function buildBrewSteps(result) {
+    if (!result) return [];
+    return [
+      {
+        key: "steep",
+        label: "浸泡",
+        durationMs: clampTimerMs(result.steep_sec * 1000),
+        action: "注水後蓋上上蓋，先不要下壓，讓咖啡粉持續浸泡萃取。",
+      },
+      {
+        key: "swirl",
+        label: "旋轉",
+        durationMs: clampTimerMs(result.swirl_sec * 1000),
+        action: "穩定旋轉杯身，讓粉床重新均勻混合，提升萃取一致性。",
+      },
+      {
+        key: "swirl_wait",
+        label: "旋轉後等待",
+        durationMs: clampTimerMs(result.swirl_wait_sec * 1000),
+        action: "停止晃動，靜置讓粉床沉降，準備進入下壓階段。",
+      },
+      {
+        key: "press",
+        label: "下壓",
+        durationMs: clampTimerMs(result.press_sec * 1000),
+        action: "以穩定且平均的力道向下壓，直到這個配方流程完成。",
+      },
+    ];
+  }
+
+  function getTimerTotalRemainingMs() {
+    if (!brewTimer.steps.length) return 0;
+    const currentStepRemaining = brewTimer.isRunning
+      ? clampTimerMs(brewTimer.endAtMs - Date.now())
+      : brewTimer.remainingMs;
+    const remainingAfterCurrent = brewTimer.steps
+      .slice(brewTimer.stepIndex + 1)
+      .reduce((total, step) => total + step.durationMs, 0);
+    return currentStepRemaining + remainingAfterCurrent;
+  }
+
+  function clearBrewTimerTick() {
+    if (brewTimer.tickHandle) {
+      clearInterval(brewTimer.tickHandle);
+      brewTimer.tickHandle = null;
+    }
+  }
+
+  function resetBrewTimerState() {
+    clearBrewTimerTick();
+    brewTimer = {
+      openRankIndex: null,
+      steps: [],
+      stepIndex: 0,
+      remainingMs: 0,
+      isRunning: false,
+      endAtMs: 0,
+      tickHandle: null,
+    };
+    syncBrewTimerViewportState();
+  }
+
+  function syncBrewTimerViewportState() {
+    document.body.classList.toggle(
+      "timer-open",
+      brewTimer.openRankIndex !== null && currentViewMode === "compare",
+    );
+  }
+
+  function syncBrewTimerPanel() {
+    const panel = resultsNode.querySelector("[data-rank-timer-panel]");
+    if (!panel || brewTimer.openRankIndex === null || !brewTimer.steps.length) return;
+
+    const currentStep = brewTimer.steps[brewTimer.stepIndex];
+    if (!currentStep) return;
+
+    const currentRemaining = brewTimer.isRunning
+      ? clampTimerMs(brewTimer.endAtMs - Date.now())
+      : brewTimer.remainingMs;
+    const nextStep = brewTimer.steps[brewTimer.stepIndex + 1];
+
+    const statusNode = panel.querySelector("[data-rank-timer-status]");
+    const clockNode = panel.querySelector("[data-rank-timer-clock]");
+    const totalNode = panel.querySelector("[data-rank-timer-total]");
+    const labelNode = panel.querySelector("[data-rank-timer-label]");
+    const actionNode = panel.querySelector("[data-rank-timer-action-text]");
+    const nextNode = panel.querySelector("[data-rank-timer-next]");
+    const toggleNode = panel.querySelector("[data-rank-timer-toggle]");
+    const progressNodes = panel.querySelectorAll("[data-rank-timer-step-chip]");
+
+    statusNode.textContent = brewTimer.isRunning ? "進行中" : currentRemaining === 0 ? "已完成" : "準備開始";
+    clockNode.textContent = formatTimerClock(currentRemaining);
+    totalNode.textContent = `剩餘總時間 ${formatTimerClock(getTimerTotalRemainingMs())}`;
+    labelNode.textContent = `步驟 ${brewTimer.stepIndex + 1}/${brewTimer.steps.length}：${currentStep.label}`;
+    actionNode.textContent = currentStep.action;
+    nextNode.textContent = nextStep
+      ? `下一步：${nextStep.label}`
+      : "下一步：完成整個沖煮流程。";
+    toggleNode.textContent = brewTimer.isRunning ? "暫停" : currentRemaining === 0 ? "重新開始" : "開始";
+
+    progressNodes.forEach((node, index) => {
+      node.classList.toggle("is-active", index === brewTimer.stepIndex);
+      node.classList.toggle("is-complete", index < brewTimer.stepIndex || (index === brewTimer.stepIndex && currentRemaining === 0));
+    });
+  }
+
+  function advanceBrewTimerStep() {
+    clearBrewTimerTick();
+
+    if (brewTimer.stepIndex >= brewTimer.steps.length - 1) {
+      brewTimer.isRunning = false;
+      brewTimer.remainingMs = 0;
+      brewTimer.endAtMs = 0;
+      syncBrewTimerPanel();
+      return;
+    }
+
+    brewTimer.stepIndex += 1;
+    brewTimer.remainingMs = brewTimer.steps[brewTimer.stepIndex].durationMs;
+    brewTimer.isRunning = true;
+    brewTimer.endAtMs = Date.now() + brewTimer.remainingMs;
+    brewTimer.tickHandle = setInterval(tickBrewTimer, 250);
+    syncBrewTimerPanel();
+  }
+
+  function tickBrewTimer() {
+    if (!brewTimer.isRunning) return;
+    const remaining = clampTimerMs(brewTimer.endAtMs - Date.now());
+    brewTimer.remainingMs = remaining;
+
+    if (remaining === 0) {
+      advanceBrewTimerStep();
+      return;
+    }
+
+    syncBrewTimerPanel();
+  }
+
+  function openBrewTimer(index, result) {
+    clearBrewTimerTick();
+    const steps = buildBrewSteps(result);
+    brewTimer = {
+      openRankIndex: index,
+      steps,
+      stepIndex: 0,
+      remainingMs: steps[0] ? steps[0].durationMs : 0,
+      isRunning: false,
+      endAtMs: 0,
+      tickHandle: null,
+    };
+    syncBrewTimerViewportState();
+  }
+
+  function closeBrewTimer() {
+    resetBrewTimerState();
+    if (latestPayload?.results?.length && currentViewMode === "compare") {
+      renderResultContent(latestPayload.results);
+    }
+  }
+
+  function startOrPauseBrewTimer() {
+    if (!brewTimer.steps.length) return;
+
+    if (brewTimer.isRunning) {
+      brewTimer.remainingMs = clampTimerMs(brewTimer.endAtMs - Date.now());
+      brewTimer.isRunning = false;
+      brewTimer.endAtMs = 0;
+      clearBrewTimerTick();
+      syncBrewTimerPanel();
+      return;
+    }
+
+    if (brewTimer.remainingMs === 0) {
+      brewTimer.stepIndex = 0;
+      brewTimer.remainingMs = brewTimer.steps[0].durationMs;
+    }
+
+    brewTimer.isRunning = true;
+    brewTimer.endAtMs = Date.now() + brewTimer.remainingMs;
+    clearBrewTimerTick();
+    brewTimer.tickHandle = setInterval(tickBrewTimer, 250);
+    syncBrewTimerPanel();
+  }
+
+  function resetBrewTimer() {
+    if (!brewTimer.steps.length) return;
+    clearBrewTimerTick();
+    brewTimer.stepIndex = 0;
+    brewTimer.remainingMs = brewTimer.steps[0].durationMs;
+    brewTimer.isRunning = false;
+    brewTimer.endAtMs = 0;
+    syncBrewTimerPanel();
+  }
+
+  function skipBrewTimerStep() {
+    if (!brewTimer.steps.length) return;
+
+    if (brewTimer.stepIndex >= brewTimer.steps.length - 1) {
+      clearBrewTimerTick();
+      brewTimer.remainingMs = 0;
+      brewTimer.isRunning = false;
+      brewTimer.endAtMs = 0;
+      syncBrewTimerPanel();
+      return;
+    }
+
+    clearBrewTimerTick();
+    brewTimer.stepIndex += 1;
+    brewTimer.remainingMs = brewTimer.steps[brewTimer.stepIndex].durationMs;
+    brewTimer.isRunning = false;
+    brewTimer.endAtMs = 0;
+    syncBrewTimerPanel();
   }
 
   function metricCard(label, value) {
@@ -179,6 +442,65 @@
     return `
       <span class="compare-label">${label}</span>
       ${sublabel ? `<span class="compare-label-sub">${sublabel}</span>` : ""}
+    `;
+  }
+
+  function renderRankTimerPanel(result, index) {
+    const steps = buildBrewSteps(result);
+    const activeStep = steps[brewTimer.stepIndex] || steps[0];
+    const totalMs = steps.reduce((sum, step) => sum + step.durationMs, 0);
+    const currentMs = brewTimer.openRankIndex === index
+      ? brewTimer.remainingMs
+      : activeStep.durationMs;
+    return `
+      <div class="rank-timer-popover" data-rank-timer-panel="${index}">
+        <div class="rank-timer-layout">
+          <div class="rank-timer-clock-card">
+            <div class="rank-timer-status" data-rank-timer-status>Ready</div>
+            <div class="rank-timer-clock" data-rank-timer-clock>${formatTimerClock(currentMs)}</div>
+            <div class="rank-timer-total" data-rank-timer-total>剩餘總時間 ${formatTimerClock(totalMs)}</div>
+          </div>
+          <div class="rank-timer-step-card">
+            <div class="rank-timer-step-label" data-rank-timer-label>步驟 1/${steps.length}：${activeStep.label}</div>
+            <div class="rank-timer-step-text" data-rank-timer-action-text>${activeStep.action}</div>
+            <div class="rank-timer-step-next" data-rank-timer-next>下一步：${steps[1] ? steps[1].label : "完成整個沖煮流程。"}</div>
+          </div>
+        </div>
+        <div class="rank-timer-progress">
+          ${steps.map((step, stepIndex) => `
+            <span
+              class="rank-timer-step-chip ${stepIndex === 0 ? "is-active" : ""}"
+              data-rank-timer-step-chip
+            >${step.label}</span>
+          `).join("")}
+        </div>
+        <div class="rank-timer-actions">
+          <button class="rank-timer-action-button" type="button" data-rank-timer-action="toggle" data-rank-timer-toggle>開始</button>
+          <button class="rank-timer-action-button is-secondary" type="button" data-rank-timer-action="reset">重設</button>
+          <button class="rank-timer-action-button is-secondary" type="button" data-rank-timer-action="next">下一步</button>
+          <button class="rank-timer-action-button is-ghost" type="button" data-rank-timer-action="close">關閉</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderRankHeader(result, index) {
+    const scoreLine = result ? `<span class="compare-sub">Score ${result.score.toFixed(1)}</span>` : "";
+    const isOpen = brewTimer.openRankIndex === index && result;
+    return `
+      <th>
+        <div class="compare-rank-head">
+          <button
+            class="rank-header-button ${isOpen ? "is-active" : ""}"
+            type="button"
+            data-rank-timer-trigger="${index}"
+          >
+            <span>Rank ${index + 1}</span>
+            ${scoreLine}
+          </button>
+          ${isOpen ? renderRankTimerPanel(result, index) : ""}
+        </div>
+      </th>
     `;
   }
 
@@ -256,12 +578,7 @@
 
   function renderCompareTable(results) {
     const topResults = results.slice(0, 3);
-    const columns = [0, 1, 2].map((index) => {
-      const result = topResults[index];
-      return result
-        ? `<th>Rank ${index + 1}<span class="compare-sub">Score ${result.score.toFixed(1)}</span></th>`
-        : `<th>Rank ${index + 1}</th>`;
-    }).join("");
+    const columns = [0, 1, 2].map((index) => renderRankHeader(topResults[index], index)).join("");
 
     const row = (label, formatter) => `
       <tr>
@@ -380,11 +697,16 @@
     resultsNode.innerHTML = currentViewMode === "compare"
       ? renderCompareTable(results)
       : renderDetailCards(results);
+    syncBrewTimerViewportState();
+    if (currentViewMode === "compare") {
+      syncBrewTimerPanel();
+    }
   }
 
   function renderResults(payload) {
     const { meta, results } = payload;
     latestPayload = payload;
+    resetBrewTimerState();
 
     summary.innerHTML = [
       metricCard("焙度", `${meta.roast_name} (${meta.roast_code})`),
@@ -394,6 +716,7 @@
     ].join("");
 
     if (!results.length) {
+      setMobileControlsHidden(false);
       viewModeBar.hidden = true;
       resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
       updateRadarTrigger([]);
@@ -427,6 +750,13 @@
     button.addEventListener("click", () => showHelp(button.dataset.helpTarget));
   });
 
+  mobileControlsQuery.addEventListener("change", () => {
+    if (!mobileControlsQuery.matches) {
+      mobileControlsHidden = false;
+    }
+    syncControlsPanelState();
+  });
+
   viewModeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.viewMode === currentViewMode) return;
@@ -439,6 +769,31 @@
   });
 
   resultsNode.addEventListener("click", (event) => {
+    const timerTrigger = event.target.closest("[data-rank-timer-trigger]");
+    if (timerTrigger) {
+      const index = Number(timerTrigger.dataset.rankTimerTrigger);
+      const result = latestPayload?.results?.[index];
+      if (!result) return;
+      if (brewTimer.openRankIndex === index) {
+        closeBrewTimer();
+        return;
+      }
+      openBrewTimer(index, result);
+      renderResultContent(latestPayload.results);
+      syncBrewTimerPanel();
+      return;
+    }
+
+    const timerAction = event.target.closest("[data-rank-timer-action]");
+    if (timerAction) {
+      const action = timerAction.dataset.rankTimerAction;
+      if (action === "toggle") startOrPauseBrewTimer();
+      if (action === "reset") resetBrewTimer();
+      if (action === "next") skipBrewTimerStep();
+      if (action === "close") closeBrewTimer();
+      return;
+    }
+
     const trigger = event.target.closest("[data-open-radar]");
     if (!trigger) return;
     event.preventDefault();
@@ -451,13 +806,19 @@
     }
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !radarModal.hidden) {
+    if (event.key !== "Escape") return;
+    if (!radarModal.hidden) {
       closeRadarModal();
+      return;
+    }
+    if (brewTimer.openRankIndex !== null) {
+      closeBrewTimer();
     }
   });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    setMobileControlsHidden(true, { scrollToResults: true });
     submitButton.disabled = true;
     submitButton.textContent = "計算中...";
 
@@ -475,6 +836,7 @@
       const data = await response.json();
       renderResults(data);
     } catch (error) {
+      setMobileControlsHidden(false);
       viewModeBar.hidden = true;
       resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
       updateRadarTrigger([]);
@@ -486,4 +848,5 @@
 
   syncViewModeUI();
   showHelp("brewer");
+  syncControlsPanelState();
 })();

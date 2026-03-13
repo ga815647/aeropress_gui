@@ -117,7 +117,7 @@ app = create_app()
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AeroPress Web UI")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--debug", dest="debug", action="store_true")
     parser.add_argument("--no-debug", dest="debug", action="store_false")

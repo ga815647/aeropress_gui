@@ -1,4 +1,4 @@
-from webapp import create_app
+from webapp import build_parser, create_app
 
 
 def test_webapp_routes() -> None:
@@ -8,6 +8,7 @@ def test_webapp_routes() -> None:
     index_response = client.get("/")
     assert index_response.status_code == 200
     assert b"AeroPress" in index_response.data
+    assert b"data-controls-toggle" in index_response.data
 
     api_response = client.post(
         "/api/optimize",
@@ -29,3 +30,10 @@ def test_webapp_routes() -> None:
     assert len(payload["results"]) == 1
     assert "compounds_abs" in payload["results"][0]
     assert "swirl_wait_sec" in payload["results"][0]
+
+
+def test_webapp_parser_exposes_lan_by_default() -> None:
+    args = build_parser().parse_args([])
+    assert args.host == "0.0.0.0"
+    assert args.port == 8000
+    assert args.debug is True
