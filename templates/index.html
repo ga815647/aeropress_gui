@@ -27,11 +27,11 @@
           linear-gradient(135deg, #f3ebdf 0%, #e7d6c5 100%);
       }
       .shell {
-        width: min(1240px, calc(100vw - 32px));
+        width: min(1160px, calc(100vw - 32px));
         margin: 24px auto 40px;
         display: grid;
-        grid-template-columns: 380px 1fr;
-        gap: 24px;
+        grid-template-columns: 340px 1fr;
+        gap: 20px;
       }
       .panel {
         background: rgba(255, 250, 240, 0.88);
@@ -47,12 +47,12 @@
         align-self: start;
       }
       .hero {
-        padding: 28px;
+        padding: 22px 24px 18px;
       }
       h1 {
         margin: 0 0 8px;
-        font-size: clamp(2rem, 3vw, 3.4rem);
-        line-height: 0.95;
+        font-size: clamp(1.55rem, 2.2vw, 2.45rem);
+        line-height: 1.02;
         letter-spacing: -0.03em;
       }
       h2, h3, p, label, select, input, button {
@@ -151,18 +151,18 @@
       .summary {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 20px;
+        gap: 10px;
+        margin-top: 16px;
       }
       .chip {
         background: rgba(255,255,255,0.7);
         border: 1px solid var(--line);
         border-radius: 18px;
-        padding: 14px;
+        padding: 12px;
       }
       .result-card {
         border-top: 1px solid var(--line);
-        padding: 20px 28px 28px;
+        padding: 18px 24px 22px;
       }
       .result-card:first-of-type { border-top: 0; }
       .result-head {
@@ -172,33 +172,131 @@
         gap: 12px;
         margin-bottom: 12px;
       }
-      .score { font-size: 2rem; font-weight: 800; color: var(--accent); }
+      .result-head h2 {
+        font-size: clamp(1.1rem, 1.5vw, 1.4rem);
+        line-height: 1.15;
+      }
+      .score { font-size: 1.65rem; font-weight: 800; color: var(--accent); }
       .metrics {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        margin: 12px 0 16px;
+        gap: 8px;
+        margin: 10px 0 14px;
       }
       .metric, .ratio, .compound {
         background: rgba(255,255,255,0.72);
         border: 1px solid var(--line);
         border-radius: 16px;
-        padding: 12px;
+        padding: 10px;
       }
       .compound-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 14px;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .compound-note {
+        margin-top: 6px;
+        color: var(--muted);
+        line-height: 1.45;
+        font-size: 12px;
+      }
+      .radar-trigger-wrap {
+        margin: 0 24px 20px;
+      }
+      .radar-trigger {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px 16px;
+        background: rgba(255,255,255,0.72);
+        color: var(--ink);
+        text-align: left;
+        cursor: pointer;
+      }
+      .radar-trigger strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 15px;
+      }
+      .radar-trigger:hover {
+        border-color: rgba(187, 95, 42, 0.45);
+        box-shadow: 0 10px 24px rgba(88, 55, 33, 0.08);
+      }
+      .modal[hidden] {
+        display: none;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(31, 26, 23, 0.42);
+      }
+      .modal-panel {
+        width: min(920px, 100%);
+        max-height: min(88vh, 920px);
+        overflow: auto;
+        background: rgba(255, 250, 240, 0.98);
+        border: 1px solid rgba(216, 199, 183, 0.95);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+      }
+      .modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 12px;
+        padding: 22px 24px 14px;
+      }
+      .modal-head h2 {
+        margin: 4px 0 0;
+        font-size: 1.35rem;
+      }
+      .modal-close {
+        border: 0;
+        border-radius: 999px;
+        width: 34px;
+        height: 34px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 18px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .modal-body {
+        padding: 0 24px 24px;
       }
       .radar-wrap {
-        margin-top: 18px;
         border: 1px solid var(--line);
         border-radius: 20px;
         background: rgba(255,255,255,0.72);
-        padding: 16px;
+        padding: 16px 18px 12px;
       }
-      #radar svg { width: 100%; height: auto; display: block; }
+      #radar svg {
+        width: min(100%, 520px);
+        height: auto;
+        display: block;
+        margin: 0 auto;
+      }
+      .radar-legend {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .legend-item {
+        background: rgba(255,255,255,0.72);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px;
+      }
+      .legend-item strong {
+        display: inline-block;
+        margin-bottom: 6px;
+      }
       .empty {
         padding: 28px;
         border-top: 1px solid var(--line);
@@ -207,9 +305,16 @@
       @media (max-width: 980px) {
         .shell { grid-template-columns: 1fr; }
         .controls { position: static; }
+        .radar-trigger-wrap { margin: 0 20px 20px; }
+        .radar-legend { grid-template-columns: 1fr; }
         .summary, .metrics, .compound-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
       @media (max-width: 640px) {
+        .hero,
+        .result-card { padding-left: 18px; padding-right: 18px; }
+        .radar-trigger-wrap { margin: 0 18px 18px; }
+        .modal-head,
+        .modal-body { padding-left: 18px; padding-right: 18px; }
         .grid, .summary, .metrics, .compound-grid { grid-template-columns: 1fr; }
       }
     </style>
@@ -219,7 +324,6 @@
       <section class="panel controls">
         <span class="eyebrow">Local Web UI</span>
         <h2 style="margin-top:0">沖煮參數</h2>
-        <p class="muted">選取任一欄位時，下面會出現提示框，說明這個參數在模型中的作用。</p>
         <form id="optimize-form">
           <div class="grid">
             <div class="field" data-help-key="brewer">
@@ -322,12 +426,34 @@
           <p class="muted">輸入水質、焙度與環境條件，立即得到最優配方、風味向量與圖形化比較。</p>
           <div id="summary" class="summary"></div>
         </div>
-        <div id="radar" class="radar-wrap" hidden></div>
+        <div class="radar-trigger-wrap">
+          <button id="radar-trigger" class="radar-trigger" type="button" hidden>
+            <strong>查看風味雷達圖</strong>
+            <span class="muted">點擊展開大圖，並查看 AC / SW / PS / CA / CGA / MEL 的意義說明。</span>
+          </button>
+        </div>
         <div id="results" class="results">
           <div class="empty">尚未執行最佳化。</div>
         </div>
       </section>
     </main>
+
+    <div id="radar-modal" class="modal" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="radar-modal-title">
+        <div class="modal-head">
+          <div>
+            <span class="eyebrow">Flavor Radar</span>
+            <h2 id="radar-modal-title">風味雷達圖與參數說明</h2>
+            <p class="muted">比較前三名沖煮組合在六個風味向量上的相對強度。</p>
+          </div>
+          <button id="radar-close" class="modal-close" type="button" aria-label="關閉">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="radar" class="radar-wrap"></div>
+          <div id="radar-legend" class="radar-legend"></div>
+        </div>
+      </div>
+    </div>
 
     <script>
       const form = document.getElementById("optimize-form");
@@ -338,12 +464,44 @@
       const submitButton = document.getElementById("submit-button");
       const summary = document.getElementById("summary");
       const resultsNode = document.getElementById("results");
+      const radarTrigger = document.getElementById("radar-trigger");
+      const radarModal = document.getElementById("radar-modal");
+      const radarClose = document.getElementById("radar-close");
       const radarNode = document.getElementById("radar");
+      const radarLegend = document.getElementById("radar-legend");
       const tooltipTitle = document.getElementById("tooltip-title");
       const tooltipBody = document.getElementById("tooltip-body");
       const tooltipMeta = document.getElementById("tooltip-meta");
       const presets = {{ presets|tojson }};
       const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
+      let latestRadarResults = [];
+
+      const compoundHelp = {
+        AC: {
+          label: "明亮酸質",
+          body: "代表杯中的活潑酸感與前段亮度，越高通常越有清晰、立體的果酸表現。"
+        },
+        SW: {
+          label: "甜感厚度",
+          body: "代表甜味與圓潤度，影響口感是否飽滿、滑順，能平衡過尖的酸質。"
+        },
+        PS: {
+          label: "正向香氣",
+          body: "代表花香、果香與乾淨香氣的強度，通常越高越能拉出愉悅的香氣層次。"
+        },
+        CA: {
+          label: "木質苦感",
+          body: "代表偏木質、乾感的苦味來源，過高時容易讓尾韻變硬、變澀。"
+        },
+        CGA: {
+          label: "綠感刺激",
+          body: "代表生澀、草本與尖銳刺激感，通常在萃取失衡時會更明顯。"
+        },
+        MEL: {
+          label: "焙烤厚苦",
+          body: "代表焙烤、焦糖化後的厚重苦甜感，適量能增加深度，過高則容易壓味。"
+        }
+      };
 
       const fieldHelp = {
         brewer: {
@@ -436,14 +594,13 @@
         return `<div class="chip"><strong>${label}</strong><div>${value}</div></div>`;
       }
 
-      function renderRadar(results) {
+      function buildRadarSvg(results) {
         if (!results.length) {
-          radarNode.hidden = true;
-          return;
+          return "";
         }
-        const size = 360;
+        const size = 420;
         const center = size / 2;
-        const radius = 120;
+        const radius = 142;
         const maxByKey = Object.fromEntries(keys.map((key) => [key, Math.max(...results.map((item) => item.compounds_abs[key]), 1e-8)]));
         const rings = [0.25, 0.5, 0.75, 1.0];
         const series = results.slice(0, 3).map((result, index) => {
@@ -461,9 +618,9 @@
           const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
           const x = center + Math.cos(angle) * radius;
           const y = center + Math.sin(angle) * radius;
-          const lx = center + Math.cos(angle) * (radius + 24);
-          const ly = center + Math.sin(angle) * (radius + 24);
-          return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line><text x="${lx}" y="${ly}" text-anchor="middle" font-size="12" fill="#6d6358">${key}</text>`;
+          const lx = center + Math.cos(angle) * (radius + 28);
+          const ly = center + Math.sin(angle) * (radius + 28);
+          return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line><text x="${lx}" y="${ly}" text-anchor="middle" font-size="13" fill="#6d6358">${key}</text>`;
         }).join("");
         const ringSvg = rings.map((ring) => {
           const points = keys.map((_, idx) => {
@@ -474,8 +631,51 @@
           }).join(" ");
           return `<polygon points="${points}" fill="none" stroke="#e4d7cb"></polygon>`;
         }).join("");
-        radarNode.innerHTML = `<svg viewBox="0 0 ${size} ${size}">${ringSvg}${spokes}${series}</svg>`;
-        radarNode.hidden = false;
+        return `<svg viewBox="0 0 ${size} ${size}">${ringSvg}${spokes}${series}</svg>`;
+      }
+
+      function closeRadarModal() {
+        radarModal.hidden = true;
+        document.body.style.overflow = "";
+      }
+
+      function openRadarModal() {
+        if (!latestRadarResults.length) return;
+        radarNode.innerHTML = buildRadarSvg(latestRadarResults);
+        radarLegend.innerHTML = keys.map((key) => radarLegendCard(key)).join("");
+        radarModal.hidden = false;
+        document.body.style.overflow = "hidden";
+      }
+
+      function updateRadarTrigger(results) {
+        latestRadarResults = results.slice(0, 3);
+        radarTrigger.hidden = !latestRadarResults.length;
+        if (!latestRadarResults.length) {
+          closeRadarModal();
+        } else if (!radarModal.hidden) {
+          openRadarModal();
+        }
+      }
+
+      function compoundCard(key, value) {
+        const help = compoundHelp[key];
+        return `
+          <div class="compound" title="${help.label}">
+            <strong>${key}</strong>
+            <div>${value.toFixed(4)}</div>
+            <div class="compound-note">${help.label}: ${help.body}</div>
+          </div>
+        `;
+      }
+
+      function radarLegendCard(key) {
+        const help = compoundHelp[key];
+        return `
+          <div class="legend-item">
+            <strong>${key} - ${help.label}</strong>
+            <div class="muted">${help.body}</div>
+          </div>
+        `;
       }
 
       function renderResults(payload) {
@@ -489,7 +689,7 @@
 
         if (!results.length) {
           resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
-          renderRadar([]);
+          updateRadarTrigger([]);
           return;
         }
 
@@ -515,13 +715,26 @@
               <div class="ratio"><strong>Contact</strong><div>${formatTime(result.total_contact_sec)}</div></div>
             </div>
             <div class="compound-grid">
-              ${keys.map((key) => `<div class="compound"><strong>${key}</strong><div>${result.compounds_abs[key].toFixed(4)}</div></div>`).join("")}
+              ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
             </div>
           </article>
         `).join("");
 
-        renderRadar(results);
+        updateRadarTrigger(results);
       }
+
+      radarTrigger.addEventListener("click", openRadarModal);
+      radarClose.addEventListener("click", closeRadarModal);
+      radarModal.addEventListener("click", (event) => {
+        if (event.target === radarModal) {
+          closeRadarModal();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !radarModal.hidden) {
+          closeRadarModal();
+        }
+      });
 
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -542,7 +755,7 @@
           renderResults(data);
         } catch (error) {
           resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
-          radarNode.hidden = true;
+          updateRadarTrigger([]);
         } finally {
           submitButton.disabled = false;
           submitButton.textContent = "開始最佳化";
