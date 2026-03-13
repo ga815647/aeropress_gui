@@ -4,7 +4,7 @@ import constants
 from models.compounds import predict_compounds
 from models.ey_model import calc_ey, calc_fines_ratio
 from models.scoring import build_ideal_abs, flavor_score
-from models.tds_model import apply_channeling, calc_press_time, calc_retention, calc_swirl_wait, calc_tds
+from models.tds_model import apply_channeling, calc_drip_volume, calc_press_time, calc_retention, calc_swirl_wait, calc_tds
 
 
 def optimize(
@@ -24,6 +24,8 @@ def optimize(
 
     pour_time = water_ml / constants.POUR_RATE
     pour_offset = pour_time / 2.0
+    seal_delay = constants.SEAL_DELAY_DEFAULT
+    drip_time = pour_time + seal_delay
     results: list[dict] = []
 
     max_temp = min(base_temp + 3, constants.TEMP_BOILING_POINT)
@@ -57,6 +59,7 @@ def optimize(
                         water_kh,
                         press_equiv=press_equiv,
                         pour_offset=pour_offset,
+                        seal_delay=seal_delay,
                     )
                     if ey < constants.EY_MIN:
                         continue
@@ -78,12 +81,15 @@ def optimize(
                         water_mg_frac,
                         press_equiv=press_equiv,
                         pour_offset=pour_offset,
+                        water_ml=water_ml,
+                        seal_delay=seal_delay,
                     )
                     ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
                     tds = calc_tds(roast_code, dose, ey, dial, water_ml)
                     ideal_abs = build_ideal_abs(roast_code, tds)
                     score = flavor_score(compounds, ideal_abs, tds, roast_code, water_kh, t_slurry_val, temp)
                     swirl_wait = calc_swirl_wait(dial)
+                    drip_volume = calc_drip_volume(water_ml, dial, drip_time)
 
                     results.append(
                         {
@@ -97,6 +103,9 @@ def optimize(
                             "swirl_wait_sec": swirl_wait,
                             "press_sec": display_press_sec,
                             "press_sec_internal": press_sec,
+                            "seal_delay": seal_delay,
+                            "pre_seal_drip_sec": round(drip_time, 1),
+                            "pre_seal_drip_ml": drip_volume,
                             "total_contact_sec": steep + constants.SWIRL_TIME_SEC + swirl_wait + display_press_sec,
                             "ey": ey,
                             "tds": tds,

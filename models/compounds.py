@@ -3,21 +3,16 @@ from __future__ import annotations
 import math
 
 import constants
+from models.tds_model import calc_drip_volume
 
 
-def predict_compounds(
+def _predict_closed_compounds(
     roast_code: str,
     temp: float,
     dial: float,
-    steep_sec: float,
-    ey: float,
-    water_kh: float = 30,
-    water_mg_frac: float = 0.40,
-    press_equiv: float = 0,
-    pour_offset: float = 0,
+    effective_steep: float,
+    water_mg_frac: float,
 ) -> dict:
-    effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv
-
     mg_delta = water_mg_frac - 0.50
     ac_sw_mult = 1.0 + mg_delta * constants.MG_FRAC_AC_SW_MULT
     ps_cga_mult = 1.0 + (-mg_delta) * constants.MG_FRAC_PS_CGA_MULT
@@ -55,10 +50,54 @@ def predict_compounds(
     mel = base_profile["MEL"] * (1 + (temp - 90) * 0.01)
 
     return {
-        "AC": round(ac, 4),
-        "SW": round(sw, 4),
-        "PS": round(ps, 4),
-        "CA": round(ca, 4),
-        "CGA": round(cga, 4),
-        "MEL": round(mel, 4),
+        "AC": ac,
+        "SW": sw,
+        "PS": ps,
+        "CA": ca,
+        "CGA": cga,
+        "MEL": mel,
     }
+
+
+def predict_compounds(
+    roast_code: str,
+    temp: float,
+    dial: float,
+    steep_sec: float,
+    ey: float,
+    water_kh: float = 30,
+    water_mg_frac: float = 0.40,
+    press_equiv: float = 0,
+    pour_offset: float = 0,
+    water_ml: float = 400,
+    seal_delay: float = constants.SEAL_DELAY_DEFAULT,
+) -> dict:
+    effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv
+    main_profile = _predict_closed_compounds(roast_code, temp, dial, effective_steep, water_mg_frac)
+
+    drip_time = water_ml / constants.POUR_RATE + seal_delay
+    drip_volume = calc_drip_volume(water_ml, dial, drip_time)
+    drip_ratio = min(max(drip_volume / max(water_ml, 1e-6), 0.0), 0.35)
+
+    if drip_ratio > 0:
+        drip_profile = _predict_closed_compounds(
+            roast_code,
+            temp,
+            dial,
+            max(1.0, drip_time * constants.PRE_SEAL_CONTACT_FRACTION),
+            water_mg_frac,
+        )
+        drip_profile["AC"] *= constants.PRE_SEAL_AC_MULT
+        drip_profile["SW"] *= constants.PRE_SEAL_SW_MULT
+        drip_profile["PS"] *= constants.PRE_SEAL_PS_MULT
+        drip_profile["CA"] *= constants.PRE_SEAL_CA_MULT
+        drip_profile["CGA"] *= constants.PRE_SEAL_CGA_MULT
+        drip_profile["MEL"] *= constants.PRE_SEAL_MEL_MULT
+        profile = {
+            key: main_profile[key] * (1.0 - drip_ratio) + drip_profile[key] * drip_ratio
+            for key in constants.KEYS
+        }
+    else:
+        profile = main_profile
+
+    return {key: round(profile[key], 4) for key in constants.KEYS}

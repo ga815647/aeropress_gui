@@ -145,13 +145,15 @@
     `;
   }
 
-  function compareValueCell(result, primary, secondary = "") {
+  function compareValueCell(result, primary, secondary = "", cellClass = "", valueClass = "") {
+    const tdClass = cellClass ? ` class="${cellClass}"` : "";
+    const rankClass = valueClass ? `compare-rank ${valueClass}` : "compare-rank";
     if (!result) {
-      return `<td><span class="compare-rank">-</span></td>`;
+      return `<td${tdClass}><span class="compare-rank">-</span></td>`;
     }
     return `
-      <td>
-        <span class="compare-rank">${primary}</span>
+      <td${tdClass}>
+        <span class="${rankClass}">${primary}</span>
         ${secondary ? `<span class="compare-sub">${secondary}</span>` : ""}
       </td>
     `;
@@ -274,6 +276,28 @@
       row(compareLabelCell("Swirl Phase", "Swirl + Wait"), (result) => compareValueCell(result, result ? `${result.swirl_sec + result.swirl_wait_sec}s` : "-")),
     ].join("");
 
+    const compoundRows = keys.map((key) => {
+      const maxValue = Math.max(
+        ...topResults
+          .filter(Boolean)
+          .map((result) => result.compounds_abs[key]),
+      );
+
+      return row(compareLabelCell(key, compoundHelp[key].label), (result) => {
+        if (!result) {
+          return compareValueCell(result, "-");
+        }
+        const isHighest = result.compounds_abs[key] === maxValue;
+        return compareValueCell(
+          result,
+          result.compounds_abs[key].toFixed(4),
+          "",
+          isHighest ? "compare-cell-highlight" : "",
+          isHighest ? "compare-rank-highlight" : "",
+        );
+      });
+    }).join("");
+
     return `
       <section class="compare-card">
         <div class="compare-head">
@@ -300,7 +324,7 @@
               ${row(compareLabelCell("AC/SW", "酸甜比"), (result) => compareValueCell(result, result ? result.ratios.ac_sw_actual : "-", result ? `ideal ${result.ratios.ac_sw_ideal}` : ""))}
               ${row(compareLabelCell("PS/Bitter", "香氣苦味比"), (result) => compareValueCell(result, result ? result.ratios.ps_bitter_actual : "-", result ? `ideal ${result.ratios.ps_bitter_ideal}` : ""))}
               ${compareSection("六維向量")}
-              ${keys.map((key) => row(compareLabelCell(key, compoundHelp[key].label), (result) => compareValueCell(result, result ? result.compounds_abs[key].toFixed(4) : "-"))).join("")}
+              ${compoundRows}
             </tbody>
           </table>
         </div>
