@@ -370,54 +370,8 @@
     `;
   }
 
-  function renderRankTimerPanel(result, index) {
-    const steps = buildBrewSteps(result);
-    const activeStep = steps[brewTimer.stepIndex] || steps[0];
-    const totalMs = steps.reduce((sum, step) => sum + step.durationMs, 0);
-    const currentMs = brewTimer.openRankIndex === index
-      ? brewTimer.remainingMs
-      : activeStep.durationMs;
-    return `
-      <div class="rank-timer-popover" data-rank-timer-panel="${index}">
-        <div class="rank-timer-head">
-          <div>
-            <div class="rank-timer-rank">Rank ${index + 1} 沖煮碼表</div>
-            <div class="rank-timer-score">Score ${result.score.toFixed(1)} · ${steps.length} steps</div>
-          </div>
-          <button class="rank-timer-close-button" type="button" data-rank-timer-action="close" aria-label="關閉碼表">×</button>
-        </div>
-        <div class="rank-timer-layout">
-          <div class="rank-timer-clock-card">
-            <div class="rank-timer-status" data-rank-timer-status>Ready</div>
-            <div class="rank-timer-clock" data-rank-timer-clock>${formatTimerClock(currentMs)}</div>
-            <div class="rank-timer-total" data-rank-timer-total>剩餘總時間 ${formatTimerClock(totalMs)}</div>
-          </div>
-          <div class="rank-timer-step-card">
-            <div class="rank-timer-step-label" data-rank-timer-label>步驟 1/${steps.length}：${activeStep.label}</div>
-            <div class="rank-timer-step-text" data-rank-timer-action-text>${activeStep.action}</div>
-            <div class="rank-timer-step-next" data-rank-timer-next>下一步：${steps[1] ? steps[1].label : "完成整個沖煮流程。"}</div>
-          </div>
-        </div>
-        <div class="rank-timer-progress">
-          ${steps.map((step, stepIndex) => `
-            <span
-              class="rank-timer-step-chip ${stepIndex === 0 ? "is-active" : ""}"
-              data-rank-timer-step-chip
-            >${step.label}</span>
-          `).join("")}
-        </div>
-        <div class="rank-timer-actions">
-          <button class="rank-timer-action-button" type="button" data-rank-timer-action="toggle" data-rank-timer-toggle>開始</button>
-          <button class="rank-timer-action-button is-secondary" type="button" data-rank-timer-action="next">下一步</button>
-          <button class="rank-timer-action-button is-ghost" type="button" data-rank-timer-action="reset">重設</button>
-        </div>
-      </div>
-    `;
-  }
-
   function renderRankHeader(result, index) {
     const scoreLine = result ? `<span class="compare-sub">Score ${result.score.toFixed(1)}</span>` : "";
-    const isOpen = brewTimer.openRankIndex === index && result;
     return `
       <th>
         <div class="compare-rank-head">
