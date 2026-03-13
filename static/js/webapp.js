@@ -451,6 +451,13 @@
       : activeStep.durationMs;
     return `
       <div class="rank-timer-popover" data-rank-timer-panel="${index}">
+        <div class="rank-timer-head">
+          <div>
+            <div class="rank-timer-rank">Rank ${index + 1} 沖煮碼表</div>
+            <div class="rank-timer-score">Score ${result.score.toFixed(1)} · ${steps.length} steps</div>
+          </div>
+          <button class="rank-timer-close-button" type="button" data-rank-timer-action="close" aria-label="關閉碼表">×</button>
+        </div>
         <div class="rank-timer-layout">
           <div class="rank-timer-clock-card">
             <div class="rank-timer-status" data-rank-timer-status>Ready</div>
@@ -473,9 +480,8 @@
         </div>
         <div class="rank-timer-actions">
           <button class="rank-timer-action-button" type="button" data-rank-timer-action="toggle" data-rank-timer-toggle>開始</button>
-          <button class="rank-timer-action-button is-secondary" type="button" data-rank-timer-action="reset">重設</button>
           <button class="rank-timer-action-button is-secondary" type="button" data-rank-timer-action="next">下一步</button>
-          <button class="rank-timer-action-button is-ghost" type="button" data-rank-timer-action="close">關閉</button>
+          <button class="rank-timer-action-button is-ghost" type="button" data-rank-timer-action="reset">重設</button>
         </div>
       </div>
     `;
