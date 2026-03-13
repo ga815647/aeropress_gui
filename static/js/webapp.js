@@ -1,0 +1,423 @@
+(() => {
+  const form = document.getElementById("optimize-form");
+  if (!form) return;
+
+  const presetSelect = document.getElementById("preset");
+  const ghInput = document.getElementById("gh");
+  const khInput = document.getElementById("kh");
+  const mgInput = document.getElementById("mg_frac");
+  const submitButton = document.getElementById("submit-button");
+  const summary = document.getElementById("summary");
+  const resultsNode = document.getElementById("results");
+  const radarTrigger = document.getElementById("radar-trigger");
+  const viewModeBar = document.getElementById("view-mode-bar");
+  const viewModeButtons = document.querySelectorAll("[data-view-mode]");
+  const viewModeNote = document.getElementById("view-mode-note");
+  const radarModal = document.getElementById("radar-modal");
+  const radarClose = document.getElementById("radar-close");
+  const radarNode = document.getElementById("radar");
+  const radarLegend = document.getElementById("radar-legend");
+  const tooltipTitle = document.getElementById("tooltip-title");
+  const tooltipBody = document.getElementById("tooltip-body");
+  const tooltipMeta = document.getElementById("tooltip-meta");
+
+  const presets = window.APP_PRESETS || {};
+  const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
+
+  let currentViewMode = "compare";
+  let latestPayload = null;
+  let latestRadarResults = [];
+
+  const fieldHelp = {
+    brewer: {
+      title: "器材尺寸",
+      body: "切換不同 AeroPress 容量，會影響搜尋範圍中的粉量與萃取條件。",
+      meta: "一般版本與 XL 的配方尺度不同，建議先選對器材再開始比較。",
+    },
+    roast: {
+      title: "焙度",
+      body: "焙度會改變理想風味向量與苦甜平衡，直接影響排序結果。",
+      meta: "若不知道怎麼選，通常可先從中焙 M 開始測試。",
+    },
+    preset: {
+      title: "水質預設",
+      body: "選擇常見水配方後，會自動回填 GH、KH 與 Mg 比例。",
+      meta: "若想微調，可先套用預設再手動修改數值。",
+    },
+    gh: {
+      title: "GH",
+      body: "總硬度代表鈣鎂離子含量，會影響萃取效率、甜感與結構。",
+      meta: "常見起手值可先放在 40 到 100 ppm 附近。",
+    },
+    kh: {
+      title: "KH",
+      body: "碳酸鹽硬度代表緩衝能力，會影響酸感是否被壓掉或過度尖銳。",
+      meta: "KH 過高常讓酸質變鈍，過低則可能讓杯感失去穩定性。",
+    },
+    mg_frac: {
+      title: "Mg 比例",
+      body: "用來描述 GH 中鎂占比，會牽動酸甜表現與口感輪廓。",
+      meta: "常見可從 0.30 到 0.50 開始試。",
+    },
+    top: {
+      title: "Top N",
+      body: "控制回傳幾組最佳結果，方便你看多一點組合或只專注最前面的排序。",
+      meta: "若主要是比較前三名，維持 3 就足夠。",
+    },
+    t_env: {
+      title: "環境溫度",
+      body: "環境溫度會影響實際 slurry 溫度，進而影響模型中的萃取預估。",
+      meta: "冬天與夏天差異明顯時，這個值值得調整。",
+    },
+    tds_floor: {
+      title: "TDS Floor",
+      body: "限制過低 TDS 的組合，避免推薦雖然乾淨但過薄的結果。",
+      meta: "若你想找更輕盈的配方，可試著微幅下修。",
+    },
+    altitude: {
+      title: "海拔",
+      body: "海拔會影響沸點與實際水溫上限，因此會改變可行的沖煮溫度範圍。",
+      meta: "平地可維持 0，高海拔地區再補入實際數值。",
+    },
+  };
+
+  const compoundHelp = {
+    AC: {
+      label: "明亮酸質",
+      body: "代表杯中的活潑酸感與前段亮度，越高通常越有清晰、立體的果酸表現。",
+    },
+    SW: {
+      label: "甜感厚度",
+      body: "代表甜味與圓潤度，影響口感是否飽滿、滑順，能平衡過尖的酸質。",
+    },
+    PS: {
+      label: "正向香氣",
+      body: "代表花香、果香與乾淨香氣的強度，通常越高越能拉出愉悅的香氣層次。",
+    },
+    CA: {
+      label: "木質苦感",
+      body: "代表偏木質、乾感的苦味來源，過高時容易讓尾韻變硬、變澀。",
+    },
+    CGA: {
+      label: "綠感刺激",
+      body: "代表生澀、草本與尖銳刺激感，通常在萃取失衡時會更明顯。",
+    },
+    MEL: {
+      label: "焙烤厚苦",
+      body: "代表焙烤、焦糖化後的厚重苦甜感，適量能增加深度，過高則容易壓味。",
+    },
+  };
+
+  function showHelp(key) {
+    const entry = fieldHelp[key];
+    if (!entry) return;
+    tooltipTitle.textContent = entry.title;
+    tooltipBody.textContent = entry.body;
+    tooltipMeta.textContent = entry.meta;
+  }
+
+  function formatTime(seconds) {
+    const total = Math.round(seconds);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
+
+  function metricCard(label, value) {
+    return `<div class="chip"><strong>${label}</strong><div>${value}</div></div>`;
+  }
+
+  function compoundCard(key, value) {
+    const help = compoundHelp[key];
+    return `
+      <div class="compound" title="${help.label}">
+        <strong>${key}</strong>
+        <div>${value.toFixed(4)}</div>
+        <div class="compound-note">${help.label}: ${help.body}</div>
+      </div>
+    `;
+  }
+
+  function radarLegendCard(key) {
+    const help = compoundHelp[key];
+    return `
+      <div class="legend-item">
+        <strong>${key} - ${help.label}</strong>
+        <div class="muted">${help.body}</div>
+      </div>
+    `;
+  }
+
+  function compareValueCell(result, primary, secondary = "") {
+    if (!result) {
+      return `<td><span class="compare-rank">-</span></td>`;
+    }
+    return `
+      <td>
+        <span class="compare-rank">${primary}</span>
+        ${secondary ? `<span class="compare-sub">${secondary}</span>` : ""}
+      </td>
+    `;
+  }
+
+  function compareSection(title) {
+    return `<tr class="compare-section-row"><td colspan="4">${title}</td></tr>`;
+  }
+
+  function buildRadarSvg(results) {
+    if (!results.length) return "";
+
+    const size = 420;
+    const center = size / 2;
+    const radius = 142;
+    const maxByKey = Object.fromEntries(
+      keys.map((key) => [key, Math.max(...results.map((item) => item.compounds_abs[key]), 1e-8)]),
+    );
+    const rings = [0.25, 0.5, 0.75, 1.0];
+
+    const series = results.slice(0, 3).map((result, index) => {
+      const points = keys.map((key, idx) => {
+        const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+        const normalized = result.compounds_abs[key] / maxByKey[key];
+        const x = center + Math.cos(angle) * radius * normalized;
+        const y = center + Math.sin(angle) * radius * normalized;
+        return `${x},${y}`;
+      }).join(" ");
+      const color = ["#bb5f2a", "#4e6b5b", "#8f4667"][index] || "#555";
+      return `<polygon points="${points}" fill="${color}22" stroke="${color}" stroke-width="2"></polygon>`;
+    }).join("");
+
+    const spokes = keys.map((key, idx) => {
+      const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+      const x = center + Math.cos(angle) * radius;
+      const y = center + Math.sin(angle) * radius;
+      const lx = center + Math.cos(angle) * (radius + 28);
+      const ly = center + Math.sin(angle) * (radius + 28);
+      return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line><text x="${lx}" y="${ly}" text-anchor="middle" font-size="13" fill="#6d6358">${key}</text>`;
+    }).join("");
+
+    const ringSvg = rings.map((ring) => {
+      const points = keys.map((_, idx) => {
+        const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+        const x = center + Math.cos(angle) * radius * ring;
+        const y = center + Math.sin(angle) * radius * ring;
+        return `${x},${y}`;
+      }).join(" ");
+      return `<polygon points="${points}" fill="none" stroke="#e4d7cb"></polygon>`;
+    }).join("");
+
+    return `<svg viewBox="0 0 ${size} ${size}">${ringSvg}${spokes}${series}</svg>`;
+  }
+
+  function closeRadarModal() {
+    radarModal.hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  function openRadarModal() {
+    if (!latestRadarResults.length) return;
+    radarNode.innerHTML = buildRadarSvg(latestRadarResults);
+    radarLegend.innerHTML = keys.map((key) => radarLegendCard(key)).join("");
+    radarModal.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function updateRadarTrigger(results) {
+    latestRadarResults = results.slice(0, 3);
+    radarTrigger.hidden = !latestRadarResults.length;
+    if (!latestRadarResults.length) {
+      closeRadarModal();
+      return;
+    }
+    if (!radarModal.hidden) {
+      openRadarModal();
+    }
+  }
+
+  function renderCompareTable(results) {
+    const topResults = results.slice(0, 3);
+    const columns = [0, 1, 2].map((index) => {
+      const result = topResults[index];
+      return result
+        ? `<th>Rank ${index + 1}<span class="compare-sub">Score ${result.score.toFixed(1)}</span></th>`
+        : `<th>Rank ${index + 1}</th>`;
+    }).join("");
+
+    const row = (label, formatter) => `
+      <tr>
+        <td>${label}</td>
+        ${[0, 1, 2].map((index) => formatter(topResults[index])).join("")}
+      </tr>
+    `;
+
+    return `
+      <section class="compare-card">
+        <div class="compare-table-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>比較項目</th>
+                ${columns}
+              </tr>
+            </thead>
+            <tbody>
+              ${compareSection("配方")}
+              ${row("沖煮設定", (result) => compareValueCell(result, result ? `Temp ${result.temp}C / Dial ${result.dial}` : "-", result ? `Dose ${result.dose}g` : ""))}
+              ${row("時間配置", (result) => compareValueCell(result, result ? `Steep ${formatTime(result.steep_sec)}` : "-", result ? `Press ${result.press_sec}s / Contact ${formatTime(result.total_contact_sec)}` : ""))}
+              ${compareSection("萃取數值")}
+              ${row("EY", (result) => compareValueCell(result, result ? `${result.ey.toFixed(3)}%` : "-"))}
+              ${row("TDS", (result) => compareValueCell(result, result ? `${result.tds.toFixed(4)}%` : "-"))}
+              ${row("T_slurry", (result) => compareValueCell(result, result ? `${result.t_slurry.toFixed(1)}C` : "-"))}
+              ${compareSection("風味比例")}
+              ${row("AC/SW", (result) => compareValueCell(result, result ? result.ratios.ac_sw_actual : "-", result ? `ideal ${result.ratios.ac_sw_ideal}` : ""))}
+              ${row("PS/Bitter", (result) => compareValueCell(result, result ? result.ratios.ps_bitter_actual : "-", result ? `ideal ${result.ratios.ps_bitter_ideal}` : ""))}
+              ${compareSection("六維向量")}
+              ${keys.map((key) => row(`${key} (${compoundHelp[key].label})`, (result) => compareValueCell(result, result ? result.compounds_abs[key].toFixed(4) : "-"))).join("")}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderDetailCards(results) {
+    return results.map((result, index) => `
+      <article class="result-card">
+        <div class="result-head">
+          <div>
+            <div class="muted">Rank ${index + 1}</div>
+            <h2 style="margin:4px 0 0">Temp ${result.temp}C / Dial ${result.dial} / Dose ${result.dose}g</h2>
+          </div>
+          <div class="score">${result.score.toFixed(1)}</div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><strong>Steep</strong><div>${formatTime(result.steep_sec)}</div></div>
+          <div class="metric"><strong>EY</strong><div>${result.ey.toFixed(3)}%</div></div>
+          <div class="metric"><strong>TDS</strong><div>${result.tds.toFixed(4)}%</div></div>
+          <div class="metric"><strong>T_slurry</strong><div>${result.t_slurry.toFixed(1)}C</div></div>
+        </div>
+        <div class="metrics">
+          <div class="ratio"><strong>AC/SW</strong><div>${result.ratios.ac_sw_actual} / ideal ${result.ratios.ac_sw_ideal}</div></div>
+          <div class="ratio"><strong>PS/Bitter</strong><div>${result.ratios.ps_bitter_actual} / ideal ${result.ratios.ps_bitter_ideal}</div></div>
+          <div class="ratio"><strong>Press</strong><div>${result.press_sec}s</div></div>
+          <div class="ratio"><strong>Contact</strong><div>${formatTime(result.total_contact_sec)}</div></div>
+        </div>
+        <div class="compound-grid">
+          ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
+        </div>
+      </article>
+    `).join("");
+  }
+
+  function syncViewModeUI() {
+    viewModeButtons.forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.viewMode === currentViewMode);
+    });
+    viewModeNote.textContent = currentViewMode === "compare"
+      ? "聚焦前三名的核心數據差異。"
+      : "逐項附上參數與風味說明，適合細讀。";
+  }
+
+  function renderResultContent(results) {
+    resultsNode.innerHTML = currentViewMode === "compare"
+      ? renderCompareTable(results)
+      : renderDetailCards(results);
+  }
+
+  function renderResults(payload) {
+    const { meta, results } = payload;
+    latestPayload = payload;
+
+    summary.innerHTML = [
+      metricCard("焙度", `${meta.roast_name} (${meta.roast_code})`),
+      metricCard("水質", `GH ${meta.water_gh} / KH ${meta.water_kh}`),
+      metricCard("Mg 比例", meta.water_mg_frac),
+      metricCard("TDS Floor", meta.tds_floor),
+    ].join("");
+
+    if (!results.length) {
+      viewModeBar.hidden = true;
+      resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
+      updateRadarTrigger([]);
+      return;
+    }
+
+    viewModeBar.hidden = false;
+    syncViewModeUI();
+    renderResultContent(results);
+    updateRadarTrigger(results);
+  }
+
+  presetSelect.addEventListener("change", () => {
+    const selected = presetSelect.value;
+    if (selected && presets[selected]) {
+      ghInput.value = presets[selected].gh;
+      khInput.value = presets[selected].kh;
+      mgInput.value = presets[selected].mg_frac;
+    }
+    showHelp("preset");
+  });
+
+  document.querySelectorAll("[data-help-key] input, [data-help-key] select").forEach((element) => {
+    const key = element.closest("[data-help-key]").dataset.helpKey;
+    element.addEventListener("focus", () => showHelp(key));
+    element.addEventListener("change", () => showHelp(key));
+    element.addEventListener("click", () => showHelp(key));
+  });
+
+  document.querySelectorAll("[data-help-target]").forEach((button) => {
+    button.addEventListener("click", () => showHelp(button.dataset.helpTarget));
+  });
+
+  viewModeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.viewMode === currentViewMode) return;
+      currentViewMode = button.dataset.viewMode;
+      syncViewModeUI();
+      if (latestPayload?.results?.length) {
+        renderResultContent(latestPayload.results);
+      }
+    });
+  });
+
+  radarTrigger.addEventListener("click", openRadarModal);
+  radarClose.addEventListener("click", closeRadarModal);
+  radarModal.addEventListener("click", (event) => {
+    if (event.target === radarModal) {
+      closeRadarModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !radarModal.hidden) {
+      closeRadarModal();
+    }
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submitButton.disabled = true;
+    submitButton.textContent = "計算中...";
+
+    const payload = Object.fromEntries(new FormData(form).entries());
+    ["gh", "kh", "mg_frac", "top", "t_env", "tds_floor", "altitude"].forEach((key) => {
+      payload[key] = payload[key] === "" ? null : Number(payload[key]);
+    });
+
+    try {
+      const response = await fetch("/api/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      renderResults(data);
+    } catch (error) {
+      viewModeBar.hidden = true;
+      resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
+      updateRadarTrigger([]);
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "開始最佳化";
+    }
+  });
+
+  showHelp("brewer");
+})();
