@@ -14,6 +14,7 @@
         --accent-soft: #f2caa8;
         --line: #d8c7b7;
         --shadow: 0 24px 60px rgba(88, 55, 33, 0.14);
+        --tooltip-shadow: 0 18px 40px rgba(79, 41, 18, 0.18);
       }
       * { box-sizing: border-box; }
       body {
@@ -26,10 +27,10 @@
           linear-gradient(135deg, #f3ebdf 0%, #e7d6c5 100%);
       }
       .shell {
-        width: min(1200px, calc(100vw - 32px));
+        width: min(1240px, calc(100vw - 32px));
         margin: 24px auto 40px;
         display: grid;
-        grid-template-columns: 360px 1fr;
+        grid-template-columns: 380px 1fr;
         gap: 24px;
       }
       .panel {
@@ -39,15 +40,66 @@
         box-shadow: var(--shadow);
         backdrop-filter: blur(10px);
       }
-      .controls { padding: 24px; position: sticky; top: 24px; align-self: start; }
-      .hero { padding: 28px; }
-      h1 { margin: 0 0 8px; font-size: clamp(2rem, 3vw, 3.4rem); line-height: 0.95; letter-spacing: -0.03em; }
-      p, label, select, input, button { font-size: 14px; }
-      .eyebrow { display: inline-block; padding: 6px 10px; background: var(--accent-soft); border-radius: 999px; font-weight: 600; margin-bottom: 14px; }
+      .controls {
+        padding: 24px;
+        position: sticky;
+        top: 24px;
+        align-self: start;
+      }
+      .hero {
+        padding: 28px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 3vw, 3.4rem);
+        line-height: 0.95;
+        letter-spacing: -0.03em;
+      }
+      h2, h3, p, label, select, input, button {
+        font-size: 14px;
+      }
+      .eyebrow {
+        display: inline-block;
+        padding: 6px 10px;
+        background: var(--accent-soft);
+        border-radius: 999px;
+        font-weight: 600;
+        margin-bottom: 14px;
+      }
       .muted { color: var(--muted); }
-      .grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-      .field { display: grid; gap: 6px; margin-bottom: 12px; }
+      .grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: 1fr 1fr;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
       .field.full { grid-column: 1 / -1; }
+      .label-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .hint-button {
+        border: 0;
+        width: 22px;
+        min-width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        padding: 0;
+        cursor: pointer;
+      }
+      .hint-button:hover {
+        filter: brightness(0.96);
+      }
       select, input {
         width: 100%;
         border: 1px solid var(--line);
@@ -56,7 +108,12 @@
         background: #fffdf9;
         color: var(--ink);
       }
-      button {
+      select:focus, input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(187, 95, 42, 0.14);
+      }
+      .primary-button {
         width: 100%;
         border: 0;
         border-radius: 18px;
@@ -66,7 +123,30 @@
         font-weight: 700;
         cursor: pointer;
       }
-      button:disabled { opacity: 0.6; cursor: wait; }
+      .primary-button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .tooltip-card {
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(247,234,221,0.92));
+        box-shadow: var(--tooltip-shadow);
+      }
+      .tooltip-card h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+      .tooltip-card p {
+        margin: 0 0 8px;
+        line-height: 1.5;
+      }
+      .tooltip-meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
       .results { display: grid; gap: 18px; }
       .summary {
         display: grid;
@@ -139,27 +219,36 @@
       <section class="panel controls">
         <span class="eyebrow">Local Web UI</span>
         <h2 style="margin-top:0">沖煮參數</h2>
-        <p class="muted">同一套模型，現在可以直接在瀏覽器操作。</p>
+        <p class="muted">選取任一欄位時，下面會出現提示框，說明這個參數在模型中的作用。</p>
         <form id="optimize-form">
           <div class="grid">
-            <div class="field">
-              <label for="brewer">機型</label>
+            <div class="field" data-help-key="brewer">
+              <div class="label-row">
+                <label for="brewer">機型</label>
+                <button class="hint-button" type="button" data-help-target="brewer">?</button>
+              </div>
               <select id="brewer" name="brewer">
                 {% for brewer in brewer_options %}
                 <option value="{{ brewer }}">{{ brewer }}</option>
                 {% endfor %}
               </select>
             </div>
-            <div class="field">
-              <label for="roast">焙度</label>
+            <div class="field" data-help-key="roast">
+              <div class="label-row">
+                <label for="roast">焙度</label>
+                <button class="hint-button" type="button" data-help-target="roast">?</button>
+              </div>
               <select id="roast" name="roast">
                 {% for roast in roast_codes %}
                 <option value="{{ roast }}" {% if roast == 'M' %}selected{% endif %}>{{ roast }}</option>
                 {% endfor %}
               </select>
             </div>
-            <div class="field full">
-              <label for="preset">水質快選</label>
+            <div class="field full" data-help-key="preset">
+              <div class="label-row">
+                <label for="preset">水質快選</label>
+                <button class="hint-button" type="button" data-help-target="preset">?</button>
+              </div>
               <select id="preset" name="preset">
                 <option value="">手動輸入</option>
                 {% for key, preset in presets.items() %}
@@ -167,22 +256,69 @@
                 {% endfor %}
               </select>
             </div>
-            <div class="field"><label for="gh">GH</label><input id="gh" name="gh" type="number" step="0.1" value="50"></div>
-            <div class="field"><label for="kh">KH</label><input id="kh" name="kh" type="number" step="0.1" value="30"></div>
-            <div class="field"><label for="mg_frac">Mg 比例</label><input id="mg_frac" name="mg_frac" type="number" step="0.01" min="0" max="1" value="0.40"></div>
-            <div class="field"><label for="top">Top N</label><input id="top" name="top" type="number" min="1" max="10" value="3"></div>
-            <div class="field"><label for="t_env">室溫 °C</label><input id="t_env" name="t_env" type="number" step="0.1" value="25"></div>
-            <div class="field"><label for="tds_floor">TDS Floor</label><input id="tds_floor" name="tds_floor" type="number" step="0.01" value="0.80"></div>
-            <div class="field full"><label for="altitude">海拔 m</label><input id="altitude" name="altitude" type="number" step="1" value="0"></div>
+            <div class="field" data-help-key="gh">
+              <div class="label-row">
+                <label for="gh">GH</label>
+                <button class="hint-button" type="button" data-help-target="gh">?</button>
+              </div>
+              <input id="gh" name="gh" type="number" step="0.1" value="50">
+            </div>
+            <div class="field" data-help-key="kh">
+              <div class="label-row">
+                <label for="kh">KH</label>
+                <button class="hint-button" type="button" data-help-target="kh">?</button>
+              </div>
+              <input id="kh" name="kh" type="number" step="0.1" value="30">
+            </div>
+            <div class="field" data-help-key="mg_frac">
+              <div class="label-row">
+                <label for="mg_frac">Mg 比例</label>
+                <button class="hint-button" type="button" data-help-target="mg_frac">?</button>
+              </div>
+              <input id="mg_frac" name="mg_frac" type="number" step="0.01" min="0" max="1" value="0.40">
+            </div>
+            <div class="field" data-help-key="top">
+              <div class="label-row">
+                <label for="top">Top N</label>
+                <button class="hint-button" type="button" data-help-target="top">?</button>
+              </div>
+              <input id="top" name="top" type="number" min="1" max="10" value="3">
+            </div>
+            <div class="field" data-help-key="t_env">
+              <div class="label-row">
+                <label for="t_env">室溫 °C</label>
+                <button class="hint-button" type="button" data-help-target="t_env">?</button>
+              </div>
+              <input id="t_env" name="t_env" type="number" step="0.1" value="25">
+            </div>
+            <div class="field" data-help-key="tds_floor">
+              <div class="label-row">
+                <label for="tds_floor">TDS Floor</label>
+                <button class="hint-button" type="button" data-help-target="tds_floor">?</button>
+              </div>
+              <input id="tds_floor" name="tds_floor" type="number" step="0.01" value="0.80">
+            </div>
+            <div class="field full" data-help-key="altitude">
+              <div class="label-row">
+                <label for="altitude">海拔 m</label>
+                <button class="hint-button" type="button" data-help-target="altitude">?</button>
+              </div>
+              <input id="altitude" name="altitude" type="number" step="1" value="0">
+            </div>
           </div>
-          <button id="submit-button" type="submit">開始最佳化</button>
+          <button id="submit-button" class="primary-button" type="submit">開始最佳化</button>
         </form>
+        <aside id="tooltip-card" class="tooltip-card" aria-live="polite">
+          <h3 id="tooltip-title">參數說明</h3>
+          <p id="tooltip-body">點任一欄位或問號按鈕，這裡會解釋它的意義、對模型的影響，以及何時需要調整。</p>
+          <div id="tooltip-meta" class="tooltip-meta">目前尚未選取特定參數。</div>
+        </aside>
       </section>
 
       <section class="panel">
         <div class="hero">
           <span class="eyebrow">AeroPress 4-Vector</span>
-          <h1>把 CLI 變成<br>可視化沖煮台</h1>
+          <h1>把 CLI 變成可視化沖煮台</h1>
           <p class="muted">輸入水質、焙度與環境條件，立即得到最優配方、風味向量與圖形化比較。</p>
           <div id="summary" class="summary"></div>
         </div>
@@ -203,15 +339,92 @@
       const summary = document.getElementById("summary");
       const resultsNode = document.getElementById("results");
       const radarNode = document.getElementById("radar");
+      const tooltipTitle = document.getElementById("tooltip-title");
+      const tooltipBody = document.getElementById("tooltip-body");
+      const tooltipMeta = document.getElementById("tooltip-meta");
       const presets = {{ presets|tojson }};
       const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
 
+      const fieldHelp = {
+        brewer: {
+          title: "機型 Brewer",
+          body: "決定注水量與豆量搜尋範圍。`standard` 走 200ml / 9–18g；`xl` 走 400ml / 18–30g。這會直接影響注水延遲、粉水比、壓降與 TDS。",
+          meta: "如果你用的是 AeroPress XL，這裡一定要選 `xl`。"
+        },
+        roast: {
+          title: "焙度 Roast",
+          body: "決定基準水溫、理想風味向量、MEL 苦味係數、Scorch 閾值與 TDS 偏好中心。這是整個模型最上游的風味分支。",
+          meta: "焙度越深，最佳水溫通常越低，MEL / CGA 懲罰也更敏感。"
+        },
+        preset: {
+          title: "水質快選 Preset",
+          body: "快速帶入 GH、KH 與 Mg 比例。適合你已經知道自己使用 Aquacode、BWT 或特定礦泉水時，避免每次手動輸入。",
+          meta: "選了 preset 後，下面的 GH / KH / Mg 會自動填入，你仍可再手動覆蓋。"
+        },
+        gh: {
+          title: "GH 總硬度",
+          body: "代表水中鈣鎂總量，直接影響萃取驅動力。太低會讓萃取偏弱，太高則可能讓風味變鈍或過度抽出苦澀。",
+          meta: "模型中 GH 會修正整體 EY；一般中段可從 40–100 ppm 開始。"
+        },
+        kh: {
+          title: "KH 碳酸鹽硬度",
+          body: "代表水的緩衝能力，主要影響酸質感知。KH 越高，酸感越容易被中和，杯感會更鈍、更平。",
+          meta: "模型中 KH 主要在評分層作用，不是直接改變 EY，而是改變 AC 感知。"
+        },
+        mg_frac: {
+          title: "Mg 比例",
+          body: "表示 GH 裡面有多少比例是鎂離子。Mg 較偏向拉高酸甜萃取，Ca 較偏向 body 與澀感，因此同樣 GH 下，Ca:Mg 組成會改變杯型。",
+          meta: "0 代表幾乎全 Ca，1 代表幾乎全 Mg；一般自來水常落在 0.3–0.5。"
+        },
+        top: {
+          title: "Top N",
+          body: "控制要顯示幾組最佳結果。數字越大，你能比較更多候選解，但畫面會更長，計算後傳回的資料也更多。",
+          meta: "通常 3 很夠用；若你要看更多邊界解，可以拉到 5 或 10。"
+        },
+        t_env: {
+          title: "室溫 T_ENV",
+          body: "用來計算咖啡粉初始溫度與冷卻曲線終態。室溫越低，長浸泡下的平均萃取溫度會更快下降。",
+          meta: "冬天、冷氣房、山區都值得調整；它會同時影響 t_slurry 與 T_avg。"
+        },
+        tds_floor: {
+          title: "TDS Floor",
+          body: "你個人對『褐水』的最低可接受濃度下限。若結果低於這個值，評分會被額外二次衰減，避免過稀配方誤衝高分。",
+          meta: "預設 0.80；如果你特別討厭稀薄口感，可以再往上調。"
+        },
+        altitude: {
+          title: "海拔 Altitude",
+          body: "用來修正當地沸點。海拔越高，水的實際沸點越低，模型會同步壓低可搜尋的最高水溫。",
+          meta: "平地幾乎可忽略；山區沖煮時影響很大，例如 2000m 左右沸點會降到約 93°C。"
+        }
+      };
+
+      function showHelp(key) {
+        const entry = fieldHelp[key];
+        if (!entry) return;
+        tooltipTitle.textContent = entry.title;
+        tooltipBody.textContent = entry.body;
+        tooltipMeta.textContent = entry.meta;
+      }
+
       presetSelect.addEventListener("change", () => {
         const selected = presetSelect.value;
-        if (!selected || !presets[selected]) return;
-        ghInput.value = presets[selected].gh;
-        khInput.value = presets[selected].kh;
-        mgInput.value = presets[selected].mg_frac;
+        if (selected && presets[selected]) {
+          ghInput.value = presets[selected].gh;
+          khInput.value = presets[selected].kh;
+          mgInput.value = presets[selected].mg_frac;
+        }
+        showHelp("preset");
+      });
+
+      document.querySelectorAll("[data-help-key] input, [data-help-key] select").forEach((element) => {
+        const key = element.closest("[data-help-key]").dataset.helpKey;
+        element.addEventListener("focus", () => showHelp(key));
+        element.addEventListener("change", () => showHelp(key));
+        element.addEventListener("click", () => showHelp(key));
+      });
+
+      document.querySelectorAll("[data-help-target]").forEach((button) => {
+        button.addEventListener("click", () => showHelp(button.dataset.helpTarget));
       });
 
       function formatTime(seconds) {
@@ -337,4 +550,4 @@
       });
     </script>
   </body>
-  </html>
+</html>
