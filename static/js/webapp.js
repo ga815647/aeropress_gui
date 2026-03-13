@@ -732,33 +732,19 @@
           </div>
           <div class="score">${result.score.toFixed(1)}</div>
         </div>
-        <div class="metrics">
-          <div class="metric"><strong>碼表按下</strong><div style="font-size: 0.85em; margin-top: 4px;">還沒蓋蓋子</div></div>
-          <div class="metric"><strong>SWIRL 開始</strong><div>${formatTime(result.steep_sec)}</div></div>
-          <div class="metric"><strong>WAIT 開始</strong><div>${formatTime(result.steep_sec + result.swirl_sec)}</div></div>
-        </div>
-        <div class="metrics">
-          <div class="metric"><strong>Steep</strong><div>${formatTime(result.steep_sec)}</div></div>
-          <div class="metric"><strong>Swirl</strong><div>${result.swirl_sec}s</div></div>
-          <div class="ratio"><strong>Swirl Wait</strong><div>${result.swirl_wait_sec}s</div></div>
-          <div class="ratio"><strong>Swirl Phase</strong><div>${result.swirl_sec + result.swirl_wait_sec}s</div></div>
-          <div class="metric"><strong>Press</strong><div>${result.press_sec}s</div></div>
-        </div>
-        <div class="metrics">
-          <div class="metric"><strong>Contact</strong><div>${formatTime(result.total_contact_sec)}</div></div>
-          <div class="metric"><strong>EY</strong><div>${result.ey.toFixed(3)}%</div></div>
+        
+        <div class="metrics" style="margin-top: 1rem;">
           <div class="metric"><strong>TDS</strong><div>${result.tds.toFixed(4)}%</div></div>
-          <div class="metric"><strong>T_slurry</strong><div>${result.t_slurry.toFixed(1)}C</div></div>
+          <div class="metric"><strong>EY</strong><div>${result.ey.toFixed(3)}%</div></div>
+          <div class="ratio"><strong>SW / AC</strong><div>${result.ratios.ac_sw_actual} (Ideal ${result.ratios.ac_sw_ideal})</div></div>
+          <div class="ratio"><strong>PS / Bitter</strong><div>${result.ratios.ps_bitter_actual} (Ideal ${result.ratios.ps_bitter_ideal})</div></div>
         </div>
-        <div class="metrics">
-          <div class="ratio"><strong>AC/SW</strong><div>${result.ratios.ac_sw_actual} / ideal ${result.ratios.ac_sw_ideal}</div></div>
-          <div class="ratio"><strong>PS/Bitter</strong><div>${result.ratios.ps_bitter_actual} / ideal ${result.ratios.ps_bitter_ideal}</div></div>
 
-        </div>
-        <div class="compound-grid">
+        ${timelineHtml}
+
+        <div class="compound-grid" style="margin-top: 1.5rem;">
           ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
         </div>
-        ${timelineHtml}
       </article>
       `;
     }).join("");
