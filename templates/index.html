@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AeroPress Optimizer UI</title>
+    <style>
+      :root {
+        --bg: #f5efe4;
+        --paper: #fffaf0;
+        --ink: #1f1a17;
+        --muted: #6d6358;
+        --accent: #bb5f2a;
+        --accent-soft: #f2caa8;
+        --line: #d8c7b7;
+        --shadow: 0 24px 60px rgba(88, 55, 33, 0.14);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", "Noto Sans TC", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, #ffe8c7 0, transparent 30%),
+          radial-gradient(circle at bottom right, #f3d2bb 0, transparent 25%),
+          linear-gradient(135deg, #f3ebdf 0%, #e7d6c5 100%);
+      }
+      .shell {
+        width: min(1200px, calc(100vw - 32px));
+        margin: 24px auto 40px;
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 24px;
+      }
+      .panel {
+        background: rgba(255, 250, 240, 0.88);
+        border: 1px solid rgba(216, 199, 183, 0.9);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+      }
+      .controls { padding: 24px; position: sticky; top: 24px; align-self: start; }
+      .hero { padding: 28px; }
+      h1 { margin: 0 0 8px; font-size: clamp(2rem, 3vw, 3.4rem); line-height: 0.95; letter-spacing: -0.03em; }
+      p, label, select, input, button { font-size: 14px; }
+      .eyebrow { display: inline-block; padding: 6px 10px; background: var(--accent-soft); border-radius: 999px; font-weight: 600; margin-bottom: 14px; }
+      .muted { color: var(--muted); }
+      .grid { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+      .field { display: grid; gap: 6px; margin-bottom: 12px; }
+      .field.full { grid-column: 1 / -1; }
+      select, input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 11px 12px;
+        background: #fffdf9;
+        color: var(--ink);
+      }
+      button {
+        width: 100%;
+        border: 0;
+        border-radius: 18px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, #cb6d34, #9f471f);
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.6; cursor: wait; }
+      .results { display: grid; gap: 18px; }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 20px;
+      }
+      .chip {
+        background: rgba(255,255,255,0.7);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+      }
+      .result-card {
+        border-top: 1px solid var(--line);
+        padding: 20px 28px 28px;
+      }
+      .result-card:first-of-type { border-top: 0; }
+      .result-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .score { font-size: 2rem; font-weight: 800; color: var(--accent); }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 12px 0 16px;
+      }
+      .metric, .ratio, .compound {
+        background: rgba(255,255,255,0.72);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 12px;
+      }
+      .compound-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .radar-wrap {
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255,255,255,0.72);
+        padding: 16px;
+      }
+      #radar svg { width: 100%; height: auto; display: block; }
+      .empty {
+        padding: 28px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+      @media (max-width: 980px) {
+        .shell { grid-template-columns: 1fr; }
+        .controls { position: static; }
+        .summary, .metrics, .compound-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 640px) {
+        .grid, .summary, .metrics, .compound-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel controls">
+        <span class="eyebrow">Local Web UI</span>
+        <h2 style="margin-top:0">沖煮參數</h2>
+        <p class="muted">同一套模型，現在可以直接在瀏覽器操作。</p>
+        <form id="optimize-form">
+          <div class="grid">
+            <div class="field">
+              <label for="brewer">機型</label>
+              <select id="brewer" name="brewer">
+                {% for brewer in brewer_options %}
+                <option value="{{ brewer }}">{{ brewer }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label for="roast">焙度</label>
+              <select id="roast" name="roast">
+                {% for roast in roast_codes %}
+                <option value="{{ roast }}" {% if roast == 'M' %}selected{% endif %}>{{ roast }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field full">
+              <label for="preset">水質快選</label>
+              <select id="preset" name="preset">
+                <option value="">手動輸入</option>
+                {% for key, preset in presets.items() %}
+                <option value="{{ key }}">{{ preset.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field"><label for="gh">GH</label><input id="gh" name="gh" type="number" step="0.1" value="50"></div>
+            <div class="field"><label for="kh">KH</label><input id="kh" name="kh" type="number" step="0.1" value="30"></div>
+            <div class="field"><label for="mg_frac">Mg 比例</label><input id="mg_frac" name="mg_frac" type="number" step="0.01" min="0" max="1" value="0.40"></div>
+            <div class="field"><label for="top">Top N</label><input id="top" name="top" type="number" min="1" max="10" value="3"></div>
+            <div class="field"><label for="t_env">室溫 °C</label><input id="t_env" name="t_env" type="number" step="0.1" value="25"></div>
+            <div class="field"><label for="tds_floor">TDS Floor</label><input id="tds_floor" name="tds_floor" type="number" step="0.01" value="0.80"></div>
+            <div class="field full"><label for="altitude">海拔 m</label><input id="altitude" name="altitude" type="number" step="1" value="0"></div>
+          </div>
+          <button id="submit-button" type="submit">開始最佳化</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="hero">
+          <span class="eyebrow">AeroPress 4-Vector</span>
+          <h1>把 CLI 變成<br>可視化沖煮台</h1>
+          <p class="muted">輸入水質、焙度與環境條件，立即得到最優配方、風味向量與圖形化比較。</p>
+          <div id="summary" class="summary"></div>
+        </div>
+        <div id="radar" class="radar-wrap" hidden></div>
+        <div id="results" class="results">
+          <div class="empty">尚未執行最佳化。</div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("optimize-form");
+      const presetSelect = document.getElementById("preset");
+      const ghInput = document.getElementById("gh");
+      const khInput = document.getElementById("kh");
+      const mgInput = document.getElementById("mg_frac");
+      const submitButton = document.getElementById("submit-button");
+      const summary = document.getElementById("summary");
+      const resultsNode = document.getElementById("results");
+      const radarNode = document.getElementById("radar");
+      const presets = {{ presets|tojson }};
+      const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
+
+      presetSelect.addEventListener("change", () => {
+        const selected = presetSelect.value;
+        if (!selected || !presets[selected]) return;
+        ghInput.value = presets[selected].gh;
+        khInput.value = presets[selected].kh;
+        mgInput.value = presets[selected].mg_frac;
+      });
+
+      function formatTime(seconds) {
+        const total = Math.round(seconds);
+        return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+      }
+
+      function metricCard(label, value) {
+        return `<div class="chip"><strong>${label}</strong><div>${value}</div></div>`;
+      }
+
+      function renderRadar(results) {
+        if (!results.length) {
+          radarNode.hidden = true;
+          return;
+        }
+        const size = 360;
+        const center = size / 2;
+        const radius = 120;
+        const maxByKey = Object.fromEntries(keys.map((key) => [key, Math.max(...results.map((item) => item.compounds_abs[key]), 1e-8)]));
+        const rings = [0.25, 0.5, 0.75, 1.0];
+        const series = results.slice(0, 3).map((result, index) => {
+          const points = keys.map((key, idx) => {
+            const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+            const normalized = result.compounds_abs[key] / maxByKey[key];
+            const x = center + Math.cos(angle) * radius * normalized;
+            const y = center + Math.sin(angle) * radius * normalized;
+            return `${x},${y}`;
+          }).join(" ");
+          const color = ["#bb5f2a", "#4e6b5b", "#8f4667"][index] || "#555";
+          return `<polygon points="${points}" fill="${color}22" stroke="${color}" stroke-width="2"></polygon>`;
+        }).join("");
+        const spokes = keys.map((key, idx) => {
+          const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+          const x = center + Math.cos(angle) * radius;
+          const y = center + Math.sin(angle) * radius;
+          const lx = center + Math.cos(angle) * (radius + 24);
+          const ly = center + Math.sin(angle) * (radius + 24);
+          return `<line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line><text x="${lx}" y="${ly}" text-anchor="middle" font-size="12" fill="#6d6358">${key}</text>`;
+        }).join("");
+        const ringSvg = rings.map((ring) => {
+          const points = keys.map((_, idx) => {
+            const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
+            const x = center + Math.cos(angle) * radius * ring;
+            const y = center + Math.sin(angle) * radius * ring;
+            return `${x},${y}`;
+          }).join(" ");
+          return `<polygon points="${points}" fill="none" stroke="#e4d7cb"></polygon>`;
+        }).join("");
+        radarNode.innerHTML = `<svg viewBox="0 0 ${size} ${size}">${ringSvg}${spokes}${series}</svg>`;
+        radarNode.hidden = false;
+      }
+
+      function renderResults(payload) {
+        const { meta, results } = payload;
+        summary.innerHTML = [
+          metricCard("焙度", `${meta.roast_name} (${meta.roast_code})`),
+          metricCard("水質", `GH ${meta.water_gh} / KH ${meta.water_kh}`),
+          metricCard("Mg 比例", meta.water_mg_frac),
+          metricCard("TDS Floor", meta.tds_floor),
+        ].join("");
+
+        if (!results.length) {
+          resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
+          renderRadar([]);
+          return;
+        }
+
+        resultsNode.innerHTML = results.map((result, index) => `
+          <article class="result-card">
+            <div class="result-head">
+              <div>
+                <div class="muted">Rank ${index + 1}</div>
+                <h2 style="margin:4px 0 0">Temp ${result.temp}°C / Dial ${result.dial} / Dose ${result.dose}g</h2>
+              </div>
+              <div class="score">${result.score.toFixed(1)}</div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><strong>Steep</strong><div>${formatTime(result.steep_sec)}</div></div>
+              <div class="metric"><strong>EY</strong><div>${result.ey.toFixed(3)}%</div></div>
+              <div class="metric"><strong>TDS</strong><div>${result.tds.toFixed(4)}%</div></div>
+              <div class="metric"><strong>T_slurry</strong><div>${result.t_slurry.toFixed(1)}°C</div></div>
+            </div>
+            <div class="metrics">
+              <div class="ratio"><strong>AC/SW</strong><div>${result.ratios.ac_sw_actual} / ideal ${result.ratios.ac_sw_ideal}</div></div>
+              <div class="ratio"><strong>PS/Bitter</strong><div>${result.ratios.ps_bitter_actual} / ideal ${result.ratios.ps_bitter_ideal}</div></div>
+              <div class="ratio"><strong>Press</strong><div>${result.press_sec}s</div></div>
+              <div class="ratio"><strong>Contact</strong><div>${formatTime(result.total_contact_sec)}</div></div>
+            </div>
+            <div class="compound-grid">
+              ${keys.map((key) => `<div class="compound"><strong>${key}</strong><div>${result.compounds_abs[key].toFixed(4)}</div></div>`).join("")}
+            </div>
+          </article>
+        `).join("");
+
+        renderRadar(results);
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        submitButton.disabled = true;
+        submitButton.textContent = "計算中…";
+        const payload = Object.fromEntries(new FormData(form).entries());
+        ["gh", "kh", "mg_frac", "top", "t_env", "tds_floor", "altitude"].forEach((key) => {
+          payload[key] = payload[key] === "" ? null : Number(payload[key]);
+        });
+
+        try {
+          const response = await fetch("/api/optimize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await response.json();
+          renderResults(data);
+        } catch (error) {
+          resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
+          radarNode.hidden = true;
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "開始最佳化";
+        }
+      });
+    </script>
+  </body>
+  </html>

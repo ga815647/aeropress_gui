@@ -3,12 +3,11 @@ from __future__ import annotations
 import argparse
 import sys
 
-import constants
-from data.water_presets import get_water_preset
 from optimizer import optimize
 from output.export import export_csv, export_json
 from output.radar import plot_radar
 from output.terminal import print_terminal
+from runtime import apply_environment_settings, resolve_water_profile
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,25 +31,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    constants.T_ENV = args.t_env
-    constants.TEMP_BOILING_POINT = 100.0 - args.altitude / 300.0
-
-    if args.tds_floor is not None:
-        constants.TDS_BROWN_WATER_FLOOR = args.tds_floor
-    else:
+    used_default_floor = apply_environment_settings(args.t_env, args.tds_floor, args.altitude)
+    if used_default_floor:
         print(
             "\n提示：TDS_BROWN_WATER_FLOOR 使用預設值 0.80%，建議依個人口感以 --tds-floor 調整（說明：§15 第 28 點）\n",
             file=sys.stderr,
         )
 
-    if args.gh is not None and args.kh is not None:
-        water_gh, water_kh = args.gh, args.kh
-        water_mg_frac = args.mg_frac if args.mg_frac is not None else 0.40
-    elif args.preset is not None:
-        preset = get_water_preset(args.preset)
-        water_gh, water_kh, water_mg_frac = preset["gh"], preset["kh"], preset.get("mg_frac", 0.40)
-    else:
-        water_gh, water_kh, water_mg_frac = 50.0, 30.0, 0.40
+    water_gh, water_kh, water_mg_frac, source = resolve_water_profile(
+        gh=args.gh,
+        kh=args.kh,
+        mg_frac=args.mg_frac,
+        preset=args.preset,
+    )
+    if source == "default":
         print("未指定水質，使用預設 GH=50 / KH=30 / mg_frac=0.40。", file=sys.stderr)
 
     results = optimize(
