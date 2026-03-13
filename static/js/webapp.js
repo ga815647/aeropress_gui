@@ -816,6 +816,9 @@
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
     setMobileControlsHidden(true, { scrollToResults: true });
     submitButton.disabled = true;
     submitButton.textContent = "計算中...";
