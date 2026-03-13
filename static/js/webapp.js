@@ -131,13 +131,10 @@
 
   function syncControlsPanelState() {
     if (!controlsPanel || !controlsBody || !controlsToggle) return;
-    const isMobile = mobileControlsQuery.matches;
-    const hiddenOnMobile = isMobile && mobileControlsHidden;
 
+    const hiddenOnMobile = mobileControlsQuery.matches && mobileControlsHidden;
     controlsPanel.hidden = hiddenOnMobile;
     controlsPanel.classList.remove("is-collapsed");
-    controlsToggle.hidden = true;
-    controlsToggle.setAttribute("aria-expanded", "true");
     controlsBody.hidden = false;
   }
 
@@ -756,6 +753,7 @@
     }
     syncControlsPanelState();
   });
+
 
   viewModeButtons.forEach((button) => {
     button.addEventListener("click", () => {
