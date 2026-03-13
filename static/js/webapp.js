@@ -7,7 +7,6 @@
   const khInput = document.getElementById("kh");
   const mgInput = document.getElementById("mg_frac");
   const submitButton = document.getElementById("submit-button");
-  const summary = document.getElementById("summary");
   const resultsNode = document.getElementById("results");
 
   const radarModal = document.getElementById("radar-modal");
@@ -120,9 +119,14 @@
     if (!controlsPanel || !controlsBody || !controlsToggle) return;
 
     const hiddenOnMobile = mobileControlsQuery.matches && mobileControlsHidden;
-    controlsPanel.hidden = hiddenOnMobile;
-    controlsPanel.classList.remove("is-collapsed");
-    controlsBody.hidden = false;
+    if (hiddenOnMobile) {
+      controlsPanel.classList.add("is-collapsed");
+      controlsBody.hidden = true;
+    } else {
+      controlsPanel.classList.remove("is-collapsed");
+      controlsBody.hidden = false;
+    }
+    controlsPanel.hidden = false; // Never hide the whole panel anymore
   }
 
   function setMobileControlsHidden(nextValue, { scrollToResults = false } = {}) {
@@ -132,7 +136,9 @@
 
     if (nextValue && scrollToResults) {
       requestAnimationFrame(() => {
-        summary.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (resultsNode) {
+          resultsNode.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       });
     }
   }
@@ -710,6 +716,11 @@
       closeRadarModal();
       return;
     }
+  });
+  
+  controlsToggle.addEventListener("click", () => {
+    if (!mobileControlsQuery.matches) return;
+    setMobileControlsHidden(!mobileControlsHidden);
   });
 
   form.addEventListener("submit", async (event) => {

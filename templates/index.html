@@ -14,6 +14,16 @@
             <span class="eyebrow">Local Web UI</span>
             <h2 class="section-title">沖煮參數設定</h2>
           </div>
+          <div class="mobile-only toggle-icon" style="display: none; font-size: 1.2rem; color: var(--accent);">
+            <style>
+              @media (max-width: 640px) {
+                .mobile-only.toggle-icon { display: block !important; }
+                .is-collapsed .toggle-icon { transform: rotate(180deg); transition: transform 0.3s; }
+                .toggle-icon { transition: transform 0.3s; }
+              }
+            </style>
+            ▾
+          </div>
         </div>
         <div class="controls-body" data-controls-body>
           <form id="optimize-form">
