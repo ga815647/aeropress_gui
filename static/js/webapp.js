@@ -31,15 +31,8 @@
   let latestPayload = null;
   let latestRadarResults = [];
   let mobileControlsHidden = false;
-  let brewTimer = {
-    openRankIndex: null,
-    steps: [],
-    stepIndex: 0,
-    remainingMs: 0,
-    isRunning: false,
-    endAtMs: 0,
-    tickHandle: null,
-  };
+  let brewTimerInterval = null;
+  let activeTimers = {};
 
   const fieldHelp = {
     brewer: {
@@ -155,229 +148,164 @@
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
   }
 
-  function clampTimerMs(value) {
-    return Math.max(0, Math.round(value));
-  }
-
-  function formatTimerClock(ms) {
-    const totalSeconds = Math.ceil(clampTimerMs(ms) / 1000);
+  // Helper to format remaining time
+  function formatInlineClock(ms) {
+    const totalSeconds = Math.ceil(Math.max(0, ms) / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
 
-  function buildBrewSteps(result) {
-    if (!result) return [];
-    return [
-      {
-        key: "steep",
-        label: "浸泡",
-        durationMs: clampTimerMs(result.steep_sec * 1000),
-        action: "注完水還沒蓋蓋子（此時按下碼表），等待一段時間後塞入活塞建立負壓，讓咖啡粉持續浸泡。",
-      },
-      {
-        key: "swirl",
-        label: "旋轉",
-        durationMs: clampTimerMs(result.swirl_sec * 1000),
-        action: "穩定旋轉杯身，讓粉床重新均勻混合，提升萃取一致性。",
-      },
-      {
-        key: "swirl_wait",
-        label: "旋轉後等待",
-        durationMs: clampTimerMs(result.swirl_wait_sec * 1000),
-        action: "停止晃動，靜置讓粉床沉降，準備進入下壓階段。",
-      },
-      {
-        key: "press",
-        label: "下壓",
-        durationMs: clampTimerMs(result.press_sec * 1000),
-        action: "以穩定且平均的力道向下壓，直到這個配方流程完成。",
-      },
-    ];
+  function renderInlineTimer(result, index) {
+    return `
+      <div class="inline-timer-wrap" style="margin-top: 1.5rem; border-top: 1px solid #e4d7cb; padding-top: 1.5rem; text-align: center;">
+        <div id="timer-display-${index}" style="font-size: 3.5rem; font-weight: bold; font-variant-numeric: tabular-nums; color: #bb5f2a; line-height: 1;">00:00</div>
+        <div id="timer-current-action-${index}" style="font-size: 1.2rem; color: #4e6b5b; margin-top: 0.5rem; margin-bottom: 1.5rem; min-height: 1.8rem;">準備注水</div>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button class="btn btn-primary primary-button" type="button" data-inline-timer-toggle="${index}" style="min-width: 120px;">▶️ 開始</button>
+          <button class="btn btn-outline-secondary default-button" type="button" data-inline-timer-reset="${index}" style="min-width: 100px;">🔄 重置</button>
+        </div>
+      </div>
+    `;
   }
 
-  function getTimerTotalRemainingMs() {
-    if (!brewTimer.steps.length) return 0;
-    const currentStepRemaining = brewTimer.isRunning
-      ? clampTimerMs(brewTimer.endAtMs - Date.now())
-      : brewTimer.remainingMs;
-    const remainingAfterCurrent = brewTimer.steps
-      .slice(brewTimer.stepIndex + 1)
-      .reduce((total, step) => total + step.durationMs, 0);
-    return currentStepRemaining + remainingAfterCurrent;
+  function startOrPauseInlineTimer(index, result) {
+    if (!activeTimers[index]) {
+      const milestones = [
+        { time: 0, 
+          action: "準備注水", 
+          rowId: `timeline-row-${index}-0` 
+        },
+        { 
+          time: 0, 
+          action: "注水與封閉：注水後塞入活塞建立負壓", 
+          rowId: `timeline-row-${index}-1` 
+        },
+        { 
+          time: result.steep_sec, 
+          action: "旋轉與靜置：輕柔搖晃 5 秒後靜置", 
+          rowId: `timeline-row-${index}-2` 
+        },
+        { 
+          time: result.steep_sec + 5 + result.swirl_wait_sec, 
+          action: "開始下壓：穩定平均地向下壓", 
+          rowId: `timeline-row-${index}-3` 
+        },
+        { 
+          time: result.steep_sec + 5 + result.swirl_wait_sec + result.press_sec, 
+          action: "萃取完成", 
+          rowId: `timeline-row-${index}-4` 
+        }
+      ];
+
+      activeTimers[index] = {
+        isRunning: false,
+        elapsedMs: 0,
+        lastTickMs: 0,
+        milestones: milestones,
+        totalTimeSec: milestones[milestones.length - 1].time
+      };
+    }
+
+    const timer = activeTimers[index];
+    const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${index}"]`);
+
+    if (timer.isRunning) {
+      timer.isRunning = false;
+      toggleBtn.textContent = "▶️ 繼續";
+    } else {
+      if (timer.elapsedMs >= timer.totalTimeSec * 1000) {
+        timer.elapsedMs = 0;
+      }
+      timer.isRunning = true;
+      timer.lastTickMs = Date.now();
+      toggleBtn.textContent = "⏸️ 暫停";
+      
+      if (!brewTimerInterval) {
+        brewTimerInterval = setInterval(tickAllTimers, 100);
+      }
+    }
+    syncInlineTimerUI(index);
   }
 
-  function clearBrewTimerTick() {
-    if (brewTimer.tickHandle) {
-      clearInterval(brewTimer.tickHandle);
-      brewTimer.tickHandle = null;
+  function resetInlineTimer(index) {
+    if (activeTimers[index]) {
+      activeTimers[index].isRunning = false;
+      activeTimers[index].elapsedMs = 0;
+    }
+    const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${index}"]`);
+    if (toggleBtn) toggleBtn.textContent = "▶️ 開始";
+    syncInlineTimerUI(index);
+  }
+
+  function tickAllTimers() {
+    const now = Date.now();
+    let anyRunning = false;
+    
+    for (const [indexStr, timer] of Object.entries(activeTimers)) {
+      if (timer.isRunning) {
+        anyRunning = true;
+        const delta = now - timer.lastTickMs;
+        timer.elapsedMs += delta;
+        timer.lastTickMs = now;
+        
+        if (timer.elapsedMs >= timer.totalTimeSec * 1000) {
+          timer.elapsedMs = timer.totalTimeSec * 1000;
+          timer.isRunning = false;
+          const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${indexStr}"]`);
+          if (toggleBtn) toggleBtn.textContent = "🔄 重新開始";
+        }
+        
+        syncInlineTimerUI(Number(indexStr));
+      }
+    }
+
+    if (!anyRunning && brewTimerInterval) {
+      clearInterval(brewTimerInterval);
+      brewTimerInterval = null;
     }
   }
 
-  function resetBrewTimerState() {
-    clearBrewTimerTick();
-    brewTimer = {
-      openRankIndex: null,
-      steps: [],
-      stepIndex: 0,
-      remainingMs: 0,
-      isRunning: false,
-      endAtMs: 0,
-      tickHandle: null,
-    };
-    syncBrewTimerViewportState();
-  }
+  function syncInlineTimerUI(index) {
+    const timer = activeTimers[index];
+    if (!timer) return;
 
-  function syncBrewTimerViewportState() {
-    document.body.classList.toggle(
-      "timer-open",
-      brewTimer.openRankIndex !== null && currentViewMode === "compare",
-    );
-  }
+    const display = document.getElementById(`timer-display-${index}`);
+    const actionText = document.getElementById(`timer-current-action-${index}`);
+    if (!display || !actionText) return;
 
-  function syncBrewTimerPanel() {
-    const panel = resultsNode.querySelector("[data-rank-timer-panel]");
-    if (!panel || brewTimer.openRankIndex === null || !brewTimer.steps.length) return;
+    display.textContent = formatInlineClock(timer.elapsedMs);
+    
+    const elapsedSec = timer.elapsedMs / 1000;
+    let currentMilestone = timer.milestones[0];
+    let nextMilestoneIdx = 1;
 
-    const currentStep = brewTimer.steps[brewTimer.stepIndex];
-    if (!currentStep) return;
-
-    const currentRemaining = brewTimer.isRunning
-      ? clampTimerMs(brewTimer.endAtMs - Date.now())
-      : brewTimer.remainingMs;
-    const nextStep = brewTimer.steps[brewTimer.stepIndex + 1];
-
-    const statusNode = panel.querySelector("[data-rank-timer-status]");
-    const clockNode = panel.querySelector("[data-rank-timer-clock]");
-    const totalNode = panel.querySelector("[data-rank-timer-total]");
-    const labelNode = panel.querySelector("[data-rank-timer-label]");
-    const actionNode = panel.querySelector("[data-rank-timer-action-text]");
-    const nextNode = panel.querySelector("[data-rank-timer-next]");
-    const toggleNode = panel.querySelector("[data-rank-timer-toggle]");
-    const progressNodes = panel.querySelectorAll("[data-rank-timer-step-chip]");
-
-    statusNode.textContent = brewTimer.isRunning ? "進行中" : currentRemaining === 0 ? "已完成" : "準備開始";
-    clockNode.textContent = formatTimerClock(currentRemaining);
-    totalNode.textContent = `剩餘總時間 ${formatTimerClock(getTimerTotalRemainingMs())}`;
-    labelNode.textContent = `步驟 ${brewTimer.stepIndex + 1}/${brewTimer.steps.length}：${currentStep.label}`;
-    actionNode.textContent = currentStep.action;
-    nextNode.textContent = nextStep
-      ? `下一步：${nextStep.label}`
-      : "下一步：完成整個沖煮流程。";
-    toggleNode.textContent = brewTimer.isRunning ? "暫停" : currentRemaining === 0 ? "重新開始" : "開始";
-
-    progressNodes.forEach((node, index) => {
-      node.classList.toggle("is-active", index === brewTimer.stepIndex);
-      node.classList.toggle("is-complete", index < brewTimer.stepIndex || (index === brewTimer.stepIndex && currentRemaining === 0));
-    });
-  }
-
-  function advanceBrewTimerStep() {
-    clearBrewTimerTick();
-
-    if (brewTimer.stepIndex >= brewTimer.steps.length - 1) {
-      brewTimer.isRunning = false;
-      brewTimer.remainingMs = 0;
-      brewTimer.endAtMs = 0;
-      syncBrewTimerPanel();
-      return;
+    for (let i = timer.milestones.length - 1; i >= 0; i--) {
+      if (elapsedSec >= timer.milestones[i].time) {
+        currentMilestone = timer.milestones[i];
+        nextMilestoneIdx = Math.min(i + 1, timer.milestones.length - 1);
+        break;
+      }
     }
 
-    brewTimer.stepIndex += 1;
-    brewTimer.remainingMs = brewTimer.steps[brewTimer.stepIndex].durationMs;
-    brewTimer.isRunning = true;
-    brewTimer.endAtMs = Date.now() + brewTimer.remainingMs;
-    brewTimer.tickHandle = setInterval(tickBrewTimer, 250);
-    syncBrewTimerPanel();
-  }
-
-  function tickBrewTimer() {
-    if (!brewTimer.isRunning) return;
-    const remaining = clampTimerMs(brewTimer.endAtMs - Date.now());
-    brewTimer.remainingMs = remaining;
-
-    if (remaining === 0) {
-      advanceBrewTimerStep();
-      return;
+    if (elapsedSec >= timer.totalTimeSec) {
+      actionText.textContent = "萃取完成！請享用咖啡。";
+    } else {
+      actionText.textContent = currentMilestone.action;
     }
 
-    syncBrewTimerPanel();
-  }
-
-  function openBrewTimer(index, result) {
-    clearBrewTimerTick();
-    const steps = buildBrewSteps(result);
-    brewTimer = {
-      openRankIndex: index,
-      steps,
-      stepIndex: 0,
-      remainingMs: steps[0] ? steps[0].durationMs : 0,
-      isRunning: false,
-      endAtMs: 0,
-      tickHandle: null,
-    };
-    syncBrewTimerViewportState();
-  }
-
-  function closeBrewTimer() {
-    resetBrewTimerState();
-    if (latestPayload?.results?.length && currentViewMode === "compare") {
-      renderResultContent(latestPayload.results, latestPayload.meta);
+    // Highlight row
+    for (let i = 1; i < timer.milestones.length; i++) {
+        const rowId = timer.milestones[i].rowId;
+        const row = document.getElementById(rowId);
+        if (row) {
+             if (timer.milestones[i] === currentMilestone && elapsedSec < timer.totalTimeSec) {
+                 row.style.backgroundColor = "#fff9e6";
+             } else {
+                 row.style.backgroundColor = "";
+             }
+        }
     }
-  }
-
-  function startOrPauseBrewTimer() {
-    if (!brewTimer.steps.length) return;
-
-    if (brewTimer.isRunning) {
-      brewTimer.remainingMs = clampTimerMs(brewTimer.endAtMs - Date.now());
-      brewTimer.isRunning = false;
-      brewTimer.endAtMs = 0;
-      clearBrewTimerTick();
-      syncBrewTimerPanel();
-      return;
-    }
-
-    if (brewTimer.remainingMs === 0) {
-      brewTimer.stepIndex = 0;
-      brewTimer.remainingMs = brewTimer.steps[0].durationMs;
-    }
-
-    brewTimer.isRunning = true;
-    brewTimer.endAtMs = Date.now() + brewTimer.remainingMs;
-    clearBrewTimerTick();
-    brewTimer.tickHandle = setInterval(tickBrewTimer, 250);
-    syncBrewTimerPanel();
-  }
-
-  function resetBrewTimer() {
-    if (!brewTimer.steps.length) return;
-    clearBrewTimerTick();
-    brewTimer.stepIndex = 0;
-    brewTimer.remainingMs = brewTimer.steps[0].durationMs;
-    brewTimer.isRunning = false;
-    brewTimer.endAtMs = 0;
-    syncBrewTimerPanel();
-  }
-
-  function skipBrewTimerStep() {
-    if (!brewTimer.steps.length) return;
-
-    if (brewTimer.stepIndex >= brewTimer.steps.length - 1) {
-      clearBrewTimerTick();
-      brewTimer.remainingMs = 0;
-      brewTimer.isRunning = false;
-      brewTimer.endAtMs = 0;
-      syncBrewTimerPanel();
-      return;
-    }
-
-    clearBrewTimerTick();
-    brewTimer.stepIndex += 1;
-    brewTimer.remainingMs = brewTimer.steps[brewTimer.stepIndex].durationMs;
-    brewTimer.isRunning = false;
-    brewTimer.endAtMs = 0;
-    syncBrewTimerPanel();
   }
 
   function metricCard(label, value) {
@@ -493,15 +421,11 @@
     return `
       <th>
         <div class="compare-rank-head">
-          <button
-            class="rank-header-button ${isOpen ? "is-active" : ""}"
-            type="button"
-            data-rank-timer-trigger="${index}"
-          >
-            <span>Rank ${index + 1}</span>
-            ${scoreLine}
-          </button>
-          ${isOpen ? renderRankTimerPanel(result, index) : ""}
+          <span>Rank ${index + 1}</span>
+          ${scoreLine}
+          <div style="margin-top: 8px;">
+             <button class="btn btn-sm btn-outline-primary" type="button" data-scroll-to-recipe="${index}">👉 選擇此配方</button>
+          </div>
         </div>
       </th>
     `;
@@ -672,7 +596,7 @@
           </div>
           <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse;">
             <tbody>
-              <tr style="border-bottom: 1px solid #f1ece6;">
+              <tr id="timeline-row-${index}-1" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
                 <td style="padding: 0.5rem 0.25rem; font-weight: bold; width: 60px; vertical-align: top;">${formatTime(currentSec)}</td>
                 <td style="padding: 0.5rem 0.25rem;">
                   <strong>注水與封閉</strong><br>
@@ -682,7 +606,7 @@
               ${(() => {
                 currentSec = result.steep_sec;
                 return `
-              <tr style="border-bottom: 1px solid #f1ece6;">
+              <tr id="timeline-row-${index}-2" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
                 <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
                 <td style="padding: 0.5rem 0.25rem;">
                   <strong>旋轉與靜置</strong><br>
@@ -697,7 +621,7 @@
                   ? ' <span class="badge bg-danger" style="background-color: #bb5f2a; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 4px;">阻力崩潰折算</span>' 
                   : '';
                 return `
-              <tr style="border-bottom: 1px solid #f1ece6;">
+              <tr id="timeline-row-${index}-3" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
                 <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
                 <td style="padding: 0.5rem 0.25rem;">
                   <strong>開始下壓</strong><br>
@@ -709,7 +633,7 @@
               ${(() => {
                 currentSec += result.press_sec;
                 return `
-              <tr>
+              <tr id="timeline-row-${index}-4" style="transition: background-color 0.3s;">
                 <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
                 <td style="padding: 0.5rem 0.25rem;">
                   <strong>萃取完成</strong><br>
@@ -720,11 +644,12 @@
               })()}
             </tbody>
           </table>
+          ${renderInlineTimer(result, index)}
         </div>
       `;
 
       return `
-      <article class="result-card">
+      <article class="result-card" id="recipe-card-${index}">
         <div class="result-head">
           <div>
             <div class="muted">Rank ${index + 1}</div>
@@ -763,16 +688,25 @@
     resultsNode.innerHTML = currentViewMode === "compare"
       ? renderCompareTable(results)
       : renderDetailCards(results, meta);
-    syncBrewTimerViewportState();
-    if (currentViewMode === "compare") {
-      syncBrewTimerPanel();
+
+    // Initialize UI on mode switch
+    if (currentViewMode === "detail") {
+      for (const idxStr of Object.keys(activeTimers)) {
+          syncInlineTimerUI(Number(idxStr));
+      }
     }
   }
 
   function renderResults(payload) {
     const { meta, results } = payload;
     latestPayload = payload;
-    resetBrewTimerState();
+    
+    // reset all timers
+    if (brewTimerInterval) {
+      clearInterval(brewTimerInterval);
+      brewTimerInterval = null;
+    }
+    activeTimers = {};
 
     summary.innerHTML = [
       metricCard("焙度", `${meta.roast_name} (${meta.roast_code})`),
@@ -836,29 +770,39 @@
   });
 
   resultsNode.addEventListener("click", (event) => {
-    const timerTrigger = event.target.closest("[data-rank-timer-trigger]");
-    if (timerTrigger) {
-      const index = Number(timerTrigger.dataset.rankTimerTrigger);
-      const result = latestPayload?.results?.[index];
-      if (!result) return;
-      if (brewTimer.openRankIndex === index) {
-        closeBrewTimer();
-        return;
-      }
-      openBrewTimer(index, result);
-      renderResultContent(latestPayload.results, latestPayload.meta);
-      syncBrewTimerPanel();
+    const detailScrollTrigger = event.target.closest("[data-scroll-to-recipe]");
+    if (detailScrollTrigger) {
+      const index = Number(detailScrollTrigger.dataset.scrollToRecipe);
+      
+      // Select the 'detail' view mode programmatically
+      const detailBtn = document.querySelector('[data-view-mode="detail"]');
+      if (detailBtn) detailBtn.click();
+
+      // Scroll to respective detail card
+      setTimeout(() => {
+        const targetElement = document.getElementById(`recipe-card-${index}`);
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50); // Small delay to allow renderResultContent to finish replacing DOM
       return;
     }
 
-    const timerAction = event.target.closest("[data-rank-timer-action]");
-    if (timerAction) {
-      const action = timerAction.dataset.rankTimerAction;
-      if (action === "toggle") startOrPauseBrewTimer();
-      if (action === "reset") resetBrewTimer();
-      if (action === "next") skipBrewTimerStep();
-      if (action === "close") closeBrewTimer();
-      return;
+    const timerToggle = event.target.closest("[data-inline-timer-toggle]");
+    if (timerToggle) {
+        const index = Number(timerToggle.dataset.inlineTimerToggle);
+        const result = latestPayload?.results?.[index];
+        if (result) {
+            startOrPauseInlineTimer(index, result);
+        }
+        return;
+    }
+
+    const timerReset = event.target.closest("[data-inline-timer-reset]");
+    if (timerReset) {
+        const index = Number(timerReset.dataset.inlineTimerReset);
+        resetInlineTimer(index);
+        return;
     }
 
     const trigger = event.target.closest("[data-open-radar]");
@@ -877,9 +821,6 @@
     if (!radarModal.hidden) {
       closeRadarModal();
       return;
-    }
-    if (brewTimer.openRankIndex !== null) {
-      closeBrewTimer();
     }
   });
 
