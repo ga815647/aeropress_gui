@@ -118,6 +118,16 @@
         return;
       }
     }
+    if (key === "roast") {
+      const selected = document.getElementById("roast").value;
+      const roastOption = window.APP_ROAST_OPTIONS.find(opt => opt.code === selected);
+      if (roastOption) {
+        tooltipTitle.textContent = "焙度";
+        tooltipBody.textContent = roastOption.note;
+        tooltipMeta.textContent = "可依豆袋上的 Agtron 或 SCA 等級選擇；無測量時可從 Medium (M) 開始。";
+        return;
+      }
+    }
     const entry = fieldHelp[key];
     if (!entry) return;
     tooltipTitle.textContent = entry.title;

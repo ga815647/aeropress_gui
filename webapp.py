@@ -43,7 +43,7 @@ def create_app() -> Flask:
     @app.get("/")
     def index():
         roast_options = [
-            {"code": k, "name": v["name"]} for k, v in constants.ROAST_TABLE.items()
+            {"code": k, "name": v["name"], "note": v["note"]} for k, v in constants.ROAST_TABLE.items()
         ]
         return render_template(
             "index.html",
