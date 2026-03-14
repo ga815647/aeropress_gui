@@ -519,6 +519,9 @@
             <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">💧 水質: GH ${meta.water_gh} / KH ${meta.water_kh}</span>
             <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🧪 Mg 比例: ${meta.water_mg_frac}</span>
           </div>
+          <div style="margin: 0.5rem 0 1rem 0; padding: 0.75rem; background-color: #fdf3ed; border: 1px solid #e4d7cb; border-radius: 8px; font-size: 0.9em; color: #bb5f2a;">
+            <strong>⏱️ 計時建議：</strong> 建議先 <strong>「按馬錶」</strong>，隨即 <strong>「注水」</strong>，完成後 <strong>「塞塞子」</strong>。這能確保從水接觸咖啡的第一秒起就開始計算萃取時間。
+          </div>
           <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse; table-layout: fixed; word-wrap: break-word;">
             <tbody>
               <tr id="timeline-row-${index}-1" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
