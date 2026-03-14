@@ -18,7 +18,7 @@ def _huber(x: float, delta: float) -> float:
 
 def _huber_asym(x: float, delta: float, compound: str) -> float:
     base = _huber(x, delta)
-    if compound in ("CA", "CGA") and x > 0:
+    if compound in ("CA", "CGA", "MEL") and x > 0:
         return base * constants.ASYM_BITTER_MULT
     if compound == "SW" and x < 0:
         return base * constants.ASYM_SWEET_MULT
@@ -59,6 +59,7 @@ def flavor_score(
     tds: float,
     roast_code: str,
     water_kh: float = 30,
+    water_gh: float = 50,
     t_slurry: float = 90,
     temp_initial: float = 90,
 ) -> float:
@@ -82,6 +83,11 @@ def flavor_score(
         if mel_sens > 0:
             actual_perceived["MEL"] = actual_abs["MEL"] * (1.0 + excess * mel_sens)
 
+    # v5.11: 理想苦味下修，縮小模型與實感落差（高溫苦突出）
+    ideal_adj = dict(ideal_abs)
+    for k in ("CA", "CGA", "MEL"):
+        ideal_adj[k] = ideal_abs[k] * constants.IDEAL_BITTER_REDUCTION
+
     dot = sum(constants.WEIGHTS[k] * actual_perceived[k] * ideal_abs[k] for k in constants.KEYS)
     norm_a = math.sqrt(sum(constants.WEIGHTS[k] * actual_perceived[k] ** 2 for k in constants.KEYS))
     norm_i = math.sqrt(sum(constants.WEIGHTS[k] * ideal_abs[k] ** 2 for k in constants.KEYS))
@@ -90,8 +96,8 @@ def flavor_score(
     conc_loss = sum(
         constants.WEIGHTS[k]
         * _huber_asym(
-            (actual_perceived[k] - max(ideal_abs[k], constants.CONC_SENSITIVITY_FLOOR))
-            / max(ideal_abs[k], constants.CONC_SENSITIVITY_FLOOR),
+            (actual_perceived[k] - max(ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k], constants.CONC_SENSITIVITY_FLOOR))
+            / max(ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k], constants.CONC_SENSITIVITY_FLOOR),
             constants.CONC_HUBER_DELTA,
             k,
         )
@@ -104,7 +110,7 @@ def flavor_score(
     b_ac_sw = math.exp(-_huber((a_ac_sw - i_ac_sw) / max(i_ac_sw, _CONC_FLOOR), constants.CONC_HUBER_DELTA))
 
     mel_coeff = constants.MEL_BITTER_COEFF[roast_code]
-    i_bitter = max(ideal_abs["CA"] + ideal_abs["CGA"] + ideal_abs["MEL"] * mel_coeff, _CONC_FLOOR)
+    i_bitter = max(ideal_adj["CA"] + ideal_adj["CGA"] + ideal_adj["MEL"] * mel_coeff, _CONC_FLOOR)
     a_bitter = max(
         actual_perceived["CA"] + actual_perceived["CGA"] + actual_perceived["MEL"] * mel_coeff,
         _CONC_FLOOR,
@@ -112,6 +118,21 @@ def flavor_score(
     i_ps_r = ideal_abs["PS"] / i_bitter
     a_ps_r = actual_perceived["PS"] / a_bitter
     b_ps = math.exp(-_huber((a_ps_r - i_ps_r) / max(i_ps_r, _CONC_FLOOR), constants.CONC_HUBER_DELTA))
+
+    # v5.11: 軟水（如 RO）苦味感知加權：低 GH 時苦味更明顯，超標加重懲罰
+    soft_water_penalty = 1.0
+    if water_gh < constants.LOW_GH_THRESHOLD and a_bitter > i_bitter:
+        excess_ratio = (a_bitter - i_bitter) / max(i_bitter, _CONC_FLOOR)
+        soft_water_penalty = math.exp(-constants.SOFT_WATER_BITTER_SLOPE * excess_ratio)
+
+    # v5.11: 酸高甜低（低溫酸出、香味不足）懲罰
+    acid_without_sweet_penalty = 1.0
+    if actual_perceived["AC"] > ideal_abs["AC"] and actual_perceived["SW"] < ideal_abs["SW"]:
+        ac_excess = (actual_perceived["AC"] - ideal_abs["AC"]) / max(ideal_abs["AC"], _CONC_FLOOR)
+        sw_deficit = (ideal_abs["SW"] - actual_perceived["SW"]) / max(ideal_abs["SW"], _CONC_FLOOR)
+        acid_without_sweet_penalty = math.exp(
+            -constants.AC_WITHOUT_SWEET_SLOPE * min(ac_excess, sw_deficit)
+        )
 
     tds_prefer = constants.TDS_PREFER[roast_code]
     diff = tds - tds_prefer
@@ -149,6 +170,8 @@ def flavor_score(
         * cga_astringency
         * harshness_penalty
         * ashy_penalty
+        * soft_water_penalty
+        * acid_without_sweet_penalty
     )
 
     if tds < constants.TDS_BROWN_WATER_FLOOR:

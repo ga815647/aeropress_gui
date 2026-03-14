@@ -53,7 +53,11 @@ def test_flavor_score_penalties_do_not_crash_and_reward_better_balance() -> None
     harsh = dict(balanced)
     harsh["AC"] *= 1.6
     harsh["CGA"] *= 2.0
-    balanced_score = flavor_score(balanced, ideal, 1.25, "medium", 30, 88, 92)
-    harsh_score = flavor_score(harsh, ideal, 1.25, "medium", 30, 95, 100)
+    balanced_score = flavor_score(
+        balanced, ideal, 1.25, "medium", water_kh=30, t_slurry=88, temp_initial=92
+    )
+    harsh_score = flavor_score(
+        harsh, ideal, 1.25, "medium", water_kh=30, t_slurry=95, temp_initial=100
+    )
     assert balanced_score > harsh_score
     assert harsh_score >= 0

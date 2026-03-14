@@ -248,3 +248,43 @@ h_float_post ∝ h_float_pre × (1 − swirl_efficacy) × (μ(T_slurry) / μ_ref
 ### 7.3 延後（待 §15 實測）
 
 浮層、下壓分相、PS 動力學、IDEAL 微調。
+
+---
+
+## 8. v5.11 口感矯正（RO 實測回饋與水質權重）
+
+### 8.1 實測情境與落差
+
+- **沖煮條件**：RO 水（GH/KH 極低）、程式輸出約 99.5 分參數。
+- **實測數據**：TDS 1.28%、EY 15.9%、SW/AC 0.665（Ideal 0.593）、PS/Bitter 1.227（Ideal 1.141）；化合物 AC/SW/PS/CA/CGA/MEL 皆在合理區間。
+- **口感回饋**：高溫苦味突出、中溫 body 醇厚、低溫酸出來沒帶出香味；自評最高約 90 分。
+- **結論**：模型分數與實感仍有約 10 分落差，需納入（1）高溫苦味懲罰、（2）低溫酸無香懲罰、（3）水質權重（軟水苦感加權）。
+
+### 8.2 物理／化學依據
+
+| 項目 | 依據 |
+|------|------|
+| **高溫苦突出** | 苦味物質（CA/CGA/MEL）在高溫時感官閾值較低；理想苦味目標略高於多數實感偏好 → 下修理想苦、並將 MEL 納入不對稱苦味懲罰。 |
+| **軟水苦感** | 低 GH/KH（如 RO）緩衝不足，苦味離子更易被感知；文獻與實務常見「軟水放大苦感」→ 當 water_gh < 閾值且實際苦味高於理想時，額外懲罰。 |
+| **低溫酸無香** | 低溫時揮發性香氣衰減，酸質仍明顯，易出現「酸出但無圓潤/香味」→ 當 AC > 理想且 SW < 理想時，視為酸高甜低，加重懲罰。 |
+
+### 8.3 已實作（v5.11）
+
+| 項目 | 說明 |
+|------|------|
+| **IDEAL_BITTER_REDUCTION** | 0.95；理想 CA/CGA/MEL 在評分時視為下修 5%，縮小「模型剛好」與「實感仍偏苦」的落差。 |
+| **MEL 納入 ASYM_BITTER_MULT** | 濃度偏離項中，MEL 超標與 CA/CGA 同採 1.8× 懲罰。 |
+| **水質權重（water_gh）** | `flavor_score` 新增參數 `water_gh`；當 `water_gh < LOW_GH_THRESHOLD`（20 ppm）且實際苦味 > 理想苦味時，乘以 `exp(-SOFT_WATER_BITTER_SLOPE * 超標比)`。 |
+| **酸高甜低懲罰** | 當 `AC > ideal_AC` 且 `SW < ideal_SW` 時，乘以 `exp(-AC_WITHOUT_SWEET_SLOPE * min(AC超標比, SW不足比))`，對應低溫酸無香。 |
+
+### 8.4 常數一覽（v5.11 新增）
+
+- `IDEAL_BITTER_REDUCTION = 0.95`
+- `LOW_GH_THRESHOLD = 20`
+- `SOFT_WATER_BITTER_SLOPE = 2.0`
+- `AC_WITHOUT_SWEET_SLOPE = 3.0`
+
+### 8.5 後續建議
+
+- 若仍感高溫苦：可再微調 `IDEAL_BITTER_REDUCTION`（如 0.92）或 `ASYM_BITTER_MULT`（如 2.0）。
+- 水質：RO 使用者可維持現有 GH/KH 輸入，程式已依 `water_gh` 自動加權；若使用調水配方，建議如實輸入 GH/KH 以利評分反映水質。

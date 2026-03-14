@@ -100,6 +100,12 @@ KH_PERCEPT_DECAY = 150
 ASYM_BITTER_MULT = 1.8  # v5.10: 加強苦味超標懲罰
 ASYM_SWEET_MULT = 1.5
 
+# v5.11: RO/實測口感矯正（高溫苦突出、低溫酸無香、水質權重）
+IDEAL_BITTER_REDUCTION = 0.95  # 理想苦味下修 5%，縮小模型與實感落差
+LOW_GH_THRESHOLD = 20  # ppm；低於此視為軟水（如 RO），苦味感知加權
+SOFT_WATER_BITTER_SLOPE = 2.0  # 軟水時苦味超標之額外懲罰斜率
+AC_WITHOUT_SWEET_SLOPE = 3.0   # 酸高甜低（低溫酸無香）懲罰斜率
+
 # v5.10: 下修以對應實測「過於濃烈」，偏日常適飲
 TDS_PREFER = {
     "very_light": 1.27,

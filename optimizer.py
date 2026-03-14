@@ -87,7 +87,11 @@ def optimize(
                     ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
                     tds = calc_tds(roast_code, dose, ey, dial, water_ml)
                     ideal_abs = build_ideal_abs(roast_code, tds)
-                    score = flavor_score(compounds, ideal_abs, tds, roast_code, water_kh, t_slurry_val, temp)
+                    score = flavor_score(
+                        compounds, ideal_abs, tds, roast_code,
+                        water_kh=water_kh, water_gh=water_gh,
+                        t_slurry=t_slurry_val, temp_initial=temp,
+                    )
                     swirl_wait = calc_swirl_wait(dial)
                     drip_volume = calc_drip_volume(water_ml, dial, drip_time)
 
