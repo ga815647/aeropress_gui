@@ -46,7 +46,7 @@
               </div>
               <select id="roast" name="roast">
                 {% for opt in roast_options %}
-                <option value="{{ opt.code }}" {% if opt.code == 'medium' %}selected{% endif %}>{{ opt.code }} | {{ opt.name }}</option>
+                <option value="{{ opt.code }}" {% if opt.code == 'medium' %}selected{% endif %}>{{ opt.name }}</option>
                 {% endfor %}
               </select>
             </div>
