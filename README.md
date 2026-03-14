@@ -36,6 +36,7 @@ pip install -e .[dev]
 ├── optimizer.py         # 參數搜尋與排序
 ├── constants.py         # 模型常數
 ├── runtime.py           # 環境與水質解析
+├── AeroPress_4Vector_白皮書.md   # 完整規格（整合 v5.8s + 封閉前漏水 + 口感校正 + 焙度對照）
 ├── data/water_presets.py
 ├── models/              # EY / TDS / compounds / scoring
 ├── output/              # terminal / json / csv / radar
