@@ -135,7 +135,7 @@ def flavor_score(
     harshness_penalty = math.exp(-constants.HARSHNESS_SLOPE * harshness_product) if harshness_product > 0 else 1.0
 
     ashy_penalty = 1.0
-    if roast_code in ("MD", "D"):
+    if roast_code in ("moderately_dark", "dark", "very_dark"):
         mel_excess_ratio = max(actual_perceived["MEL"] / max(ideal_abs["MEL"], _CONC_FLOOR) - 1.0, 0)
         ashy_product = mel_excess_ratio * cga_excess_ratio
         ashy_penalty = math.exp(-constants.ASHY_SLOPE * ashy_product) if ashy_product > 0 else 1.0

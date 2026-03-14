@@ -43,8 +43,8 @@ def test_export_json_csv_and_radar(tmp_path: Path) -> None:
     cwd = os.getcwd()
     os.chdir(tmp_path)
     try:
-        export_json(results, "M", 50, 30)
-        export_csv(results, "M")
+        export_json(results, "medium", 50, 30)
+        export_csv(results, "medium")
         plot_radar(results)
     finally:
         os.chdir(cwd)
@@ -77,7 +77,7 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
         "--brewer",
         "xl",
         "--roast",
-        "M",
+        "medium",
         "--gh",
         "50",
         "--kh",

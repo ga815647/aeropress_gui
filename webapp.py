@@ -42,9 +42,13 @@ def create_app() -> Flask:
 
     @app.get("/")
     def index():
+        roast_options = [
+            {"code": k, "name": v["name"]} for k, v in constants.ROAST_TABLE.items()
+        ]
         return render_template(
             "index.html",
             roast_codes=list(constants.ROAST_TABLE.keys()),
+            roast_options=roast_options,
             brewer_options=list(constants.BREWER_PRESETS.keys()),
             presets=WATER_PRESETS,
         )
@@ -54,11 +58,15 @@ def create_app() -> Flask:
         return jsonify(
             {
                 "roast_codes": list(constants.ROAST_TABLE.keys()),
+                "roast_options": [
+                    {"code": k, "name": v["name"]}
+                    for k, v in constants.ROAST_TABLE.items()
+                ],
                 "brewers": constants.BREWER_PRESETS,
                 "presets": WATER_PRESETS,
                 "defaults": {
                     "brewer": "xl",
-                    "roast": "M",
+                    "roast": "medium",
                     "top": 3,
                     "t_env": 25.0,
                     "altitude": 0.0,
@@ -82,7 +90,7 @@ def create_app() -> Flask:
             mg_frac=payload.get("mg_frac"),
             preset=payload.get("preset"),
         )
-        roast_code = str(payload.get("roast", "M"))
+        roast_code = str(payload.get("roast", "medium"))
         results = optimize(
             roast_code=roast_code,
             brewer_size=payload.get("brewer", "xl"),

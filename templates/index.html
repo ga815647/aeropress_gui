@@ -45,8 +45,8 @@
                 <button class="hint-button" type="button" data-help-target="roast">?</button>
               </div>
               <select id="roast" name="roast">
-                {% for roast in roast_codes %}
-                <option value="{{ roast }}" {% if roast == 'M' %}selected{% endif %}>{{ roast }}</option>
+                {% for opt in roast_options %}
+                <option value="{{ opt.code }}" {% if opt.code == 'medium' %}selected{% endif %}>{{ opt.code }} | {{ opt.name }}</option>
                 {% endfor %}
               </select>
             </div>

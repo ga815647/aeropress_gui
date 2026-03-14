@@ -14,7 +14,7 @@ def test_webapp_routes() -> None:
         "/api/optimize",
         json={
             "brewer": "xl",
-            "roast": "M",
+            "roast": "medium",
             "gh": 50,
             "kh": 30,
             "mg_frac": 0.40,
@@ -25,7 +25,7 @@ def test_webapp_routes() -> None:
     )
     payload = api_response.get_json()
     assert api_response.status_code == 200
-    assert payload["meta"]["roast_code"] == "M"
+    assert payload["meta"]["roast_code"] == "medium"
     assert len(payload["results"]) == 1
     assert "compounds_abs" in payload["results"][0]
     assert "swirl_wait_sec" in payload["results"][0]

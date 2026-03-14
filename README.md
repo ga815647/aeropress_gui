@@ -68,7 +68,7 @@ python main.py --roast MD --brewer xl --gh 60 --kh 20 --mg-frac 0.7 --output csv
 
 | 參數 | 說明 | 預設 |
 | --- | --- | --- |
-| `--roast` | 烘焙度 `L+` `L` `LM` `M` `MD` `D` | 必填 |
+| `--roast` | 焙度（SCA 代號）`very_light` `light` `medium_light` `medium` `moderately_dark` `dark` `very_dark` | 必填 |
 | `--brewer` | 容量 `standard` / `xl` | `xl` |
 | `--preset` | 水質 preset | 無 |
 | `--gh` | GH ppm | 無 |
@@ -85,6 +85,8 @@ python main.py --roast MD --brewer xl --gh 60 --kh 20 --mg-frac 0.7 --output csv
 - 有 `--gh` + `--kh` → 用手動值
 - 僅 `--preset` → 用該 preset
 - 皆無 → GH=50, KH=30, mg_frac=0.40
+
+**焙度對照（SCA / Agtron）：** very_light 85–95 | light 75–80 | medium_light 60–70 | medium 50–55 | moderately_dark 40–45 | dark 30–35 | very_dark 20–25
 
 **Preset key：** `ro` `aquacode_7l` `dr_you_jeju_yongamsoo` `tamsaa_jeju_water_j_creation` `volvic_pure` `top1_tamsaa_sweetness` `top2_volvic_balance` `top3_jeju_structure`
 
@@ -119,7 +121,7 @@ python webapp.py --host 127.0.0.1 --port 8000 --no-debug
 ```json
 {
   "brewer": "xl",
-  "roast": "M",
+  "roast": "medium",
   "preset": "aquacode_7l",
   "top": 3,
   "t_env": 25,

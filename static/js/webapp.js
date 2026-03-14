@@ -39,8 +39,8 @@
     },
     roast: {
       title: "焙度",
-      body: "焙度會改變理想風味向量與苦甜平衡，直接影響排序結果。",
-      meta: "若不知道怎麼選，通常可先從中焙 M 開始測試。",
+      body: "焙度依 SCA/SCAA 分類與 Agtron 色值對應，會改變理想風味向量與苦甜平衡。",
+      meta: "可依豆袋上的 Agtron 或 SCA 等級選擇；無測量時可從 Medium (M) 開始。",
     },
     preset: {
       title: "水質預設",

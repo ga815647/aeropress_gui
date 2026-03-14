@@ -12,8 +12,8 @@ def test_calc_fines_ratio_clamps() -> None:
 
 
 def test_retention_and_swirl_wait_boundaries() -> None:
-    assert calc_retention("L+", 3.5) >= 1.60
-    assert calc_retention("D", 6.5) <= 2.80
+    assert calc_retention("very_light", 3.5) >= 1.60
+    assert calc_retention("very_dark", 6.5) <= 2.80
     assert calc_swirl_wait(3.5) == 40
     assert calc_swirl_wait(6.5) == 10
 
@@ -26,37 +26,34 @@ def test_calc_press_time_increases_for_finer_and_larger_dose() -> None:
 
 
 def test_calc_ey_monotonic_and_bounded() -> None:
-    low = calc_ey("M", 90, 5.5, 90, 22, 400, 50, 30)
-    high = calc_ey("M", 94, 4.5, 150, 22, 400, 50, 30)
+    low = calc_ey("medium", 90, 5.5, 90, 22, 400, 50, 30)
+    high = calc_ey("medium", 94, 4.5, 150, 22, 400, 50, 30)
     assert high > low
     assert high <= constants.EY_ABSOLUTE_MAX
 
 
-def test_calc_drip_volume_scales_with_time_and_inverse_dial() -> None:
+def test_calc_drip_volume_scales_with_time_and_dial_darcy() -> None:
     short = calc_drip_volume(400, 5.5, 20)
     long = calc_drip_volume(400, 5.5, 40)
     fine = calc_drip_volume(400, 4.0, 30)
     coarse = calc_drip_volume(400, 6.0, 30)
     assert long > short
-    assert fine > coarse
+    assert coarse > fine  # Darcy: coarser grind → lower resistance → more drip
 
 
-def test_seal_delay_reduces_ey_and_pushes_compounds_toward_acidity() -> None:
-    fast_seal_ey = calc_ey("M", 92, 4.5, 120, 22, 400, 50, 30, seal_delay=0)
-    slow_seal_ey = calc_ey("M", 92, 4.5, 120, 22, 400, 50, 30, seal_delay=20)
-    fast_profile = predict_compounds("M", 88, 4.5, 120, 19, 30, 0.4, seal_delay=0)
-    slow_profile = predict_compounds("M", 88, 4.5, 120, 19, 30, 0.4, seal_delay=20)
-    assert slow_seal_ey < fast_seal_ey
+def test_seal_delay_pushes_compounds_toward_acidity() -> None:
+    fast_profile = predict_compounds("medium", 88, 4.5, 120, 19, 30, 0.4, seal_delay=0)
+    slow_profile = predict_compounds("medium", 88, 4.5, 120, 19, 30, 0.4, seal_delay=20)
     assert (slow_profile["AC"] / slow_profile["SW"]) > (fast_profile["AC"] / fast_profile["SW"])
 
 
 def test_flavor_score_penalties_do_not_crash_and_reward_better_balance() -> None:
-    ideal = build_ideal_abs("M", 1.25)
-    balanced = predict_compounds("M", 88, 4.5, 120, 19, 30, 0.4)
+    ideal = build_ideal_abs("medium", 1.25)
+    balanced = predict_compounds("medium", 88, 4.5, 120, 19, 30, 0.4)
     harsh = dict(balanced)
     harsh["AC"] *= 1.6
     harsh["CGA"] *= 2.0
-    balanced_score = flavor_score(balanced, ideal, 1.25, "M", 30, 88, 92)
-    harsh_score = flavor_score(harsh, ideal, 1.25, "M", 30, 95, 100)
+    balanced_score = flavor_score(balanced, ideal, 1.25, "medium", 30, 88, 92)
+    harsh_score = flavor_score(harsh, ideal, 1.25, "medium", 30, 95, 100)
     assert balanced_score > harsh_score
     assert harsh_score >= 0

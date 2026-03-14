@@ -13,7 +13,19 @@ from runtime import apply_environment_settings, resolve_water_profile
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AeroPress 四向量最佳化系統 v5.8s")
     parser.add_argument("--brewer", default="xl", choices=["standard", "xl"])
-    parser.add_argument("--roast", required=True, choices=["L+", "L", "LM", "M", "MD", "D"])
+    parser.add_argument(
+        "--roast",
+        required=True,
+        choices=[
+            "very_light",
+            "light",
+            "medium_light",
+            "medium",
+            "moderately_dark",
+            "dark",
+            "very_dark",
+        ],
+    )
     parser.add_argument("--preset", default=None)
     parser.add_argument("--gh", type=float, default=None, help="GH ppm")
     parser.add_argument("--kh", type=float, default=None, help="KH ppm")

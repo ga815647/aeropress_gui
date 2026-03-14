@@ -33,20 +33,22 @@ BED_COMPACTION_COEFF = 0.15
 SWIRL_RESET_FRACTION = 0.35
 
 RETENTION_BASE = {
-    "L+": 2.00,
-    "L": 2.10,
-    "LM": 2.20,
-    "M": 2.30,
-    "MD": 2.40,
-    "D": 2.50,
+    "very_light": 1.95,
+    "light": 2.05,
+    "medium_light": 2.15,
+    "medium": 2.25,
+    "moderately_dark": 2.35,
+    "dark": 2.45,
+    "very_dark": 2.55,
 }
 RETENTION_DIAL_SLOPE = {
-    "L+": 0.10,
-    "L": 0.10,
-    "LM": 0.10,
-    "M": 0.10,
-    "MD": 0.09,
-    "D": 0.08,
+    "very_light": 0.10,
+    "light": 0.10,
+    "medium_light": 0.10,
+    "medium": 0.10,
+    "moderately_dark": 0.09,
+    "dark": 0.08,
+    "very_dark": 0.07,
 }
 
 K_CA = 0.030
@@ -85,12 +87,13 @@ CONC_HUBER_DELTA = 0.5
 BALANCE_PENALTY_WEIGHT = 0.15
 BODY_BITTER_PENALTY_WEIGHT = 0.12
 MEL_BITTER_COEFF = {
-    "L+": 0.0,
-    "L": 0.0,
-    "LM": 0.0,
-    "M": 0.0,
-    "MD": 0.5,
-    "D": 0.5,
+    "very_light": 0.0,
+    "light": 0.0,
+    "medium_light": 0.0,
+    "medium": 0.0,
+    "moderately_dark": 0.5,
+    "dark": 0.5,
+    "very_dark": 0.5,
 }
 
 KH_PERCEPT_DECAY = 150
@@ -98,12 +101,13 @@ ASYM_BITTER_MULT = 1.5
 ASYM_SWEET_MULT = 1.5
 
 TDS_PREFER = {
-    "L+": 1.35,
-    "L": 1.35,
-    "LM": 1.30,
-    "M": 1.25,
-    "MD": 1.20,
-    "D": 1.20,
+    "very_light": 1.35,
+    "light": 1.35,
+    "medium_light": 1.30,
+    "medium": 1.25,
+    "moderately_dark": 1.20,
+    "dark": 1.18,
+    "very_dark": 1.15,
 }
 TDS_GAUSS_SIGMA_LOW = 0.15
 TDS_GAUSS_SIGMA_HIGH = 0.25
@@ -130,12 +134,13 @@ STEEP_STEP = 15
 
 TEMP_BOILING_POINT = 100.0
 SCORCH_PARAMS = {
-    "L+": (100, 0.00, 0.00),
-    "L": (100, 0.00, 0.00),
-    "LM": (97, 0.05, 0.00),
-    "M": (95, 0.08, 0.00),
-    "MD": (91, 0.15, 0.10),
-    "D": (88, 0.20, 0.15),
+    "very_light": (100, 0.00, 0.00),
+    "light": (100, 0.00, 0.00),
+    "medium_light": (97, 0.05, 0.00),
+    "medium": (95, 0.08, 0.00),
+    "moderately_dark": (91, 0.15, 0.10),
+    "dark": (88, 0.20, 0.15),
+    "very_dark": (85, 0.25, 0.20),
 }
 
 CHANNELING_PRESS_THRESHOLD = 60
@@ -145,35 +150,90 @@ CHANNELING_BYPASS_MAX = 0.15
 CHANNELING_COLLAPSE_RATIO = 0.20
 PRESS_EQUIV_FRACTION = 0.15
 
+# Roast: SCA/SCAA official classification + Agtron (ground) range.
+# Reference: SCA roast color standards. Keys = SCA level names.
 ROAST_TABLE = {
-    "L+": {"name": "極淺焙", "base_temp": 100, "base_ey": 17.0},
-    "L": {"name": "淺焙", "base_temp": 99, "base_ey": 17.0},
-    "LM": {"name": "中淺焙", "base_temp": 95, "base_ey": 19.0},
-    "M": {"name": "中焙", "base_temp": 92, "base_ey": 19.0},
-    "MD": {"name": "中深焙", "base_temp": 88, "base_ey": 21.0},
-    "D": {"name": "深焙", "base_temp": 85, "base_ey": 21.0},
+    "very_light": {
+        "name": "Very Light (Agtron 85–95)",
+        "sca_level": "Very Light",
+        "agtron_min": 85,
+        "agtron_max": 95,
+        "base_temp": 100,
+        "base_ey": 17.0,
+    },
+    "light": {
+        "name": "Light (Agtron 75–80)",
+        "sca_level": "Light",
+        "agtron_min": 75,
+        "agtron_max": 80,
+        "base_temp": 99,
+        "base_ey": 17.0,
+    },
+    "medium_light": {
+        "name": "Medium Light (Agtron 60–70)",
+        "sca_level": "Medium Light",
+        "agtron_min": 60,
+        "agtron_max": 70,
+        "base_temp": 95,
+        "base_ey": 19.0,
+    },
+    "medium": {
+        "name": "Medium (Agtron 50–55)",
+        "sca_level": "Medium",
+        "agtron_min": 50,
+        "agtron_max": 55,
+        "base_temp": 92,
+        "base_ey": 19.0,
+    },
+    "moderately_dark": {
+        "name": "Moderately Dark (Agtron 40–45)",
+        "sca_level": "Moderately Dark",
+        "agtron_min": 40,
+        "agtron_max": 45,
+        "base_temp": 88,
+        "base_ey": 21.0,
+    },
+    "dark": {
+        "name": "Dark (Agtron 30–35)",
+        "sca_level": "Dark",
+        "agtron_min": 30,
+        "agtron_max": 35,
+        "base_temp": 85,
+        "base_ey": 21.0,
+    },
+    "very_dark": {
+        "name": "Very Dark (Agtron 20–25)",
+        "sca_level": "Very Dark",
+        "agtron_min": 20,
+        "agtron_max": 25,
+        "base_temp": 82,
+        "base_ey": 21.5,
+    },
 }
 
 TDS_ANCHORS = {"low": 1.00, "mid": 1.20, "high": 1.40}
 IDEAL_FLAVOR = {
-    ("L+", "low"): {"AC": 0.28, "SW": 0.30, "PS": 0.18, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
-    ("L+", "mid"): {"AC": 0.25, "SW": 0.32, "PS": 0.20, "CA": 0.11, "CGA": 0.08, "MEL": 0.04},
-    ("L+", "high"): {"AC": 0.22, "SW": 0.35, "PS": 0.22, "CA": 0.10, "CGA": 0.07, "MEL": 0.04},
-    ("L", "low"): {"AC": 0.25, "SW": 0.32, "PS": 0.18, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
-    ("L", "mid"): {"AC": 0.22, "SW": 0.35, "PS": 0.20, "CA": 0.12, "CGA": 0.07, "MEL": 0.04},
-    ("L", "high"): {"AC": 0.20, "SW": 0.37, "PS": 0.22, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
-    ("LM", "low"): {"AC": 0.18, "SW": 0.35, "PS": 0.20, "CA": 0.14, "CGA": 0.09, "MEL": 0.04},
-    ("LM", "mid"): {"AC": 0.15, "SW": 0.38, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
-    ("LM", "high"): {"AC": 0.13, "SW": 0.40, "PS": 0.23, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
-    ("M", "low"): {"AC": 0.12, "SW": 0.38, "PS": 0.22, "CA": 0.14, "CGA": 0.08, "MEL": 0.06},
-    ("M", "mid"): {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
-    ("M", "high"): {"AC": 0.09, "SW": 0.42, "PS": 0.24, "CA": 0.12, "CGA": 0.07, "MEL": 0.06},
-    ("MD", "low"): {"AC": 0.08, "SW": 0.32, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.17},
-    ("MD", "mid"): {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
-    ("MD", "high"): {"AC": 0.06, "SW": 0.35, "PS": 0.24, "CA": 0.11, "CGA": 0.07, "MEL": 0.17},
-    ("D", "low"): {"AC": 0.05, "SW": 0.28, "PS": 0.22, "CA": 0.12, "CGA": 0.06, "MEL": 0.27},
-    ("D", "mid"): {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},
-    ("D", "high"): {"AC": 0.04, "SW": 0.30, "PS": 0.24, "CA": 0.10, "CGA": 0.05, "MEL": 0.27},
+    ("very_light", "low"): {"AC": 0.28, "SW": 0.30, "PS": 0.18, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
+    ("very_light", "mid"): {"AC": 0.25, "SW": 0.32, "PS": 0.20, "CA": 0.11, "CGA": 0.08, "MEL": 0.04},
+    ("very_light", "high"): {"AC": 0.22, "SW": 0.35, "PS": 0.22, "CA": 0.10, "CGA": 0.07, "MEL": 0.04},
+    ("light", "low"): {"AC": 0.25, "SW": 0.32, "PS": 0.18, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
+    ("light", "mid"): {"AC": 0.22, "SW": 0.35, "PS": 0.20, "CA": 0.12, "CGA": 0.07, "MEL": 0.04},
+    ("light", "high"): {"AC": 0.20, "SW": 0.37, "PS": 0.22, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
+    ("medium_light", "low"): {"AC": 0.18, "SW": 0.35, "PS": 0.20, "CA": 0.14, "CGA": 0.09, "MEL": 0.04},
+    ("medium_light", "mid"): {"AC": 0.15, "SW": 0.38, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
+    ("medium_light", "high"): {"AC": 0.13, "SW": 0.40, "PS": 0.23, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
+    ("medium", "low"): {"AC": 0.12, "SW": 0.38, "PS": 0.22, "CA": 0.14, "CGA": 0.08, "MEL": 0.06},
+    ("medium", "mid"): {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
+    ("medium", "high"): {"AC": 0.09, "SW": 0.42, "PS": 0.24, "CA": 0.12, "CGA": 0.07, "MEL": 0.06},
+    ("moderately_dark", "low"): {"AC": 0.08, "SW": 0.32, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.17},
+    ("moderately_dark", "mid"): {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
+    ("moderately_dark", "high"): {"AC": 0.06, "SW": 0.35, "PS": 0.24, "CA": 0.11, "CGA": 0.07, "MEL": 0.17},
+    ("dark", "low"): {"AC": 0.05, "SW": 0.28, "PS": 0.22, "CA": 0.12, "CGA": 0.06, "MEL": 0.27},
+    ("dark", "mid"): {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},
+    ("dark", "high"): {"AC": 0.04, "SW": 0.30, "PS": 0.24, "CA": 0.10, "CGA": 0.05, "MEL": 0.27},
+    ("very_dark", "low"): {"AC": 0.04, "SW": 0.26, "PS": 0.22, "CA": 0.12, "CGA": 0.05, "MEL": 0.30},
+    ("very_dark", "mid"): {"AC": 0.04, "SW": 0.28, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.29},
+    ("very_dark", "high"): {"AC": 0.03, "SW": 0.28, "PS": 0.24, "CA": 0.10, "CGA": 0.04, "MEL": 0.30},
 }
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
