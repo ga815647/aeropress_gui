@@ -85,7 +85,7 @@ PRE_SEAL_MEL_MULT = 0.60
 
 CONC_HUBER_DELTA = 0.5
 BALANCE_PENALTY_WEIGHT = 0.15
-BODY_BITTER_PENALTY_WEIGHT = 0.12
+BODY_BITTER_PENALTY_WEIGHT = 0.18  # v5.10: 強化醇苦比懲罰（Body 跟不上苦味）
 MEL_BITTER_COEFF = {
     "very_light": 0.0,
     "light": 0.0,
@@ -97,20 +97,21 @@ MEL_BITTER_COEFF = {
 }
 
 KH_PERCEPT_DECAY = 150
-ASYM_BITTER_MULT = 1.5
+ASYM_BITTER_MULT = 1.8  # v5.10: 加強苦味超標懲罰
 ASYM_SWEET_MULT = 1.5
 
+# v5.10: 下修以對應實測「過於濃烈」，偏日常適飲
 TDS_PREFER = {
-    "very_light": 1.35,
-    "light": 1.35,
-    "medium_light": 1.30,
-    "medium": 1.25,
-    "moderately_dark": 1.20,
-    "dark": 1.18,
-    "very_dark": 1.15,
+    "very_light": 1.27,
+    "light": 1.27,
+    "medium_light": 1.22,
+    "medium": 1.17,
+    "moderately_dark": 1.12,
+    "dark": 1.10,
+    "very_dark": 1.07,
 }
 TDS_GAUSS_SIGMA_LOW = 0.15
-TDS_GAUSS_SIGMA_HIGH = 0.25
+TDS_GAUSS_SIGMA_HIGH = 0.20  # v5.10: 收緊過濃懲罰
 
 K_PS = 0.005
 PS_TIME_MAX = 0.20
