@@ -88,9 +88,22 @@ def flavor_score(
     for k in ("CA", "CGA", "MEL"):
         ideal_adj[k] = ideal_abs[k] * constants.IDEAL_BITTER_REDUCTION
 
-    dot = sum(constants.WEIGHTS[k] * actual_perceived[k] * ideal_abs[k] for k in constants.KEYS)
-    norm_a = math.sqrt(sum(constants.WEIGHTS[k] * actual_perceived[k] ** 2 for k in constants.KEYS))
-    norm_i = math.sqrt(sum(constants.WEIGHTS[k] * ideal_abs[k] ** 2 for k in constants.KEYS))
+    dot = sum(
+        constants.WEIGHTS[k]
+        * actual_perceived[k]
+        * (ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k])
+        for k in constants.KEYS
+    )
+    norm_a = math.sqrt(
+        sum(constants.WEIGHTS[k] * actual_perceived[k] ** 2 for k in constants.KEYS)
+    )
+    norm_i = math.sqrt(
+        sum(
+            constants.WEIGHTS[k]
+            * (ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k]) ** 2
+            for k in constants.KEYS
+        )
+    )
     cosine_sim = dot / (norm_a * norm_i) if (norm_a > 0 and norm_i > 0) else 0.0
 
     conc_loss = sum(

@@ -77,6 +77,7 @@ def optimize(
                         dial,
                         steep,
                         ey,
+                        water_gh,
                         water_kh,
                         water_mg_frac,
                         press_equiv=press_equiv,

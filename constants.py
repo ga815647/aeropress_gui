@@ -130,11 +130,13 @@ CGA_ASTRINGENCY_THRESHOLD = 1.25
 CGA_ASTRINGENCY_SLOPE = 4.0
 HARSHNESS_SLOPE = 4.0
 
-SW_AROMA_SLOPE = 0.02
-SW_AROMA_THRESH = 95.0
-SW_AROMA_CAP = 0.30
+SW_AROMA_SLOPE = 0.035
+SW_AROMA_THRESH = 93.0
+SW_AROMA_CAP = 0.40
 ASHY_SLOPE = 3.0
 
+MG_PPM_REF = 20.0
+CA_PPM_REF = 30.0
 MG_FRAC_AC_SW_MULT = 0.16
 MG_FRAC_PS_CGA_MULT = 0.08
 DIAL_STEP = 0.1
@@ -145,8 +147,8 @@ SCORCH_PARAMS = {
     "very_light": (100, 0.00, 0.00),
     "light": (100, 0.00, 0.00),
     "medium_light": (97, 0.05, 0.00),
-    "medium": (95, 0.08, 0.00),
-    "moderately_dark": (91, 0.15, 0.10),
+    "medium": (92, 0.08, 0.00),
+    "moderately_dark": (88, 0.15, 0.10),
     "dark": (88, 0.20, 0.15),
     "very_dark": (85, 0.25, 0.20),
 }
@@ -166,7 +168,7 @@ ROAST_TABLE = {
         "sca_level": "Light/Cinnamon",
         "agtron_min": 85,
         "agtron_max": 95,
-        "base_temp": 100,
+        "base_temp": 97,
         "base_ey": 17.0,
         "note": "SCA: Light/Cinnamon (Agtron #85-95)。淺肉桂色，表面皺褶多、體積小。豆質極硬。100°C 封頂動能破壁。",
     },
@@ -175,7 +177,7 @@ ROAST_TABLE = {
         "sca_level": "Medium",
         "agtron_min": 75,
         "agtron_max": 75,
-        "base_temp": 98,
+        "base_temp": 96,
         "base_ey": 17.0,
         "note": "SCA: Medium (Agtron #75)。栗子色，表面乾燥無油。一爆剛結束。維持高溫動能以推動甜感發展。",
     },
