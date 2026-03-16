@@ -67,6 +67,7 @@ def export_json(
                     "ey_pct": result["ey"],
                     "tds_pct": result["tds"],
                     "retention_g_per_g": result["retention"],
+                    "pre_seal_drip_ml": result["pre_seal_drip_ml"],
                 },
                 "compounds_abs": {
                     **{k: round(actual_abs[k], 4) for k in constants.KEYS},

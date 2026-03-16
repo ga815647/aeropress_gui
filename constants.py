@@ -67,7 +67,22 @@ K_MIN = 0.006
 K_MAX = 0.060
 DIAL_BASE = 4.5
 EY_ABSOLUTE_MAX = 28.0
-EY_MIN = 14.0
+EY_MIN = 15.0  # 上調以排除大豆量極淺萃組合（brew_capacity 修正後的附帶效應）
+
+EY_PREFER = {
+    "very_light": 17.5,
+    "light": 19.0,  # Hoffman 校正：提升至 medium_light 基準，短浸泡低 EY 組合獲有效懲罰
+    "medium_light": 19.0,
+    "medium": 19.0,
+    "moderately_dark": 20.0,
+    "dark": 20.0,
+    "very_dark": 20.5,
+}
+
+# EY 感知修正指數（待實測校正，保守估算）
+EY_PS_EXP = 0.7   # PS 對 EY 最敏感（大分子萃出慢）；Hoffman 校正：強化短浸泡欠萃懲罰
+EY_CGA_EXP = 0.2  # CGA 對 EY 中等敏感
+EY_AC_EXP = 0.1   # AC 對 EY 最不敏感（小分子早期萃出）
 
 ARRHENIUS_COEFF = 0.05
 CONC_GRADIENT_COEFF = 0.5
@@ -75,6 +90,8 @@ CONC_GRADIENT_COEFF = 0.5
 PRE_SEAL_DRIP_RATE_REF = 0.38
 PRE_SEAL_DRIP_DIAL_EXP = 1.2
 PRE_SEAL_DRIP_MAX_RATIO = 0.18
+DOSE_DRIP_REF = 18.0  # 豆量阻力修正基準值（g）；dose=18g 時修正係數為 1.0
+                       # 指數 0.3 為保守估算，待實測「不同豆量 × 固定刻度」漏水量後校正
 PRE_SEAL_CONTACT_FRACTION = 0.20
 PRE_SEAL_PERCOLATION_EFFICIENCY = 0.03
 PRE_SEAL_AC_MULT = 1.35
@@ -127,12 +144,12 @@ CGA_TIME_MAX = 0.50
 K_AC_DECAY = 0.0035
 
 CGA_ASTRINGENCY_THRESHOLD = 1.25
-CGA_ASTRINGENCY_SLOPE = 4.0
+CGA_ASTRINGENCY_SLOPE = 2.0  # Hoffman 校正 v2：96°C+135s 仍受 CGA 懲罰，降至 2.0；HARSHNESS_SLOPE 維持 4.0 作保護
 HARSHNESS_SLOPE = 4.0
 
-SW_AROMA_SLOPE = 0.035
-SW_AROMA_THRESH = 93.0
-SW_AROMA_CAP = 0.40
+SW_AROMA_SLOPE = 0.015   # Hoffman 校正：降低高溫懲罰斜率（99°C 僅 3% 損失）
+SW_AROMA_THRESH = 97.0   # Hoffman 校正：96–97°C 完全無懲罰（light 搜尋範圍 93–99°C）
+SW_AROMA_CAP = 0.25      # Hoffman 校正：收緊極端高溫上限
 ASHY_SLOPE = 3.0
 
 MG_PPM_REF = 20.0

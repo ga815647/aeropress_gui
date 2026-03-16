@@ -47,7 +47,11 @@ def _calc_phase_ey(
     t_eff_b = _calc_t_eff(temp_slurry, k_b, r, t_kinetic)
 
     base_temp = cfg["base_temp"]
-    brew_capacity = free_water / (free_water + dose * constants.CONC_GRADIENT_COEFF)
+    # 新（非線性：以平方根修正大豆量場景）
+    # 物理依據：溶劑稀釋效應隨豆量增加呈遞減邊際（大豆量時每增加 1g 的影響小於小豆量時）
+    # 係數 0.5 為保守估算，待折射儀實測不同豆量的 EY 後校正
+    effective_dose_pressure = dose * constants.CONC_GRADIENT_COEFF * (constants.SWIRL_DOSE_REF / dose) ** 0.15
+    brew_capacity = free_water / (free_water + effective_dose_pressure)
 
     def _ey_max(t_eff: float) -> float:
         return min((cfg["base_ey"] + 8.0) + (t_eff - base_temp) / 5 * 1.5, constants.EY_ABSOLUTE_MAX) * brew_capacity
@@ -81,7 +85,7 @@ def calc_ey(
 
     retention_water = dose * calc_retention(roast_code, dial)
     drip_time = water_ml / constants.POUR_RATE + seal_delay
-    drip_volume = calc_drip_volume(water_ml, dial, drip_time)
+    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
     main_free_water = max(water_ml - drip_volume - retention_water, 1.0)
     main_ey = _calc_phase_ey(roast_code, t_slurry, dial, t_kinetic, dose, main_free_water)
 

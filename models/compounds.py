@@ -76,6 +76,7 @@ def predict_compounds(
     pour_offset: float = 0,
     water_ml: float = 400,
     seal_delay: float = constants.SEAL_DELAY_DEFAULT,
+    dose: float = 18.0,
 ) -> dict:
     effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv
     main_profile = _predict_closed_compounds(
@@ -83,7 +84,7 @@ def predict_compounds(
     )
 
     drip_time = water_ml / constants.POUR_RATE + seal_delay
-    drip_volume = calc_drip_volume(water_ml, dial, drip_time)
+    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
     drip_ratio = min(max(drip_volume / max(water_ml, 1e-6), 0.0), 0.35)
 
     if drip_ratio > 0:
@@ -107,5 +108,13 @@ def predict_compounds(
         }
     else:
         profile = main_profile
+
+    # EY 感知修正：以理想 EY 為基準，實際 EY 偏低時壓低慢萃物質
+    ey_prefer = constants.EY_PREFER[roast_code]
+    ey_ratio = min(ey / ey_prefer, 1.0)  # 超過理想值不額外獎勵，夾緊至 1.0
+
+    profile["PS"] *= (ey_ratio ** constants.EY_PS_EXP)
+    profile["CGA"] *= (ey_ratio ** constants.EY_CGA_EXP)
+    profile["AC"] *= (ey_ratio ** constants.EY_AC_EXP)
 
     return {key: round(profile[key], 4) for key in constants.KEYS}

@@ -84,6 +84,7 @@ def optimize(
                         pour_offset=pour_offset,
                         water_ml=water_ml,
                         seal_delay=seal_delay,
+                        dose=dose,
                     )
                     ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
                     tds = calc_tds(roast_code, dose, ey, dial, water_ml)
@@ -94,7 +95,7 @@ def optimize(
                         t_slurry=t_slurry_val, temp_initial=temp,
                     )
                     swirl_wait = calc_swirl_wait(dial)
-                    drip_volume = calc_drip_volume(water_ml, dial, drip_time)
+                    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
 
                     results.append(
                         {
