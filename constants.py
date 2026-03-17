@@ -159,6 +159,11 @@ MG_FRAC_PS_CGA_MULT = 0.08
 DIAL_STEP = 0.1
 STEEP_STEP = 15
 
+# 各焙度研磨粗細偏好（Hoffman 450–600µm EK43 → ZP6 等效 dial ≈ 4.3 為錨點）
+# 懲罰公式：score × (1 - W + W × exp(-0.5 × ((dial - prefer)/sigma)²))
+DIAL_PREFER_WEIGHT = 0.06  # 最大 6% 懲罰（軟約束）
+DIAL_PREFER_SIGMA = 1.0    # ±1.0 dial 以內 < 2.5% 懲罰
+
 TEMP_BOILING_POINT = 100.0
 SCORCH_PARAMS = {
     "very_light": (100, 0.00, 0.00),
@@ -187,6 +192,7 @@ ROAST_TABLE = {
         "agtron_max": 95,
         "base_temp": 97,
         "base_ey": 17.0,
+        "dial_prefer": 4.2,  # 豆質最硬，細研磨穿透細胞壁
         "note": "SCA: Light/Cinnamon (Agtron #85-95)。淺肉桂色，表面皺褶多、體積小。豆質極硬。100°C 封頂動能破壁。",
     },
     "light": {
@@ -196,6 +202,7 @@ ROAST_TABLE = {
         "agtron_max": 75,
         "base_temp": 96,
         "base_ey": 17.0,
+        "dial_prefer": 4.3,  # Hoffman 錨點：450–600µm EK43 ≈ ZP6 dial 4.3
         "note": "SCA: Medium (Agtron #75)。栗子色，表面乾燥無油。一爆剛結束。維持高溫動能以推動甜感發展。",
     },
     "medium_light": {
@@ -205,6 +212,7 @@ ROAST_TABLE = {
         "agtron_max": 65,
         "base_temp": 95,
         "base_ey": 19.0,
+        "dial_prefer": 4.5,  # 溶出性提升，稍粗
         "note": "SCA: High (Agtron #65)。褐棕色。一爆完全結束，皺褶撐開。台灣精品市場最大公約數，酸甜平衡基準。",
     },
     "medium": {
@@ -214,6 +222,7 @@ ROAST_TABLE = {
         "agtron_max": 55,
         "base_temp": 91,
         "base_ey": 19.0,
+        "dial_prefer": 4.7,  # City 焙溶出最佳，可稍粗
         "note": "SCA: City (Agtron #55)。巧克力色。酸質退場、堅果轉強。若遇標示模糊豆，往下靠攏選此項最穩妥。",
     },
     "moderately_dark": {
@@ -223,6 +232,7 @@ ROAST_TABLE = {
         "agtron_max": 45,
         "base_temp": 86,
         "base_ey": 21.0,
+        "dial_prefer": 4.5,  # 回細，低溫 + 過萃保護
         "note": "SCA: Full City (Agtron #45)。暗棕色帶油光。剛過二爆。系統啟動最大幅度急煞，嚴防焦苦物質瞬間爆發。",
     },
     "dark": {
@@ -232,6 +242,7 @@ ROAST_TABLE = {
         "agtron_max": 35,
         "base_temp": 82,
         "base_ey": 21.0,
+        "dial_prefer": 4.3,  # 細研磨補償低溫萃取動能不足
         "note": "SCA: French (Agtron #35)。表面佈滿油脂。結構極疏鬆。接近萃取底線，平滑降溫以保留糖蜜與 Body。",
     },
     "very_dark": {
@@ -241,6 +252,7 @@ ROAST_TABLE = {
         "agtron_max": 25,
         "base_temp": 80,
         "base_ey": 21.5,
+        "dial_prefer": 4.1,  # 最細補償，防空洞口感
         "note": "SCA: Italian (Agtron #25)。極亮黏膩感。觸及 80°C 物理地板。守住最低熱能以溶出基本醇厚度，防止焦炭化。",
     },
 }

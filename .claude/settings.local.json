@@ -1,0 +1,33 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit(file_path:*constants.py*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /f/Programs/aeropress_hoffman/aeropress && python diagnose_anchor.py"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python main.py --brewer xl --roast light --gh 50 --kh 30 --top 3)",
+      "Bash(python main.py --brewer xl --roast light --gh 50 --kh 30 --top 10)",
+      "Bash(python main.py --brewer xl --roast light --preset ro --top 3)",
+      "WebSearch",
+      "WebFetch(domain:aeroprecipe.com)",
+      "WebFetch(domain:www.jameshoffmann.co.uk)",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "WebFetch(domain:thirdwavewater.eu)",
+      "Bash(grep -n \"calc_fines_ratio\\\\|calc_retention\\\\|K_BOULDERS\\\\|K_FINES\" /f/Programs/aeropress_hoffman/aeropress/models/*.py)",
+      "Bash(python -m pytest -x -q)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/ -x -q)",
+      "Bash(python -c \":*)",
+      "Bash(python diagnose_anchor.py)"
+    ]
+  }
+}

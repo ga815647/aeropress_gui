@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import constants
 from models.compounds import predict_compounds
 from models.ey_model import calc_ey, calc_fines_ratio
@@ -94,6 +96,11 @@ def optimize(
                         water_kh=water_kh, water_gh=water_gh,
                         t_slurry=t_slurry_val, temp_initial=temp,
                     )
+                    dial_prefer = cfg.get("dial_prefer")
+                    if dial_prefer is not None:
+                        dial_dev = (dial - dial_prefer) / constants.DIAL_PREFER_SIGMA
+                        dial_factor = 1.0 - constants.DIAL_PREFER_WEIGHT * (1.0 - math.exp(-0.5 * dial_dev**2))
+                        score = round(score * dial_factor, 1)
                     swirl_wait = calc_swirl_wait(dial)
                     drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
 
