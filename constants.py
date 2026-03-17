@@ -182,6 +182,16 @@ CHANNELING_BYPASS_MAX = 0.15
 CHANNELING_COLLAPSE_RATIO = 0.20
 PRESS_EQUIV_FRACTION = 0.15
 
+# 下壓滲流化合物選擇性（壓力驅動水流穿透粉層，不同於靜態浸泡）
+# 物理依據：壓力流維持濃度梯度（新鮮溶劑接觸）→ 難萃化合物（CGA/MEL）額外釋放；
+#           香氣揮發物（SW）在機械擾動+熱氣中部分散失
+# press_frac = min(press_sec / PRESS_PERC_REF_SEC, 2.0)
+PRESS_PERC_CGA_DIFF = 0.05   # CGA：壓力流釋放細胞壁結合型 CGA，+5% / 30s 基準
+PRESS_PERC_MEL_DIFF = 0.03   # MEL：大分子聚合物需壓力輔助溶出，+3% / 30s
+PRESS_PERC_CA_DIFF  = 0.02   # CA ：碳水化合物輕微受惠，+2% / 30s
+PRESS_PERC_SW_LOSS  = 0.03   # SW ：揮發性香氣在下壓時逸散，-3% / 30s
+PRESS_PERC_REF_SEC  = 30.0   # 基準下壓時間（Hoffman 標準版 30s；XL ~47s）
+
 # Roast: SCA/SCAA official classification + Agtron (ground) range.
 # Reference: SCA roast color standards. Keys = SCA level names.
 ROAST_TABLE = {

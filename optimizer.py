@@ -87,6 +87,7 @@ def optimize(
                         water_ml=water_ml,
                         seal_delay=seal_delay,
                         dose=dose,
+                        press_sec=press_sec,
                     )
                     ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
                     tds = calc_tds(roast_code, dose, ey, dial, water_ml)

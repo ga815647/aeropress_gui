@@ -77,6 +77,7 @@ def predict_compounds(
     water_ml: float = 400,
     seal_delay: float = constants.SEAL_DELAY_DEFAULT,
     dose: float = 18.0,
+    press_sec: float = 30.0,
 ) -> dict:
     effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv
     main_profile = _predict_closed_compounds(
@@ -116,5 +117,12 @@ def predict_compounds(
     profile["PS"] *= (ey_ratio ** constants.EY_PS_EXP)
     profile["CGA"] *= (ey_ratio ** constants.EY_CGA_EXP)
     profile["AC"] *= (ey_ratio ** constants.EY_AC_EXP)
+
+    # 下壓滲流選擇性：壓力驅動水流與靜態浸泡的化合物萃出差異
+    press_frac = min(press_sec / constants.PRESS_PERC_REF_SEC, 2.0)
+    profile["CGA"] = min(profile["CGA"] * (1.0 + constants.PRESS_PERC_CGA_DIFF * press_frac), 1.0)
+    profile["MEL"] = min(profile["MEL"] * (1.0 + constants.PRESS_PERC_MEL_DIFF * press_frac), 1.0)
+    profile["CA"]  = min(profile["CA"]  * (1.0 + constants.PRESS_PERC_CA_DIFF  * press_frac), 1.0)
+    profile["SW"]  = max(profile["SW"]  * (1.0 - constants.PRESS_PERC_SW_LOSS  * press_frac), 0.0)
 
     return {key: round(profile[key], 4) for key in constants.KEYS}
