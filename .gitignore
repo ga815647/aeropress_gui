@@ -3,3 +3,7 @@ __pycache__/
 output.json
 output.csv
 radar_top3.png
+compare_models.py
+test_exp.py
+verify_corrections.py
+.VSCodeCounter/
