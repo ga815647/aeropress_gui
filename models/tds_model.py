@@ -38,7 +38,8 @@ def calc_tds(roast_code: str, dose: float, ey: float, dial: float, water_ml: flo
 
 def calc_swirl_wait(dial: float) -> int:
     raw = constants.SWIRL_WAIT_BASE + (constants.DIAL_BASE - dial) * constants.SWIRL_WAIT_SLOPE
-    return int(max(constants.SWIRL_WAIT_MIN, min(raw, constants.SWIRL_WAIT_MAX)))
+    clamped = max(constants.SWIRL_WAIT_MIN, min(raw, constants.SWIRL_WAIT_MAX))
+    return int(round(clamped / 10) * 10)
 
 
 def calc_press_time(dose: float, dial: float, steep_sec: float = 120) -> int:
@@ -48,7 +49,8 @@ def calc_press_time(dose: float, dial: float, steep_sec: float = 120) -> int:
     dial_modifier = math.exp((constants.DIAL_BASE - dial) * constants.DARCY_PRESS_EXP) * compaction_mult
     base_time = constants.PRESS_TIME_MIN + (dose - 18) * constants.PRESS_TIME_PER_G
     raw_time = dial_modifier * base_time
-    return int(min(max(raw_time, constants.PRESS_TIME_MIN_FLOOR), constants.PRESS_TIME_MAX))
+    clamped = min(max(raw_time, constants.PRESS_TIME_MIN_FLOOR), constants.PRESS_TIME_MAX)
+    return int(round(clamped / 10) * 10)
 
 
 def apply_channeling(ey: float, compounds: dict, press_sec: float) -> tuple[float, dict]:

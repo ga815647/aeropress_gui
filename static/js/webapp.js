@@ -203,16 +203,16 @@
         },
         { 
           time: result.steep_sec, 
-          action: "旋轉與靜置：輕柔搖晃 5 秒後靜置", 
+          action: `旋轉與靜置：輕柔搖晃 ${result.swirl_sec} 秒後靜置`,
           rowId: `timeline-row-${index}-2` 
         },
         { 
-          time: result.steep_sec + 5 + result.swirl_wait_sec, 
+          time: result.steep_sec + result.swirl_sec + result.swirl_wait_sec,
           action: "開始下壓：穩定平均地向下壓", 
           rowId: `timeline-row-${index}-3` 
         },
         { 
-          time: result.steep_sec + 5 + result.swirl_wait_sec + result.press_sec, 
+          time: result.steep_sec + result.swirl_sec + result.swirl_wait_sec + result.press_sec, 
           action: "萃取完成", 
           rowId: `timeline-row-${index}-4` 
         }
@@ -548,13 +548,13 @@
                 <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
                 <td style="padding: 0.5rem 0.25rem;">
                   <strong>旋轉與靜置</strong><br>
-                  <span style="color: #6d6358;">帶著活塞輕柔搖晃杯身 5 秒，隨後放著靜置 ${result.swirl_wait_sec} 秒以建立粉床。</span>
+                  <span style="color: #6d6358;">帶著活塞輕柔搖晃杯身 ${result.swirl_sec} 秒，隨後放著靜置 ${result.swirl_wait_sec} 秒以建立粉床。</span>
                 </td>
               </tr>
                 `;
               })()}
               ${(() => {
-                currentSec += (5 + result.swirl_wait_sec);
+                currentSec += (result.swirl_sec + result.swirl_wait_sec);
                 const pressWarning = (result.press_sec_internal && result.press_sec_internal > 60) || result.press_sec > 60 
                   ? ' <span class="badge bg-danger" style="background-color: #bb5f2a; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 4px;">阻力崩潰折算</span>' 
                   : '';

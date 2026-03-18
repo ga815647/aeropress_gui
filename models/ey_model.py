@@ -70,10 +70,10 @@ def calc_ey(
     dose: float,
     water_ml: float = 400,
     water_gh: float = 50,
-    water_kh: float = 30,
     press_equiv: float = 0,
     pour_offset: float = 0,
     seal_delay: float = constants.SEAL_DELAY_DEFAULT,
+    swirl_wait_sec: int = 0,
 ) -> float:
     heat_water = water_ml
     heat_coffee = dose * constants.COFFEE_SPECIFIC_HEAT_RATIO
@@ -81,7 +81,10 @@ def calc_ey(
     t_slurry = t_mix - constants.BREWER_TEMP_DROP
 
     swirl_mult = 1.0 + constants.SWIRL_CONVECTION_BASE * (constants.SWIRL_DOSE_REF / dose)
-    t_kinetic = max(0.0, steep_sec - pour_offset) + constants.SWIRL_TIME_SEC * swirl_mult + press_equiv
+    t_kinetic = (max(0.0, steep_sec - pour_offset)
+                 + constants.SWIRL_TIME_SEC * swirl_mult
+                 + swirl_wait_sec * constants.SWIRL_WAIT_EXT_MULT
+                 + press_equiv)
 
     retention_water = dose * calc_retention(roast_code, dial)
     drip_time = water_ml / constants.POUR_RATE + seal_delay

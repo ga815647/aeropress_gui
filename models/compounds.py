@@ -25,6 +25,9 @@ def _predict_closed_compounds(
 
     ac = base_profile["AC"]
     ac *= 1 + (temp - 90) * 0.02
+    # 熱降解模型：浸泡超過 150s 後，高溫加速有機酸水解損失（非萃取飽和）。
+    # 物理依據：綠原酸等在高溫長時間下發生酯鍵斷裂，導致 AC 感知降低。
+    # 若要改為純萃取飽和模型，可移除此項，改用 sigmoid 飽和。
     ac *= math.exp(-constants.K_AC_DECAY * max(effective_steep - 150, 0))
     ac *= ac_sw_mult
 
@@ -70,7 +73,6 @@ def predict_compounds(
     steep_sec: float,
     ey: float,
     water_gh: float = 50.0,
-    water_kh: float = 30,
     water_mg_frac: float = 0.40,
     press_equiv: float = 0,
     pour_offset: float = 0,

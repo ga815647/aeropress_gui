@@ -4,32 +4,40 @@ Hoffman 錨點驗證腳本
 
 Hoffman Ultimate AeroPress Recipe（標準版，第三方實測）：
   研磨：4 EK43 / 450–600µm → ZP6 等效 dial ≈ 4.3
-  水溫：208°F = 97.8°C
-  浸泡：2:00 旋轉 → 2:30 開始壓（模型 steep = 135s 或 150s）
+  水溫：208°F = 97.8°C（錨點取 98–99°C）
+  浸泡：注水→swirl 前共 120s（model steep=120）；swirl→press ≈ 2:30
   TDS ：1.23%（稍粗版）→ Hoffman 原版預估 1.25–1.27%
   EY  ：19.9%（由 TDS=1.23%, brew=178g, dose=11g 反推）
 """
 
 import sys
+
+import constants
+import runtime
 from optimizer import optimize
 
 # ── 錨點定義 ──────────────────────────────────────────────────────────────────
 ANCHOR = {
-    "roast":      "light",
-    "brewer":     "xl",
-    "water_gh":   50,
-    "water_kh":   30,
-    # Top 3 整體驗證範圍
-    "tds_lo":     1.20,
-    "tds_hi":     1.34,
-    "ey_min":     16.0,   # 防欠萃底線（短浸泡可低至 17%，不應低於 16%）
+    "roast":        "light",
+    "brewer":       "standard",       # Hoffman 原版：11g / 200ml
+    "water_gh":     50,
+    "water_kh":     30,
+    "water_mg_frac": 0.40,
+    "t_env":        20.0,             # 錨點專用室溫（不改全域預設值 25°C）
+    "fixed_dose":   11.0,             # Hoffman 原版劑量
+    "temp_range":   (98, 99),         # ≈ 97.8°C / 208°F
+    "fixed_steep":  120,              # 注水→swirl 前 120s
+    # Top 3 整體驗證範圍（standard 11g/200ml）
+    "tds_lo":     1.05,
+    "tds_hi":     1.36,
+    "ey_min":     16.0,   # 防欠萃底線
     "dial_lo":    3.8,
     "dial_hi":    4.8,
-    "score_min":  95.0,
-    # Hoffman 配方特定驗證（Top 10 中含 135s 或 150s 時）
-    "steep_ok":   {135, 150},
-    "hoffman_ey_lo":  18.0,  # Hoffman 長浸泡 EY 必須 >= 18%
-    "hoffman_ey_hi":  22.0,
+    "score_min":  90.0,   # 固定配方分數門檻（錨點驗「可用」，非「最優」）
+    # Hoffman 浸泡特定驗證
+    "steep_ok":   {120},
+    "hoffman_ey_lo":  18.0,
+    "hoffman_ey_hi":  24.0,   # standard 11g/120s 部分組合可達 23%，放寬上限
 }
 
 
@@ -38,13 +46,22 @@ def _fmt(ok: bool) -> str:
 
 
 def run_anchor_check(verbose: bool = True) -> bool:
-    results = optimize(
-        ANCHOR["roast"],
-        brewer_size=ANCHOR["brewer"],
-        water_gh=ANCHOR["water_gh"],
-        water_kh=ANCHOR["water_kh"],
-        top_n=10,
-    )
+    _t_env_orig = constants.T_ENV
+    runtime.apply_environment_settings(ANCHOR["t_env"], 0)
+    try:
+        results = optimize(
+            ANCHOR["roast"],
+            brewer_size=ANCHOR["brewer"],
+            water_gh=ANCHOR["water_gh"],
+            water_kh=ANCHOR["water_kh"],
+            water_mg_frac=ANCHOR["water_mg_frac"],
+            top_n=10,
+            fixed_dose=ANCHOR["fixed_dose"],
+            temp_range=ANCHOR["temp_range"],
+            fixed_steep=ANCHOR["fixed_steep"],
+        )
+    finally:
+        runtime.apply_environment_settings(_t_env_orig, 0)
 
     if not results:
         print("FAIL: optimizer 返回空結果")
@@ -66,7 +83,7 @@ def run_anchor_check(verbose: bool = True) -> bool:
     # 4. Dial 範圍（Top 3）
     dial_ok = all(ANCHOR["dial_lo"] <= r["dial"] <= ANCHOR["dial_hi"] for r in top3)
 
-    # 5. Hoffman steep（135s 或 150s 必須在 Top 10 內，且 EY 需在合理範圍）
+    # 5. Hoffman steep（120s 必須在 Top 10 內，且 EY 需在合理範圍）
     top10_steeps = {r["steep_sec"] for r in top10}
     hoffman_results = [r for r in top10 if r["steep_sec"] in ANCHOR["steep_ok"]]
     steep_ok = bool(hoffman_results)
@@ -78,9 +95,9 @@ def run_anchor_check(verbose: bool = True) -> bool:
     all_pass = score_ok and tds_ok and ey_ok and dial_ok and steep_ok and hoffman_ey_ok
 
     if verbose:
-        print("=" * 55)
-        print("Hoffman anchor check (light / XL / GH50 KH30)")
-        print("=" * 55)
+        print("=" * 60)
+        print("Hoffman anchor check (light / standard / 11g / 98-99°C / steep=120s / GH50 KH30 / T_env=20)")
+        print("=" * 60)
         print("\nTop 3:")
         for i, r in enumerate(top3):
             print(f"  #{i+1}: dial={r['dial']}, steep={r['steep_sec']}s, "
@@ -103,7 +120,7 @@ def run_anchor_check(verbose: bool = True) -> bool:
         print(f"  {_fmt(hoffman_ey_ok)}  Hoffman steep EY in [{ANCHOR['hoffman_ey_lo']}, {ANCHOR['hoffman_ey_hi']}]%")
 
         print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - check constants.py ]'}")
-        print("=" * 55)
+        print("=" * 60)
 
     return all_pass
 

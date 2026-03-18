@@ -26,8 +26,8 @@ def test_calc_press_time_increases_for_finer_and_larger_dose() -> None:
 
 
 def test_calc_ey_monotonic_and_bounded() -> None:
-    low = calc_ey("medium", 90, 5.5, 90, 22, 400, 50, 30)
-    high = calc_ey("medium", 94, 4.5, 150, 22, 400, 50, 30)
+    low = calc_ey("medium", 90, 5.5, 90, 22, 400, 50)
+    high = calc_ey("medium", 94, 4.5, 150, 22, 400, 50)
     assert high > low
     assert high <= constants.EY_ABSOLUTE_MAX
 
@@ -42,14 +42,14 @@ def test_calc_drip_volume_scales_with_time_and_dial_darcy() -> None:
 
 
 def test_seal_delay_pushes_compounds_toward_acidity() -> None:
-    fast_profile = predict_compounds("medium", 88, 4.5, 120, 19, 30, 0.4, seal_delay=0)
-    slow_profile = predict_compounds("medium", 88, 4.5, 120, 19, 30, 0.4, seal_delay=20)
+    fast_profile = predict_compounds("medium", 88, 4.5, 120, 19, water_gh=50, water_mg_frac=0.4, seal_delay=0)
+    slow_profile = predict_compounds("medium", 88, 4.5, 120, 19, water_gh=50, water_mg_frac=0.4, seal_delay=20)
     assert (slow_profile["AC"] / slow_profile["SW"]) > (fast_profile["AC"] / fast_profile["SW"])
 
 
 def test_flavor_score_penalties_do_not_crash_and_reward_better_balance() -> None:
     ideal = build_ideal_abs("medium", 1.25)
-    balanced = predict_compounds("medium", 88, 4.5, 120, 19, 30, 0.4)
+    balanced = predict_compounds("medium", 88, 4.5, 120, 19, water_gh=50, water_mg_frac=0.4)
     harsh = dict(balanced)
     harsh["AC"] *= 1.6
     harsh["CGA"] *= 2.0

@@ -16,6 +16,9 @@ def optimize(
     water_kh: float = 30,
     water_mg_frac: float = 0.40,
     top_n: int = 3,
+    fixed_dose: float | None = None,
+    temp_range: tuple[int, int] | None = None,
+    fixed_steep: int | None = None,
 ) -> list[dict]:
     cfg = constants.ROAST_TABLE[roast_code]
     base_temp = cfg["base_temp"]
@@ -30,26 +33,36 @@ def optimize(
     drip_time = pour_time + seal_delay
     results: list[dict] = []
 
-    max_temp = min(base_temp + 3, constants.TEMP_BOILING_POINT)
+    if temp_range is not None:
+        temp_lo, temp_hi = temp_range
+    else:
+        temp_lo = base_temp - 3
+        temp_hi = int(min(base_temp + 3, constants.TEMP_BOILING_POINT))
 
-    for temp in range(base_temp - 3, int(max_temp) + 1):
+    steep_values = [fixed_steep] if fixed_steep is not None else range(60, 241, constants.STEEP_STEP)
+    dose_values = [int(fixed_dose * 2)] if fixed_dose is not None else range(dose_min_x2, dose_max_x2 + 1)
+
+    for temp in range(temp_lo, temp_hi + 1):
         for dial_x10 in range(35, 66):
             dial = dial_x10 / 10
-            for steep in range(60, 241, constants.STEEP_STEP):
-                for dose_x2 in range(dose_min_x2, dose_max_x2 + 1):
+            for steep in steep_values:
+                for dose_x2 in dose_values:
                     dose = dose_x2 / 2
 
                     press_sec = calc_press_time(dose, dial, steep)
                     if press_sec > constants.CHANNELING_PRESS_THRESHOLD:
-                        display_press_sec = int(
+                        collapsed_press = (
                             constants.CHANNELING_PRESS_THRESHOLD
                             + (press_sec - constants.CHANNELING_PRESS_THRESHOLD)
                             * constants.CHANNELING_COLLAPSE_RATIO
                         )
+                        display_press_sec = int(collapsed_press)
                     else:
+                        collapsed_press = press_sec
                         display_press_sec = press_sec
 
-                    press_equiv = display_press_sec * constants.PRESS_EQUIV_FRACTION
+                    press_equiv = collapsed_press * constants.PRESS_EQUIV_FRACTION
+                    swirl_wait = calc_swirl_wait(dial)
                     ey = calc_ey(
                         roast_code,
                         temp,
@@ -58,10 +71,10 @@ def optimize(
                         dose,
                         water_ml,
                         water_gh,
-                        water_kh,
                         press_equiv=press_equiv,
                         pour_offset=pour_offset,
                         seal_delay=seal_delay,
+                        swirl_wait_sec=swirl_wait,
                     )
                     if ey < constants.EY_MIN:
                         continue
@@ -80,7 +93,6 @@ def optimize(
                         steep,
                         ey,
                         water_gh,
-                        water_kh,
                         water_mg_frac,
                         press_equiv=press_equiv,
                         pour_offset=pour_offset,
@@ -96,13 +108,13 @@ def optimize(
                         compounds, ideal_abs, tds, roast_code,
                         water_kh=water_kh, water_gh=water_gh,
                         t_slurry=t_slurry_val, temp_initial=temp,
+                        ey=ey,
                     )
                     dial_prefer = cfg.get("dial_prefer")
                     if dial_prefer is not None:
                         dial_dev = (dial - dial_prefer) / constants.DIAL_PREFER_SIGMA
                         dial_factor = 1.0 - constants.DIAL_PREFER_WEIGHT * (1.0 - math.exp(-0.5 * dial_dev**2))
                         score = round(score * dial_factor, 1)
-                    swirl_wait = calc_swirl_wait(dial)
                     drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
 
                     results.append(
@@ -129,6 +141,7 @@ def optimize(
                                 max(0, steep - pour_offset)
                                 + constants.SWIRL_TIME_SEC
                                 * (1.0 + constants.SWIRL_CONVECTION_BASE * (constants.SWIRL_DOSE_REF / dose))
+                                + swirl_wait * constants.SWIRL_WAIT_EXT_MULT
                                 + press_equiv,
                                 1,
                             ),

@@ -23,6 +23,9 @@ def _sample_results() -> list[dict]:
             "swirl_wait_sec": 30,
             "press_sec": 32,
             "press_sec_internal": 32,
+            "seal_delay": 3,
+            "pre_seal_drip_sec": 11.3,
+            "pre_seal_drip_ml": 4.2,
             "total_contact_sec": 187,
             "ey": 19.2,
             "tds": 1.241,
@@ -111,7 +114,7 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("roast,expected_temp_min,expected_temp_max", [
-    ("very_light", 97, 100),  # 100 ± 3, capped at 100
+    ("very_light", 94, 100),  # base_temp=97, range 94–100
     ("light", 95, 100),       # 98 ± 3, capped at 100
     ("medium_light", 92, 98), # 95 ± 3
     ("medium", 88, 94),       # 91 ± 3

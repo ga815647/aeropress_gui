@@ -62,6 +62,7 @@ def flavor_score(
     water_gh: float = 50,
     t_slurry: float = 90,
     temp_initial: float = 90,
+    ey: float = 0.0,
 ) -> float:
     actual_abs = compute_actual_abs(actual_raw, tds)
     kh_penalty = max(0.65, math.exp(-water_kh / constants.KH_PERCEPT_DECAY))
@@ -174,6 +175,15 @@ def flavor_score(
         ashy_product = mel_excess_ratio * cga_excess_ratio
         ashy_penalty = math.exp(-constants.ASHY_SLOPE * ashy_product) if ashy_product > 0 else 1.0
 
+    ey_prefer = constants.EY_PREFER[roast_code]
+    ey_diff = ey - ey_prefer
+    ey_sigma = (
+        constants.EY_SIGMA_HI[roast_code] if ey_diff > 0
+        else constants.EY_SIGMA_LO[roast_code]
+    )
+    ey_gauss = math.exp(-0.5 * (ey_diff / ey_sigma) ** 2)
+    ey_factor = 1.0 - constants.EY_GAUSS_WEIGHT + constants.EY_GAUSS_WEIGHT * ey_gauss
+
     final = (
         cosine_sim
         * conc_score
@@ -185,6 +195,7 @@ def flavor_score(
         * ashy_penalty
         * soft_water_penalty
         * acid_without_sweet_penalty
+        * ey_factor
     )
 
     if tds < constants.TDS_BROWN_WATER_FLOOR:

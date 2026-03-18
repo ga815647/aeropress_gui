@@ -22,6 +22,7 @@ SWIRL_WAIT_SLOPE = 10
 SWIRL_WAIT_MIN = 10
 SWIRL_WAIT_MAX = 45
 SWIRL_CONVECTION_BASE = 1.0
+SWIRL_WAIT_EXT_MULT = 0.3
 SWIRL_DOSE_REF = 18.0
 
 PRESS_TIME_MIN_FLOOR = 15
@@ -83,6 +84,28 @@ EY_PREFER = {
 EY_PS_EXP = 0.7   # PS 對 EY 最敏感（大分子萃出慢）；Hoffman 校正：強化短浸泡欠萃懲罰
 EY_CGA_EXP = 0.2  # CGA 對 EY 中等敏感
 EY_AC_EXP = 0.1   # AC 對 EY 最不敏感（小分子早期萃出）
+
+# EY Gaussian 懲罰（分焙度，上下不對稱）
+# sigma_lo：低於 EY_PREFER 一側（欠萃）；sigma_hi：高於 EY_PREFER 一側（過萃）
+EY_SIGMA_LO = {
+    "very_light":      1.5,
+    "light":           1.5,
+    "medium_light":    2.0,
+    "medium":          2.0,
+    "moderately_dark": 2.5,
+    "dark":            2.5,
+    "very_dark":       3.0,
+}
+EY_SIGMA_HI = {
+    "very_light":      1.5,
+    "light":           1.5,
+    "medium_light":    2.0,
+    "medium":          2.0,
+    "moderately_dark": 2.5,
+    "dark":            2.5,
+    "very_dark":       3.0,
+}
+EY_GAUSS_WEIGHT = 0.08  # 8% 乘法因子（保守起點）
 
 ARRHENIUS_COEFF = 0.05
 CONC_GRADIENT_COEFF = 0.5
@@ -157,7 +180,7 @@ CA_PPM_REF = 30.0
 MG_FRAC_AC_SW_MULT = 0.16
 MG_FRAC_PS_CGA_MULT = 0.08
 DIAL_STEP = 0.1
-STEEP_STEP = 15
+STEEP_STEP = 30
 
 # 各焙度研磨粗細偏好（Hoffman 450–600µm EK43 → ZP6 等效 dial ≈ 4.3 為錨點）
 # 懲罰公式：score × (1 - W + W × exp(-0.5 × ((dial - prefer)/sigma)²))
