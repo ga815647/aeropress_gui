@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit(file_path:*constants.py*)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cd /f/Programs/aeropress_hoffman/aeropress && python diagnose_anchor.py"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(python main.py --brewer xl --roast light --gh 50 --kh 30 --top 3)",
@@ -27,7 +14,33 @@
       "Bash(pip install:*)",
       "Bash(python -m pytest tests/ -x -q)",
       "Bash(python -c \":*)",
-      "Bash(python diagnose_anchor.py)"
+      "Bash(python diagnose_anchor.py)",
+      "Bash(grep -n \"water_gh\\\\s*=\\\\|water_kh\\\\s*=\\\\|water_mg_frac\\\\s*=\" /f/Programs/aeropress_hoffman/aeropress/models/*.py)",
+      "Bash(grep -n \"constants\\\\.T_ENV\\\\s*=\" /f/Programs/aeropress_hoffman/aeropress/*.py)",
+      "Bash(grep \"SWIRL_RESET_FRACTION\\\\|CONC_GRADIENT_COEFF\" /f/Programs/aeropress_hoffman/aeropress/models/*.py /f/Programs/aeropress_hoffman/aeropress/optimizer.py)",
+      "Bash(for const:*)",
+      "Bash(do echo:*)",
+      "Bash(grep -l $const /f/Programs/aeropress_hoffman/aeropress/models/*.py /f/Programs/aeropress_hoffman/aeropress/*.py)",
+      "Bash(done)",
+      "Bash(grep -rn \"208.*F\\\\|97.8\\\\|Fahrenheit\" /f/Programs/aeropress_hoffman/aeropress/*.py)",
+      "Bash(for file:*)",
+      "Read(//f/Programs/aeropress_hoffman/aeropress/**)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(python -m pytest tests/test_models.py -v)",
+      "Bash(python -c \"import constants; print\\(constants.ROAST_TABLE[''very_light'']\\)\")"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit(file_path:*constants.py*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /f/Programs/aeropress_hoffman/aeropress && python diagnose_anchor.py"
+          }
+        ]
+      }
     ]
   }
 }
