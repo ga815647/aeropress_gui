@@ -175,6 +175,33 @@ def flavor_score(
         ashy_product = mel_excess_ratio * cga_excess_ratio
         ashy_penalty = math.exp(-constants.ASHY_SLOPE * ashy_product) if ashy_product > 0 else 1.0
 
+    # 口感平衡綜合懲罰：避免 AC/SW/PS 三者中任何一項過度突出
+    # 計算理想比例與實際比例的差異
+    i_ac_sw_ps_sum = ideal_abs["AC"] + ideal_abs["SW"] + ideal_abs["PS"]
+    a_ac_sw_ps_sum = actual_perceived["AC"] + actual_perceived["SW"] + actual_perceived["PS"]
+    
+    if i_ac_sw_ps_sum > 0 and a_ac_sw_ps_sum > 0:
+        # 計算各項的相對比例
+        i_ac_ratio = ideal_abs["AC"] / i_ac_sw_ps_sum
+        i_sw_ratio = ideal_abs["SW"] / i_ac_sw_ps_sum
+        i_ps_ratio = ideal_abs["PS"] / i_ac_sw_ps_sum
+        
+        a_ac_ratio = actual_perceived["AC"] / a_ac_sw_ps_sum
+        a_sw_ratio = actual_perceived["SW"] / a_ac_sw_ps_sum
+        a_ps_ratio = actual_perceived["PS"] / a_ac_sw_ps_sum
+        
+        # 計算比例差異的平方和
+        ratio_diff_sq = (
+            (a_ac_ratio - i_ac_ratio) ** 2 +
+            (a_sw_ratio - i_sw_ratio) ** 2 +
+            (a_ps_ratio - i_ps_ratio) ** 2
+        )
+        
+        # 應用懲罰：差異越大，懲罰越重
+        triad_penalty = math.exp(-constants.BALANCE_TRIAD_SLOPE * ratio_diff_sq)
+    else:
+        triad_penalty = 1.0
+
     ey_prefer = constants.EY_PREFER[roast_code]
     ey_diff = ey - ey_prefer
     ey_sigma = (
@@ -184,6 +211,9 @@ def flavor_score(
     ey_gauss = math.exp(-0.5 * (ey_diff / ey_sigma) ** 2)
     ey_factor = 1.0 - constants.EY_GAUSS_WEIGHT + constants.EY_GAUSS_WEIGHT * ey_gauss
 
+    # 口感平衡綜合懲罰加權納入
+    triad_weighted = 1.0 - constants.BALANCE_TRIAD_WEIGHT + constants.BALANCE_TRIAD_WEIGHT * triad_penalty
+    
     final = (
         cosine_sim
         * conc_score
@@ -196,6 +226,7 @@ def flavor_score(
         * soft_water_penalty
         * acid_without_sweet_penalty
         * ey_factor
+        * triad_weighted
     )
 
     if tds < constants.TDS_BROWN_WATER_FLOOR:

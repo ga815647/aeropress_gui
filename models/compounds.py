@@ -25,22 +25,20 @@ def _predict_closed_compounds(
 
     ac = base_profile["AC"]
     ac *= 1 + (temp - 90) * 0.02
-    # 熱降解模型：浸泡超過 150s 後，高溫加速有機酸水解損失（非萃取飽和）。
-    # 物理依據：綠原酸等在高溫長時間下發生酯鍵斷裂，導致 AC 感知降低。
-    # 若要改為純萃取飽和模型，可移除此項，改用 sigmoid 飽和。
-    ac *= math.exp(-constants.K_AC_DECAY * max(effective_steep - 150, 0))
+    # 修改：酸質提前開始衰減，從 90 秒開始（原 150 秒）
+    ac *= math.exp(-constants.K_AC_DECAY * max(effective_steep - constants.AC_DECAY_START, 0))
     ac *= ac_sw_mult
 
     sw = base_profile["SW"]
     optimal_sw_temp = constants.ROAST_TABLE[roast_code]["base_temp"] - 2
     sw *= 1 - abs(temp - optimal_sw_temp) * 0.01
-    sw *= 1 + max(min(effective_steep - 120, 60), 0) * 0.002
+    # 修改：甜感從浸泡開始即隨時間增加，使用指數飽和曲線（原為線性，120秒後才開始）
+    sw += constants.SW_TIME_MAX * (1.0 - math.exp(-constants.K_SW * effective_steep))
     sw *= ac_sw_mult
 
     ps = base_profile["PS"] * (1.0 + max(4.5 - dial, 0) * 0.45)
-    if effective_steep > 120:
-        extra_time = effective_steep - 120
-        ps += constants.PS_TIME_MAX * (1.0 - math.exp(-constants.K_PS * extra_time))
+    # 修改：醇厚度從浸泡開始即隨時間增加，移除 120 秒閾值限制
+    ps += constants.PS_TIME_MAX * (1.0 - math.exp(-constants.K_PS * effective_steep))
     ps *= max(0.0, 1.0 + (temp - 90) * 0.015)
     ps *= ps_cga_mult
     ps = min(ps, 1.0)

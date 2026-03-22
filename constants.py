@@ -105,7 +105,7 @@ EY_SIGMA_HI = {
     "dark":            2.5,
     "very_dark":       3.0,
 }
-EY_GAUSS_WEIGHT = 0.08  # 8% 乘法因子（保守起點）
+EY_GAUSS_WEIGHT = 0.14  # 14% 乘法因子（從18%降低，減少對低EY的過度懲罰）
 
 ARRHENIUS_COEFF = 0.05
 CONC_GRADIENT_COEFF = 0.5
@@ -125,8 +125,13 @@ PRE_SEAL_CGA_MULT = 0.88
 PRE_SEAL_MEL_MULT = 0.60
 
 CONC_HUBER_DELTA = 0.5
-BALANCE_PENALTY_WEIGHT = 0.15
+BALANCE_PENALTY_WEIGHT = 0.22  # 22% 懲罰權重（從28%降低，減少對酸甜平衡的過度懲罰）
 BODY_BITTER_PENALTY_WEIGHT = 0.18  # v5.10: 強化醇苦比懲罰（Body 跟不上苦味）
+
+# 口感平衡綜合懲罰：避免任何風味過度突出而破壞整體均衡
+# 計算 AC/SW/PS 三者比率的懲罰項
+BALANCE_TRIAD_WEIGHT = 0.05  # 5% 懲罰權重（從8%進一步降低）
+BALANCE_TRIAD_SLOPE = 1.5    # 懲罰斜率（進一步降低）
 MEL_BITTER_COEFF = {
     "very_light": 0.0,
     "light": 0.0,
@@ -148,9 +153,10 @@ SOFT_WATER_BITTER_SLOPE = 2.0  # 軟水時苦味超標之額外懲罰斜率
 AC_WITHOUT_SWEET_SLOPE = 3.0   # 酸高甜低（低溫酸無香）懲罰斜率
 
 # v5.10: 下修以對應實測「過於濃烈」，偏日常適飲
+# 調整淺焙TDS偏好，讓Hoffman錨點（~1.23%）更接近理想值
 TDS_PREFER = {
-    "very_light": 1.27,
-    "light": 1.27,
+    "very_light": 1.25,
+    "light": 1.24,  # 從1.27下調到1.24，更接近Hoffman錨點的1.23%
     "medium_light": 1.22,
     "medium": 1.17,
     "moderately_dark": 1.12,
@@ -160,11 +166,21 @@ TDS_PREFER = {
 TDS_GAUSS_SIGMA_LOW = 0.15
 TDS_GAUSS_SIGMA_HIGH = 0.20  # v5.10: 收緊過濃懲罰
 
-K_PS = 0.005
-PS_TIME_MAX = 0.20
+# 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
+K_SW = 0.005  # 甜感萃取速率常數（進一步降低，讓甜感在120秒後仍有明顯增長）
+SW_TIME_MAX = 0.20  # 甜感最大增加量（提高，讓長時間浸泡更有優勢）
+
+# 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
+K_PS = 0.008  # 醇厚度萃取速率常數（降低，讓曲線更平緩，120秒後仍有增長）
+PS_TIME_MAX = 0.30  # 醇厚度最大增加量（提高，讓長時間浸泡更有優勢）
+
+# CGA 時間函數參數
 K_CGA_TIME = 0.015
 CGA_TIME_MAX = 0.50
-K_AC_DECAY = 0.0035
+
+# 酸質（AC）衰減參數：調整開始衰減時間
+K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
+AC_DECAY_START = 110  # 酸質開始衰減的時間點（從90秒調整到110秒，讓120秒酸質不會過低）
 
 CGA_ASTRINGENCY_THRESHOLD = 1.25
 CGA_ASTRINGENCY_SLOPE = 2.0  # Hoffman 校正 v2：96°C+135s 仍受 CGA 懲罰，降至 2.0；HARSHNESS_SLOPE 維持 4.0 作保護
@@ -292,12 +308,14 @@ ROAST_TABLE = {
 
 TDS_ANCHORS = {"low": 1.00, "mid": 1.20, "high": 1.40}
 IDEAL_FLAVOR = {
-    ("very_light", "low"): {"AC": 0.28, "SW": 0.30, "PS": 0.18, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
-    ("very_light", "mid"): {"AC": 0.25, "SW": 0.32, "PS": 0.20, "CA": 0.11, "CGA": 0.08, "MEL": 0.04},
-    ("very_light", "high"): {"AC": 0.22, "SW": 0.35, "PS": 0.22, "CA": 0.10, "CGA": 0.07, "MEL": 0.04},
-    ("light", "low"): {"AC": 0.25, "SW": 0.32, "PS": 0.18, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
-    ("light", "mid"): {"AC": 0.22, "SW": 0.35, "PS": 0.20, "CA": 0.12, "CGA": 0.07, "MEL": 0.04},
-    ("light", "high"): {"AC": 0.20, "SW": 0.37, "PS": 0.22, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
+    # 極淺焙：降低酸質，提高甜感與醇厚度
+    ("very_light", "low"): {"AC": 0.24, "SW": 0.34, "PS": 0.20, "CA": 0.10, "CGA": 0.08, "MEL": 0.04},
+    ("very_light", "mid"): {"AC": 0.21, "SW": 0.36, "PS": 0.22, "CA": 0.09, "CGA": 0.08, "MEL": 0.04},
+    ("very_light", "high"): {"AC": 0.18, "SW": 0.39, "PS": 0.24, "CA": 0.08, "CGA": 0.07, "MEL": 0.04},
+    # 淺焙：進一步降低酸質，提高甜感與醇厚度，更適合120秒浸泡
+    ("light", "low"): {"AC": 0.19, "SW": 0.38, "PS": 0.21, "CA": 0.10, "CGA": 0.08, "MEL": 0.04},
+    ("light", "mid"): {"AC": 0.16, "SW": 0.41, "PS": 0.23, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
+    ("light", "high"): {"AC": 0.14, "SW": 0.43, "PS": 0.25, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("medium_light", "low"): {"AC": 0.18, "SW": 0.35, "PS": 0.20, "CA": 0.14, "CGA": 0.09, "MEL": 0.04},
     ("medium_light", "mid"): {"AC": 0.15, "SW": 0.38, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
     ("medium_light", "high"): {"AC": 0.13, "SW": 0.40, "PS": 0.23, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
