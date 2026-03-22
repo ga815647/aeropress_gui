@@ -1,9 +1,70 @@
+# Python 快取與位元組碼
 __pycache__/
+*.py[cod]
+*$py.class
+
+# 測試快取
 .pytest_cache/
+
+# 專案輸出檔案
 output.json
 output.csv
 radar_top3.png
+
+# 臨時測試腳本
 compare_models.py
 test_exp.py
 verify_corrections.py
+
+# VS Code 計數器
 .VSCodeCounter/
+
+# 工具/IDE 目錄
+.agent/
+.claude/
+.roo/
+.vscode/
+.roomodes
+
+# Python 套件建置
+aeropress_optimizer.egg-info/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虛擬環境
+.venv/
+venv/
+env/
+.env
+ENV/
+env.bak/
+venv.bak/
+
+# 作業系統與編輯器暫存檔
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vs/
+
+# 測試與覆蓋率
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# 靜態分析快取
+.mypy_cache/
+.pytype/
+.pyre/
+
+# 日誌與暫存檔
+*.log
+*.pid
+*.tmp
+*.cache
