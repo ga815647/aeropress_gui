@@ -105,7 +105,7 @@ EY_SIGMA_HI = {
     "dark":            2.5,
     "very_dark":       3.0,
 }
-EY_GAUSS_WEIGHT = 0.14  # 14% 乘法因子（從18%降低，減少對低EY的過度懲罰）
+EY_GAUSS_WEIGHT = 0.18  # 14% 乘法因子（從18%降低，減少對低EY的過度懲罰）
 
 ARRHENIUS_COEFF = 0.05
 CONC_GRADIENT_COEFF = 0.5
@@ -126,11 +126,11 @@ PRE_SEAL_MEL_MULT = 0.60
 
 CONC_HUBER_DELTA = 0.5
 BALANCE_PENALTY_WEIGHT = 0.22  # 22% 懲罰權重（從28%降低，減少對酸甜平衡的過度懲罰）
-BODY_BITTER_PENALTY_WEIGHT = 0.18  # v5.10: 強化醇苦比懲罰（Body 跟不上苦味）
+BODY_BITTER_PENALTY_WEIGHT = 0.25  # v5.10: 強化醇苦比懲罰（Body 跟不上苦味）
 
 # 口感平衡綜合懲罰：避免任何風味過度突出而破壞整體均衡
 # 計算 AC/SW/PS 三者比率的懲罰項
-BALANCE_TRIAD_WEIGHT = 0.05  # 5% 懲罰權重（從8%進一步降低）
+BALANCE_TRIAD_WEIGHT = 0.10  # 5% 懲罰權重（從8%進一步降低）
 BALANCE_TRIAD_SLOPE = 1.5    # 懲罰斜率（進一步降低）
 MEL_BITTER_COEFF = {
     "very_light": 0.0,
@@ -143,14 +143,14 @@ MEL_BITTER_COEFF = {
 }
 
 KH_PERCEPT_DECAY = 150
-ASYM_BITTER_MULT = 1.8  # v5.10: 加強苦味超標懲罰
+ASYM_BITTER_MULT = 2.2  # v5.10: 加強苦味超標懲罰
 ASYM_SWEET_MULT = 1.5
 
 # v5.11: RO/實測口感矯正（高溫苦突出、低溫酸無香、水質權重）
 IDEAL_BITTER_REDUCTION = 0.95  # 理想苦味下修 5%，縮小模型與實感落差
 LOW_GH_THRESHOLD = 20  # ppm；低於此視為軟水（如 RO），苦味感知加權
 SOFT_WATER_BITTER_SLOPE = 2.0  # 軟水時苦味超標之額外懲罰斜率
-AC_WITHOUT_SWEET_SLOPE = 3.0   # 酸高甜低（低溫酸無香）懲罰斜率
+AC_WITHOUT_SWEET_SLOPE = 4.0   # 酸高甜低（低溫酸無香）懲罰斜率
 
 # v5.10: 下修以對應實測「過於濃烈」，偏日常適飲
 # 調整淺焙TDS偏好，讓Hoffman錨點（~1.23%）更接近理想值
@@ -183,8 +183,8 @@ K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
 AC_DECAY_START = 110  # 酸質開始衰減的時間點（從90秒調整到110秒，讓120秒酸質不會過低）
 
 CGA_ASTRINGENCY_THRESHOLD = 1.25
-CGA_ASTRINGENCY_SLOPE = 2.0  # Hoffman 校正 v2：96°C+135s 仍受 CGA 懲罰，降至 2.0；HARSHNESS_SLOPE 維持 4.0 作保護
-HARSHNESS_SLOPE = 4.0
+CGA_ASTRINGENCY_SLOPE = 3.0  # Hoffman 校正 v2：96°C+135s 仍受 CGA 懲罰，降至 2.0；HARSHNESS_SLOPE 維持 4.0 作保護
+HARSHNESS_SLOPE = 5.0
 
 SW_AROMA_SLOPE = 0.015   # Hoffman 校正：降低高溫懲罰斜率（99°C 僅 3% 損失）
 SW_AROMA_THRESH = 97.0   # Hoffman 校正：96–97°C 完全無懲罰（light 搜尋範圍 93–99°C）
@@ -334,8 +334,8 @@ IDEAL_FLAVOR = {
 }
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
-WEIGHTS = {"AC": 1.2, "SW": 1.8, "PS": 1.5, "CA": 1.0, "CGA": 1.3, "MEL": 1.0}
-TDS_W3_LOW = 0.25
-TDS_W3_HIGH = 0.10
+WEIGHTS = {"AC": 1.2, "SW": 1.8, "PS": 1.5, "CA": 1.2, "CGA": 1.5, "MEL": 1.2}
+TDS_W3_LOW = 0.15
+TDS_W3_HIGH = 0.05
 CONC_SENSITIVITY_FLOOR = 0.02
 TDS_BROWN_WATER_FLOOR = 0.80
