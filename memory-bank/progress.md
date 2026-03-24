@@ -1,0 +1,6 @@
+- [2026-03-24 10:47] (architect) test
+- [2026-03-24 10:48] (code) (code continue)
+- [2026-03-24 10:56] (architect) 修 test 失效
+- [2026-03-24 11:10] (architect) **需求不明確，無法產出精準描述。**  請提供更多資訊： - 您想要做什麼類型的測試？（新增/修復/執行） - 測試的...
+- [2026-03-24 11:15] (architect) feat: add fixed press time configuration per brewer size
+- [2026-03-24 11:18] (architect) fix: pass brewer_size as keyword argument to calc_press_time

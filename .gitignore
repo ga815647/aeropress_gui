@@ -68,3 +68,4 @@ htmlcov/
 *.pid
 *.tmp
 *.cache
+.aider*
