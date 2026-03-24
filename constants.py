@@ -4,12 +4,14 @@ BREWER_PRESETS = {
         "water_ml": 200,
         "dose_min": 9.0,
         "dose_max": 18.0,
+        "fixed_press_sec": 30,
     },
     "xl": {
         "name": "AeroPress XL",
         "water_ml": 400,
         "dose_min": 18.0,
         "dose_max": 30.0,
+        "fixed_press_sec": 40,
     },
 }
 

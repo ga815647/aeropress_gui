@@ -42,15 +42,9 @@ def calc_swirl_wait(dial: float) -> int:
     return int(round(clamped / 10) * 10)
 
 
-def calc_press_time(dose: float, dial: float, steep_sec: float = 120) -> int:
-    swirl_wait_sec = calc_swirl_wait(dial)
-    effective_compaction_time = steep_sec * (1.0 - constants.SWIRL_RESET_FRACTION) + swirl_wait_sec
-    compaction_mult = 1.0 + (effective_compaction_time / 240.0) * constants.BED_COMPACTION_COEFF
-    dial_modifier = math.exp((constants.DIAL_BASE - dial) * constants.DARCY_PRESS_EXP) * compaction_mult
-    base_time = constants.PRESS_TIME_MIN + (dose - 18) * constants.PRESS_TIME_PER_G
-    raw_time = dial_modifier * base_time
-    clamped = min(max(raw_time, constants.PRESS_TIME_MIN_FLOOR), constants.PRESS_TIME_MAX)
-    return int(round(clamped / 10) * 10)
+def calc_press_time(dose: float, dial: float, steep_sec: float = 120, brewer_size: str = "xl") -> int:
+    """返回固定的下壓時間，根據 brewer 型號"""
+    return constants.BREWER_PRESETS[brewer_size]["fixed_press_sec"]
 
 
 def apply_channeling(ey: float, compounds: dict, press_sec: float) -> tuple[float, dict]:

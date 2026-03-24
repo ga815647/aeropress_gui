@@ -49,7 +49,7 @@ def optimize(
                 for dose_x2 in dose_values:
                     dose = dose_x2 / 2
 
-                    press_sec = calc_press_time(dose, dial, steep)
+                    press_sec = calc_press_time(dose, dial, steep, brewer_size)
                     if press_sec > constants.CHANNELING_PRESS_THRESHOLD:
                         collapsed_press = (
                             constants.CHANNELING_PRESS_THRESHOLD
