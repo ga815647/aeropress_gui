@@ -107,7 +107,7 @@ EY_SIGMA_HI = {
     "dark":            2.5,
     "very_dark":       3.0,
 }
-EY_GAUSS_WEIGHT = 0.18  # 14% 乘法因子（從18%降低，減少對低EY的過度懲罰）
+EY_GAUSS_WEIGHT = 0.12  # 從 0.18 降至 0.12（進一步降低 EY 懲罰，允許更多萃取變化）
 
 ARRHENIUS_COEFF = 0.05
 CONC_GRADIENT_COEFF = 0.5
@@ -127,13 +127,13 @@ PRE_SEAL_CGA_MULT = 0.88
 PRE_SEAL_MEL_MULT = 0.60
 
 CONC_HUBER_DELTA = 0.5
-BALANCE_PENALTY_WEIGHT = 0.22  # 22% 懲罰權重（從28%降低，減少對酸甜平衡的過度懲罰）
-BODY_BITTER_PENALTY_WEIGHT = 0.25  # v5.10: 強化醇苦比懲罰（Body 跟不上苦味）
+BALANCE_PENALTY_WEIGHT = 0.15  # 從 0.22 降至 0.15（降低酸甜平衡懲罰，允許更豐富風味）
+BODY_BITTER_PENALTY_WEIGHT = 0.18  # 從 0.25 降至 0.18（降低醇苦比懲罰，接受更多層次）
 
 # 口感平衡綜合懲罰：避免任何風味過度突出而破壞整體均衡
 # 計算 AC/SW/PS 三者比率的懲罰項
-BALANCE_TRIAD_WEIGHT = 0.10  # 5% 懲罰權重（從8%進一步降低）
-BALANCE_TRIAD_SLOPE = 1.5    # 懲罰斜率（進一步降低）
+BALANCE_TRIAD_WEIGHT = 0.06  # 從 0.10 降至 0.06（大幅降低三元平衡懲罰）
+BALANCE_TRIAD_SLOPE = 1.0    # 從 1.5 降至 1.0（降低懲罰斜率）
 MEL_BITTER_COEFF = {
     "very_light": 0.0,
     "light": 0.0,
@@ -154,27 +154,26 @@ LOW_GH_THRESHOLD = 20  # ppm；低於此視為軟水（如 RO），苦味感知�
 SOFT_WATER_BITTER_SLOPE = 2.0  # 軟水時苦味超標之額外懲罰斜率
 AC_WITHOUT_SWEET_SLOPE = 4.0   # 酸高甜低（低溫酸無香）懲罰斜率
 
-# v5.10: 下修以對應實測「過於濃烈」，偏日常適飲
-# 調整淺焙TDS偏好，讓Hoffman錨點（~1.23%）更接近理想值
+# 全面上調 TDS 偏好值，鼓勵更濃郁、有層次的萃取（Aeropress 哲學）
 TDS_PREFER = {
-    "very_light": 1.25,
-    "light": 1.24,  # 從1.27下調到1.24，更接近Hoffman錨點的1.23%
-    "medium_light": 1.22,
-    "medium": 1.17,
-    "moderately_dark": 1.12,
-    "dark": 1.10,
-    "very_dark": 1.07,
+    "very_light": 1.28,
+    "light": 1.27,
+    "medium_light": 1.25,
+    "medium": 1.20,
+    "moderately_dark": 1.15,
+    "dark": 1.12,
+    "very_dark": 1.09,
 }
 TDS_GAUSS_SIGMA_LOW = 0.15
 TDS_GAUSS_SIGMA_HIGH = 0.20  # v5.10: 收緊過濃懲罰
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
-K_SW = 0.005  # 甜感萃取速率常數（進一步降低，讓甜感在120秒後仍有明顯增長）
-SW_TIME_MAX = 0.20  # 甜感最大增加量（提高，讓長時間浸泡更有優勢）
+K_SW = 0.004  # 從 0.005 降至 0.004（更慢增長，鼓勵長時間浸泡）
+SW_TIME_MAX = 0.25  # 從 0.20 升至 0.25（更高上限，讓長時間浸泡更有優勢）
 
 # 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
-K_PS = 0.008  # 醇厚度萃取速率常數（降低，讓曲線更平緩，120秒後仍有增長）
-PS_TIME_MAX = 0.30  # 醇厚度最大增加量（提高，讓長時間浸泡更有優勢）
+K_PS = 0.006  # 從 0.008 降至 0.006（更慢增長，鼓勵長時間浸泡）
+PS_TIME_MAX = 0.35  # 從 0.30 升至 0.35（更高上限，強化 Aeropress 醇厚度優勢）
 
 # CGA 時間函數參數
 K_CGA_TIME = 0.015
@@ -310,17 +309,17 @@ ROAST_TABLE = {
 
 TDS_ANCHORS = {"low": 1.00, "mid": 1.20, "high": 1.40}
 IDEAL_FLAVOR = {
-    # 極淺焙：降低酸質，提高甜感與醇厚度
-    ("very_light", "low"): {"AC": 0.24, "SW": 0.34, "PS": 0.20, "CA": 0.10, "CGA": 0.08, "MEL": 0.04},
-    ("very_light", "mid"): {"AC": 0.21, "SW": 0.36, "PS": 0.22, "CA": 0.09, "CGA": 0.08, "MEL": 0.04},
-    ("very_light", "high"): {"AC": 0.18, "SW": 0.39, "PS": 0.24, "CA": 0.08, "CGA": 0.07, "MEL": 0.04},
-    # 淺焙：進一步降低酸質，提高甜感與醇厚度，更適合120秒浸泡
-    ("light", "low"): {"AC": 0.19, "SW": 0.38, "PS": 0.21, "CA": 0.10, "CGA": 0.08, "MEL": 0.04},
-    ("light", "mid"): {"AC": 0.16, "SW": 0.41, "PS": 0.23, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
-    ("light", "high"): {"AC": 0.14, "SW": 0.43, "PS": 0.25, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
-    ("medium_light", "low"): {"AC": 0.18, "SW": 0.35, "PS": 0.20, "CA": 0.14, "CGA": 0.09, "MEL": 0.04},
-    ("medium_light", "mid"): {"AC": 0.15, "SW": 0.38, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.04},
-    ("medium_light", "high"): {"AC": 0.13, "SW": 0.40, "PS": 0.23, "CA": 0.12, "CGA": 0.08, "MEL": 0.04},
+    # 極淺焙：大幅提高醇厚度和甜感，降低酸質（Aeropress 哲學）
+    ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
+    ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
+    ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
+    # 淺焙：同樣提高醇厚度和甜感，降低酸質
+    ("light", "low"): {"AC": 0.16, "SW": 0.40, "PS": 0.25, "CA": 0.09, "CGA": 0.06, "MEL": 0.04},
+    ("light", "mid"): {"AC": 0.14, "SW": 0.42, "PS": 0.27, "CA": 0.08, "CGA": 0.05, "MEL": 0.04},
+    ("light", "high"): {"AC": 0.12, "SW": 0.44, "PS": 0.29, "CA": 0.07, "CGA": 0.04, "MEL": 0.04},
+    ("medium_light", "low"): {"AC": 0.15, "SW": 0.37, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.04},
+    ("medium_light", "mid"): {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
+    ("medium_light", "high"): {"AC": 0.11, "SW": 0.41, "PS": 0.27, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
     ("medium", "low"): {"AC": 0.12, "SW": 0.38, "PS": 0.22, "CA": 0.14, "CGA": 0.08, "MEL": 0.06},
     ("medium", "mid"): {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
     ("medium", "high"): {"AC": 0.09, "SW": 0.42, "PS": 0.24, "CA": 0.12, "CGA": 0.07, "MEL": 0.06},
@@ -336,7 +335,7 @@ IDEAL_FLAVOR = {
 }
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
-WEIGHTS = {"AC": 1.2, "SW": 1.8, "PS": 1.5, "CA": 1.2, "CGA": 1.5, "MEL": 1.2}
+WEIGHTS = {"AC": 1.0, "SW": 1.8, "PS": 2.0, "CA": 1.3, "CGA": 1.3, "MEL": 1.3}
 TDS_W3_LOW = 0.15
 TDS_W3_HIGH = 0.05
 CONC_SENSITIVITY_FLOOR = 0.02
