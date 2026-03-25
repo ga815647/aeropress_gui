@@ -168,12 +168,12 @@ TDS_GAUSS_SIGMA_LOW = 0.15
 TDS_GAUSS_SIGMA_HIGH = 0.20  # v5.10: 收緊過濃懲罰
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
-K_SW = 0.004  # 從 0.005 降至 0.004（更慢增長，鼓勵長時間浸泡）
-SW_TIME_MAX = 0.25  # 從 0.20 升至 0.25（更高上限，讓長時間浸泡更有優勢）
+K_SW = 0.003  # 從 0.004 降至 0.003（更慢增長，鼓勵長時間浸泡）
+SW_TIME_MAX = 0.28  # 從 0.25 升至 0.28（更高上限，讓長時間浸泡更有優勢）
 
 # 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
-K_PS = 0.006  # 從 0.008 降至 0.006（更慢增長，鼓勵長時間浸泡）
-PS_TIME_MAX = 0.35  # 從 0.30 升至 0.35（更高上限，強化 Aeropress 醇厚度優勢）
+K_PS = 0.005  # 從 0.006 降至 0.005（更慢增長，鼓勵長時間浸泡）
+PS_TIME_MAX = 0.38  # 從 0.35 升至 0.38（更高上限，強化 Aeropress 醇厚度優勢）
 
 # CGA 時間函數參數
 K_CGA_TIME = 0.015
@@ -181,11 +181,15 @@ CGA_TIME_MAX = 0.50
 
 # 酸質（AC）衰減參數：調整開始衰減時間
 K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
-AC_DECAY_START = 110  # 酸質開始衰減的時間點（從90秒調整到110秒，讓120秒酸質不會過低）
+AC_DECAY_START = 150  # 酸質開始衰減的時間點（從 140 測試值進一步推到 150，確保長浸泡不失酸）
 
 CGA_ASTRINGENCY_THRESHOLD = 1.25
-CGA_ASTRINGENCY_SLOPE = 3.0  # Hoffman 校正 v2：96°C+135s 仍受 CGA 懲罰，降至 2.0；HARSHNESS_SLOPE 維持 4.0 作保護
+CGA_ASTRINGENCY_SLOPE = 2.5  # 從 3.0 降至 2.5（稍微放寬長浸泡苦味懲罰，讓 120s+ 更有競爭力）
 HARSHNESS_SLOPE = 5.0
+
+# 淺焙短時間不均勻萃取懲罰（Uneven Extraction Penalty）
+SHORT_STEEP_PENALTY_THRESH = 120  # 秒；低於此視為淺焙不均勻萃取
+UNEVEN_EXTRACTION_WEIGHT = 0.12   # 影響因子
 
 SW_AROMA_SLOPE = 0.015   # Hoffman 校正：降低高溫懲罰斜率（99°C 僅 3% 損失）
 SW_AROMA_THRESH = 97.0   # Hoffman 校正：96–97°C 完全無懲罰（light 搜尋範圍 93–99°C）

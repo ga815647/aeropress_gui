@@ -63,6 +63,7 @@ def flavor_score(
     t_slurry: float = 90,
     temp_initial: float = 90,
     ey: float = 0.0,
+    steep_sec: float = 0.0,
 ) -> float:
     actual_abs = compute_actual_abs(actual_raw, tds)
     kh_penalty = max(0.65, math.exp(-water_kh / constants.KH_PERCEPT_DECAY))
@@ -214,6 +215,12 @@ def flavor_score(
     # 口感平衡綜合懲罰加權納入
     triad_weighted = 1.0 - constants.BALANCE_TRIAD_WEIGHT + constants.BALANCE_TRIAD_WEIGHT * triad_penalty
     
+    # 淺焙短時間不均勻萃取懲罰 (Uneven Extraction Penalty)
+    uneven_penalty = 1.0
+    if roast_code in ("very_light", "light") and 0 < steep_sec < constants.SHORT_STEEP_PENALTY_THRESH:
+        deficit_ratio = (constants.SHORT_STEEP_PENALTY_THRESH - steep_sec) / constants.SHORT_STEEP_PENALTY_THRESH
+        uneven_penalty = 1.0 - constants.UNEVEN_EXTRACTION_WEIGHT * (deficit_ratio ** 1.5)
+
     final = (
         cosine_sim
         * conc_score
@@ -227,6 +234,7 @@ def flavor_score(
         * acid_without_sweet_penalty
         * ey_factor
         * triad_weighted
+        * uneven_penalty
     )
 
     if tds < constants.TDS_BROWN_WATER_FLOOR:

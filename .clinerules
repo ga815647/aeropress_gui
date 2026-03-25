@@ -1,0 +1,9 @@
+# Forge Rules for Cline
+
+1. 每次對話開始，讀取 memory-bank/ 和 skills/ 裡的所有 .md 檔案作為上下文。
+
+2. 收到模糊需求時，先用一段話複述你的理解（打算做什麼、影響範圍、假設），確認後再開始。
+
+3. 改完 code 後跑測試。測試通過才 commit。
+
+4. 不要在 memory-bank/ 檔案裡記錄程式碼細節（變數名、API 列表），那些交給 codebase 本身。只記高階意圖與決策原因。

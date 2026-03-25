@@ -36,7 +36,7 @@ def _predict_closed_compounds(
     sw += constants.SW_TIME_MAX * (1.0 - math.exp(-constants.K_SW * effective_steep))
     sw *= ac_sw_mult
 
-    ps = base_profile["PS"] * (1.0 + max(4.5 - dial, 0) * 0.45)
+    ps = base_profile["PS"] * (1.0 + max(4.5 - dial, 0) * 0.20)
     # 修改：醇厚度從浸泡開始即隨時間增加，移除 120 秒閾值限制
     ps += constants.PS_TIME_MAX * (1.0 - math.exp(-constants.K_PS * effective_steep))
     ps *= max(0.0, 1.0 + (temp - 90) * 0.015)

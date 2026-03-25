@@ -108,7 +108,7 @@ def optimize(
                         compounds, ideal_abs, tds, roast_code,
                         water_kh=water_kh, water_gh=water_gh,
                         t_slurry=t_slurry_val, temp_initial=temp,
-                        ey=ey,
+                        ey=ey, steep_sec=steep,
                     )
                     dial_prefer = cfg.get("dial_prefer")
                     if dial_prefer is not None:
