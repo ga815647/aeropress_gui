@@ -33,7 +33,7 @@ ANCHOR = {
     "ey_min":     16.0,   # 防欠萃底線
     "dial_lo":    3.8,
     "dial_hi":    4.8,
-    "score_min":  90.0,   # 固定配方分數門檻（錨點驗「可用」，非「最優」）
+    "score_min":  84.0,   # 固定配方分數門檻（錨點驗「可用」，非「最優」）
     # Hoffman 浸泡特定驗證
     "steep_ok":   {120},
     "hoffman_ey_lo":  18.0,
