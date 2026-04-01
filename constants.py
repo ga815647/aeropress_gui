@@ -64,6 +64,7 @@ COFFEE_SPECIFIC_HEAT_RATIO = 0.33
 BREWER_TEMP_DROP = 2.5
 
 T_ENV = 25.0
+BREWER_INSULATION_COEFF = 0.5
 COOL_RATE = 0.0008
 K_BASE = 0.025
 K_MIN = 0.006
@@ -344,3 +345,24 @@ TDS_W3_LOW = 0.15
 TDS_W3_HIGH = 0.05
 CONC_SENSITIVITY_FLOOR = 0.02
 TDS_BROWN_WATER_FLOOR = 0.80
+
+# 風味偏好篩選：門檻 = ideal_abs[key] × 乘數
+# 各維度乘數設計依據：
+#   AC  ×1.05 → 酸感需稍高於理想，才能和一般配方有效區隔
+#   SW  ×1.00 → 甜感達到理想即入選（已是優化目標，不需抬高門檻）
+#   PS  ×1.00 → 香氣達到理想即入選（同上）
+#   苦味 ×1.10 → Bitter 合計需明確超標，才算「偏苦」配方
+FLAVOR_PREF_MULTIPLIER: dict[str, float] = {
+    "acidic":   1.05,
+    "sweet":    1.00,
+    "aromatic": 1.00,
+    "bitter":   1.10,
+}
+
+# "bitter" 同時比較 CA + CGA + MEL 的合計；其餘單一 key
+FLAVOR_PREF_KEYS: dict[str, list[str]] = {
+    "acidic":   ["AC"],
+    "sweet":    ["SW"],
+    "aromatic": ["PS"],
+    "bitter":   ["CA", "CGA", "MEL"],
+}

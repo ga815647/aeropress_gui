@@ -15,7 +15,8 @@ def _calc_t_eff(temp_slurry: float, k: float, r: float, t: float) -> float:
     kt = k * t
     if kt < 1e-9:
         return temp_slurry
-    return constants.T_ENV + (temp_slurry - constants.T_ENV) * (k / (r + k)) * (
+    eff_t_env = temp_slurry - (temp_slurry - constants.T_ENV) * constants.BREWER_INSULATION_COEFF
+    return eff_t_env + (temp_slurry - eff_t_env) * (k / (r + k)) * (
         (1 - math.exp(-(r + k) * t)) / (1 - math.exp(-kt))
     )
 
@@ -34,7 +35,8 @@ def _calc_phase_ey(
 
     rt = r * t_kinetic
     if rt > 1e-9:
-        t_avg = constants.T_ENV + (temp_slurry - constants.T_ENV) / rt * (1.0 - math.exp(-rt))
+        eff_t_env = temp_slurry - (temp_slurry - constants.T_ENV) * constants.BREWER_INSULATION_COEFF
+        t_avg = eff_t_env + (temp_slurry - eff_t_env) / rt * (1.0 - math.exp(-rt))
     else:
         t_avg = temp_slurry
 

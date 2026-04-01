@@ -5,8 +5,19 @@ import math
 import constants
 from models.compounds import predict_compounds
 from models.ey_model import calc_ey, calc_fines_ratio
-from models.scoring import build_ideal_abs, flavor_score
+from models.scoring import build_ideal_abs, compute_actual_abs, flavor_score
 from models.tds_model import apply_channeling, calc_drip_volume, calc_press_time, calc_retention, calc_swirl_wait, calc_tds
+
+
+def _passes_flavor_pref(item: dict, roast_code: str, pref: str) -> bool:
+    """Return True if item's compounds_abs meets the flavor preference threshold."""
+    actual_abs = compute_actual_abs(item["compounds"], item["tds"])
+    ideal_abs = build_ideal_abs(roast_code, item["tds"])
+    mult = constants.FLAVOR_PREF_MULTIPLIER[pref]
+    keys = constants.FLAVOR_PREF_KEYS[pref]
+    actual_sum = sum(actual_abs[k] for k in keys)
+    ideal_sum = sum(ideal_abs[k] for k in keys)
+    return actual_sum >= ideal_sum * mult
 
 
 def optimize(
@@ -16,6 +27,7 @@ def optimize(
     water_kh: float = 30,
     water_mg_frac: float = 0.40,
     top_n: int = 3,
+    flavor_pref: str | None = None,
     fixed_dose: float | None = None,
     temp_range: tuple[int, int] | None = None,
     fixed_steep: int | None = None,
@@ -152,4 +164,24 @@ def optimize(
                     )
 
     results.sort(key=lambda item: item["score"], reverse=True)
-    return results[:top_n]
+
+    if not results:
+        return []
+
+    # Always keep the unfiltered #1 result (best overall score, no condition)
+    final: list[dict] = [results[0]]
+
+    if top_n > 1:
+        if flavor_pref and flavor_pref in constants.FLAVOR_PREF_MULTIPLIER:
+            # Filter-then-rank: pick top (top_n - 1) from pref-passing results,
+            # excluding the already-picked #1 result to avoid duplicates.
+            pref_pool = [
+                item for item in results[1:]
+                if _passes_flavor_pref(item, roast_code, flavor_pref)
+            ]
+            final.extend(pref_pool[: top_n - 1])
+        else:
+            # No preference: plain top-N (already sorted)
+            final.extend(results[1: top_n])
+
+    return final

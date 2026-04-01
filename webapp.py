@@ -91,6 +91,8 @@ def create_app() -> Flask:
             preset=payload.get("preset"),
         )
         roast_code = str(payload.get("roast", "medium"))
+        raw_pref = str(payload.get("flavor_pref", "")).strip().lower()
+        flavor_pref = raw_pref if raw_pref in constants.FLAVOR_PREF_MULTIPLIER else None
         results = optimize(
             roast_code=roast_code,
             brewer_size=payload.get("brewer", "xl"),
@@ -98,7 +100,14 @@ def create_app() -> Flask:
             water_kh=water_kh,
             water_mg_frac=water_mg_frac,
             top_n=int(payload.get("top", 3)),
+            flavor_pref=flavor_pref,
         )
+        
+        # Calculate theoretical maximums for this roast level for the progress bars
+        max_tds = constants.TDS_PREFER.get(roast_code, 1.25) + 0.2
+        flavor_max_raw = build_ideal_abs(roast_code, max_tds)
+        flavor_max = {k: round(v, 4) for k, v in flavor_max_raw.items()}
+
         return jsonify(
             {
                 "meta": {
@@ -108,6 +117,7 @@ def create_app() -> Flask:
                     "water_kh": water_kh,
                     "water_mg_frac": water_mg_frac,
                     "water_source": water_source,
+                    "flavor_max": flavor_max,
                 },
                 "results": [_serialize_result(item, roast_code) for item in results],
             }

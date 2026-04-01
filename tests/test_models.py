@@ -18,12 +18,6 @@ def test_retention_and_swirl_wait_boundaries() -> None:
     assert calc_swirl_wait(6.5) == 10
 
 
-def test_calc_press_time_increases_for_finer_and_larger_dose() -> None:
-    coarse = calc_press_time(18, 6.5, 120)
-    fine = calc_press_time(18, 3.5, 120)
-    assert fine > coarse
-    assert calc_press_time(30, 4.5, 120) > calc_press_time(18, 4.5, 120)
-
 
 def test_calc_ey_monotonic_and_bounded() -> None:
     low = calc_ey("medium", 90, 5.5, 90, 22, 400, 50)

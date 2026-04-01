@@ -67,6 +67,11 @@
       body: "控制回傳幾組最佳結果，方便你看多一點組合或只專注最前面的排序。",
       meta: "若主要是比較前三名，維持 3 就足夠。",
     },
+    flavor_pref: {
+      title: "風味偏好",
+      body: "Rank 1 永遠是綜合最高分配方。選擇偏好後，Rank 2 起會從符合該風味門檻的配方中挑出整體品質最高的。",
+      meta: "例如選『偏酸』，Rank 2、3 的 AC 值會明確高於該焙度理想值，但整體仍保持品質優先。",
+    },
     t_env: {
       title: "環境溫度",
       body: "環境溫度會影響實際 slurry 溫度，進而影響模型中的萃取預估。",
@@ -335,13 +340,30 @@
     return `<div class="chip"><strong>${label}</strong><div>${value}</div></div>`;
   }
 
-  function compoundCard(key, value) {
+  function compoundCard(key, value, maxValue) {
     const help = compoundHelp[key];
+    const maxVal = maxValue || 0.6; // fallback
+    const percent = Math.min(100, (value / maxVal) * 100);
+    const colors = {
+      AC: "#e07a5f",  // 亮橘酸質
+      SW: "#f2cc8f",  // 黃甜
+      PS: "#81b29a",  // 綠醇厚
+      CA: "#4a4036",  // 木質苦
+      CGA: "#d2a8b3", // 淺紫綠感
+      MEL: "#3d405b"  // 灰黑深焙
+    };
+    const fillBarColor = colors[key] || "#bb5f2a";
+
     return `
-      <div class="compound" title="${help.label}">
-        <strong>${key}</strong>
-        <div>${value.toFixed(4)}</div>
-        <div class="compound-note">${help.label}: ${help.body}</div>
+      <div class="compound" title="${help.label}" style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <strong>${key}</strong>
+          <div style="font-family: monospace;">${value.toFixed(4)}</div>
+        </div>
+        <div style="background: #e4d7cb; height: 6px; border-radius: 3px; overflow: hidden; width: 100%;">
+          <div style="background: ${fillBarColor}; height: 100%; width: ${percent}%; transition: width 0.3s; border-radius: 3px;"></div>
+        </div>
+        <div class="compound-note" style="margin-top: 4px;">${help.label}: ${help.body}</div>
       </div>
     `;
   }
@@ -606,7 +628,7 @@
         ${timelineHtml}
 
         <div class="compound-grid" style="margin-top: 1.5rem; min-width: 0;">
-          ${keys.map((key) => compoundCard(key, result.compounds_abs[key])).join("")}
+          ${keys.map((key) => compoundCard(key, result.compounds_abs[key], meta.flavor_max ? meta.flavor_max[key] : 0.6)).join("")}
         </div>
       </article>
       `;
@@ -762,6 +784,8 @@
     ["gh", "kh", "mg_frac", "top", "t_env", "altitude"].forEach((key) => {
       payload[key] = payload[key] === "" ? null : Number(payload[key]);
     });
+    // flavor_pref: keep as string (empty string = no preference)
+    if (!payload["flavor_pref"]) payload["flavor_pref"] = "";
 
     try {
       const response = await fetch("/api/optimize", {

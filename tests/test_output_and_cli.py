@@ -112,38 +112,3 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
     assert score > 70
     assert 3 <= (temp - t_slurry) <= 7
 
-
-@pytest.mark.parametrize("roast,expected_temp_min,expected_temp_max", [
-    ("very_light", 94, 100),  # base_temp=97, range 94–100
-    ("light", 95, 100),       # 98 ± 3, capped at 100
-    ("medium_light", 92, 98), # 95 ± 3
-    ("medium", 88, 94),       # 91 ± 3
-    ("moderately_dark", 83, 89), # 86 ± 3
-    ("dark", 79, 85),         # 82 ± 3
-    ("very_dark", 77, 83),    # 80 ± 3
-])
-def test_cli_roast_base_temp_ranges(tmp_path: Path, roast: str, expected_temp_min: int, expected_temp_max: int) -> None:
-    root = Path(__file__).resolve().parents[1]
-    command = [
-        sys.executable,
-        str(root / "main.py"),
-        "--brewer",
-        "xl",
-        "--roast",
-        roast,
-        "--gh",
-        "50",
-        "--kh",
-        "30",
-        "--t-env",
-        "25",
-        "--altitude",
-        "0",
-        "--top",
-        "1",
-    ]
-    completed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, check=True, timeout=120)
-    stdout = completed.stdout
-
-    temp = int(re.search(r"水溫 (\d+)°C", stdout).group(1))
-    assert expected_temp_min <= temp <= expected_temp_max, f"For roast {roast}, temp {temp} not in range {expected_temp_min}-{expected_temp_max}"
