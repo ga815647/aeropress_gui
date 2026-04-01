@@ -5,6 +5,7 @@ BREWER_PRESETS = {
         "dose_min": 9.0,
         "dose_max": 18.0,
         "fixed_press_sec": 30,
+        "area_cm2": 43.0,   # 內徑 ~74mm → π×37²≈43 cm²
     },
     "xl": {
         "name": "AeroPress XL",
@@ -12,8 +13,13 @@ BREWER_PRESETS = {
         "dose_min": 18.0,
         "dose_max": 30.0,
         "fixed_press_sec": 40,
+        "area_cm2": 63.6,   # 內徑 ~90mm → π×45²≈63.6 cm²
     },
 }
+
+# 達西定律截面積修正基準（standard 機型）
+# XL 截面積較大 → 同等研磨/豆量下流量正比於截面積
+DRIP_AREA_REF_CM2 = 43.0
 
 DOSE_STEP = 0.5
 POUR_RATE = 12
@@ -75,7 +81,7 @@ EY_MIN = 15.0  # 上調以排除大豆量極淺萃組合（brew_capacity 修正�
 
 EY_PREFER = {
     "very_light": 17.5,
-    "light": 19.0,  # Hoffman 校正：提升至 medium_light 基準，短浸泡低 EY 組合獲有效懲罰
+    "light": 21.0,  # 修正：XL 淺焙實際萃取範圍 20~22%；EY_PREFER=19 過低導致 EY 懲罰強迫選 120s 短浸泡，壓制 PS/SW 發展
     "medium_light": 19.0,
     "medium": 19.0,
     "moderately_dark": 20.0,
@@ -318,10 +324,11 @@ IDEAL_FLAVOR = {
     ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
     ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 淺焙：同樣提高醇厚度和甜感，降低酸質
-    ("light", "low"): {"AC": 0.16, "SW": 0.40, "PS": 0.25, "CA": 0.09, "CGA": 0.06, "MEL": 0.04},
-    ("light", "mid"): {"AC": 0.14, "SW": 0.42, "PS": 0.27, "CA": 0.08, "CGA": 0.05, "MEL": 0.04},
-    ("light", "high"): {"AC": 0.12, "SW": 0.44, "PS": 0.29, "CA": 0.07, "CGA": 0.04, "MEL": 0.04},
+    # 淺焙：對齊化合物模型實際預測值（PS~0.355, SW~0.381 for Hoffman anchor）
+    # 原 PS=0.27 遠低於模型預測，造成濃度懲罰系統性壓制長浸泡配方
+    ("light", "low"): {"AC": 0.13, "SW": 0.37, "PS": 0.33, "CA": 0.08, "CGA": 0.06, "MEL": 0.03},
+    ("light", "mid"): {"AC": 0.12, "SW": 0.38, "PS": 0.35, "CA": 0.07, "CGA": 0.05, "MEL": 0.03},
+    ("light", "high"): {"AC": 0.10, "SW": 0.39, "PS": 0.38, "CA": 0.06, "CGA": 0.04, "MEL": 0.03},
     ("medium_light", "low"): {"AC": 0.15, "SW": 0.37, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.04},
     ("medium_light", "mid"): {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
     ("medium_light", "high"): {"AC": 0.11, "SW": 0.41, "PS": 0.27, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
@@ -338,6 +345,32 @@ IDEAL_FLAVOR = {
     ("very_dark", "mid"): {"AC": 0.04, "SW": 0.28, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.29},
     ("very_dark", "high"): {"AC": 0.03, "SW": 0.28, "PS": 0.24, "CA": 0.10, "CGA": 0.04, "MEL": 0.30},
 }
+
+# 萃取模型用的豆子原始化合物基準（與 IDEAL_FLAVOR 評分目標獨立）
+COMPOUND_BASE = {
+    "very_light":      {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
+    "light":           {"AC": 0.14, "SW": 0.42, "PS": 0.27, "CA": 0.08, "CGA": 0.05, "MEL": 0.04},
+    "medium_light":    {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
+    "medium":          {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
+    "moderately_dark": {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
+    "dark":            {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},
+    "very_dark":       {"AC": 0.04, "SW": 0.28, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.29},
+}
+
+# 評分展開：Normal CDF 映射，讓分數分布符合鐘形直覺
+# μ 各焙度獨立校準：display(raw_best, μ) ≈ 90（正常條件下典型最佳 ≈ 90 分）
+# 100 分 = raw=1.0 理論上限（天時地利人和：氣溫 + 海拔 + 水質全部理想）
+# Hoffman 錨點（standard 11g/200ml/120s）約 86-87 分（日常好喝配方，非極限）
+SCORE_NORM_MU = {
+    "very_light":      0.926,
+    "light":           0.975,
+    "medium_light":    0.937,
+    "medium":          0.928,
+    "moderately_dark": 0.931,
+    "dark":            0.928,
+    "very_dark":       0.926,
+}
+SCORE_NORM_SIGMA = 0.021
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
 WEIGHTS = {"AC": 1.0, "SW": 1.8, "PS": 2.0, "CA": 1.3, "CGA": 1.3, "MEL": 1.3}

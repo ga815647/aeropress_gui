@@ -76,6 +76,7 @@ def calc_ey(
     pour_offset: float = 0,
     seal_delay: float = constants.SEAL_DELAY_DEFAULT,
     swirl_wait_sec: int = 0,
+    area_cm2: float = 43.0,
 ) -> float:
     heat_water = water_ml
     heat_coffee = dose * constants.COFFEE_SPECIFIC_HEAT_RATIO
@@ -90,7 +91,7 @@ def calc_ey(
 
     retention_water = dose * calc_retention(roast_code, dial)
     drip_time = water_ml / constants.POUR_RATE + seal_delay
-    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
+    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2=area_cm2)
     main_free_water = max(water_ml - drip_volume - retention_water, 1.0)
     main_ey = _calc_phase_ey(roast_code, t_slurry, dial, t_kinetic, dose, main_free_water)
 

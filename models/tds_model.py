@@ -5,7 +5,13 @@ import math
 import constants
 
 
-def calc_drip_volume(water_ml: float, dial: float, drip_time: float, dose: float = 18.0) -> float:
+def calc_drip_volume(
+    water_ml: float,
+    dial: float,
+    drip_time: float,
+    dose: float = 18.0,
+    area_cm2: float = 43.0,
+) -> float:
     if water_ml <= 0 or drip_time <= 0:
         return 0.0
 
@@ -14,7 +20,10 @@ def calc_drip_volume(water_ml: float, dial: float, drip_time: float, dose: float
     # 豆量阻力修正：豆量越多粉床越厚，漏水越少
     # 以 DOSE_DRIP_REF 為基準，指數 0.3 為保守估算（待實測校正）
     dose_resist_mult = (constants.DOSE_DRIP_REF / max(dose, 1.0)) ** 0.3
-    raw_volume = constants.PRE_SEAL_DRIP_RATE_REF * drip_time * dial_mult * dose_resist_mult
+    # 達西定律截面積修正：Q ∝ A（截面積越大流量正比增加）
+    # XL 內徑 90mm vs Standard 74mm → area_mult = 63.6/43.0 ≈ 1.48
+    area_mult = area_cm2 / constants.DRIP_AREA_REF_CM2
+    raw_volume = constants.PRE_SEAL_DRIP_RATE_REF * drip_time * dial_mult * dose_resist_mult * area_mult
     capped_volume = min(raw_volume, water_ml * constants.PRE_SEAL_DRIP_MAX_RATIO)
     return round(max(0.0, capped_volume), 3)
 

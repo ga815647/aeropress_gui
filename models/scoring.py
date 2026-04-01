@@ -4,6 +4,12 @@ import math
 
 import constants
 
+_SQRT2 = math.sqrt(2)
+
+
+def _norm_cdf(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / _SQRT2))
+
 _TDS_ANCHOR_LIST = [1.00, 1.20, 1.40]
 _WEIGHT_TOTAL = sum(constants.WEIGHTS.values())
 _CONC_FLOOR = 1e-8
@@ -240,4 +246,15 @@ def flavor_score(
     if tds < constants.TDS_BROWN_WATER_FLOOR:
         final *= (tds / constants.TDS_BROWN_WATER_FLOOR) ** 2
 
-    return round(final * 100, 1)
+    return final
+
+
+def score_to_display(raw: float, roast_code: str) -> float:
+    """將 flavor_score 回傳的 raw (0–1) 透過 Normal CDF 映射到顯示用分數 (0–100)。
+    各焙度使用獨立的 μ，讓每個焙度的典型最佳都能得約 97-98 分。
+    """
+    mu = constants.SCORE_NORM_MU[roast_code]
+    z = (raw - mu) / constants.SCORE_NORM_SIGMA
+    z_max = (1.0 - mu) / constants.SCORE_NORM_SIGMA
+    display = _norm_cdf(z) / _norm_cdf(z_max) * 100
+    return round(display, 1)

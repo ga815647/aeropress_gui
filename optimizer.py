@@ -5,7 +5,7 @@ import math
 import constants
 from models.compounds import predict_compounds
 from models.ey_model import calc_ey, calc_fines_ratio
-from models.scoring import build_ideal_abs, compute_actual_abs, flavor_score
+from models.scoring import build_ideal_abs, compute_actual_abs, flavor_score, score_to_display
 from models.tds_model import apply_channeling, calc_drip_volume, calc_press_time, calc_retention, calc_swirl_wait, calc_tds
 
 
@@ -36,6 +36,7 @@ def optimize(
     base_temp = cfg["base_temp"]
     brewer = constants.BREWER_PRESETS[brewer_size]
     water_ml = brewer["water_ml"]
+    area_cm2 = brewer.get("area_cm2", constants.DRIP_AREA_REF_CM2)
     dose_min_x2 = int(brewer["dose_min"] * 2)
     dose_max_x2 = int(brewer["dose_max"] * 2)
 
@@ -87,6 +88,7 @@ def optimize(
                         pour_offset=pour_offset,
                         seal_delay=seal_delay,
                         swirl_wait_sec=swirl_wait,
+                        area_cm2=area_cm2,
                     )
                     if ey < constants.EY_MIN:
                         continue
@@ -112,11 +114,12 @@ def optimize(
                         seal_delay=seal_delay,
                         dose=dose,
                         press_sec=press_sec,
+                        area_cm2=area_cm2,
                     )
                     ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
                     tds = calc_tds(roast_code, dose, ey, dial, water_ml)
                     ideal_abs = build_ideal_abs(roast_code, tds)
-                    score = flavor_score(
+                    score_raw = flavor_score(
                         compounds, ideal_abs, tds, roast_code,
                         water_kh=water_kh, water_gh=water_gh,
                         t_slurry=t_slurry_val, temp_initial=temp,
@@ -126,11 +129,13 @@ def optimize(
                     if dial_prefer is not None:
                         dial_dev = (dial - dial_prefer) / constants.DIAL_PREFER_SIGMA
                         dial_factor = 1.0 - constants.DIAL_PREFER_WEIGHT * (1.0 - math.exp(-0.5 * dial_dev**2))
-                        score = round(score * dial_factor, 1)
-                    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
+                        score_raw *= dial_factor
+                    score = score_to_display(score_raw, roast_code)
+                    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2)
 
                     results.append(
                         {
+                            "_score_raw": score_raw,
                             "brewer": brewer["name"],
                             "water_ml": water_ml,
                             "temp": temp,
@@ -163,7 +168,7 @@ def optimize(
                         }
                     )
 
-    results.sort(key=lambda item: item["score"], reverse=True)
+    results.sort(key=lambda item: item["_score_raw"], reverse=True)
 
     if not results:
         return []

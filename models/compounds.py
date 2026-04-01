@@ -21,7 +21,7 @@ def _predict_closed_compounds(
     ac_sw_mult = 1.0 + mg_delta * constants.MG_FRAC_AC_SW_MULT
     ps_cga_mult = 1.0 + ca_delta * constants.MG_FRAC_PS_CGA_MULT
 
-    base_profile = constants.IDEAL_FLAVOR[(roast_code, "mid")]
+    base_profile = constants.COMPOUND_BASE[roast_code]
 
     ac = base_profile["AC"]
     ac *= 1 + (temp - 90) * 0.02
@@ -78,6 +78,7 @@ def predict_compounds(
     seal_delay: float = constants.SEAL_DELAY_DEFAULT,
     dose: float = 18.0,
     press_sec: float = 30.0,
+    area_cm2: float = 43.0,
 ) -> dict:
     effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv
     main_profile = _predict_closed_compounds(
@@ -85,7 +86,7 @@ def predict_compounds(
     )
 
     drip_time = water_ml / constants.POUR_RATE + seal_delay
-    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose)
+    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2=area_cm2)
     drip_ratio = min(max(drip_volume / max(water_ml, 1e-6), 0.0), 0.35)
 
     if drip_ratio > 0:
