@@ -91,8 +91,10 @@ def create_app() -> Flask:
             preset=payload.get("preset"),
         )
         roast_code = str(payload.get("roast", "medium"))
-        raw_pref = str(payload.get("flavor_pref", "")).strip().lower()
-        flavor_pref = raw_pref if raw_pref in constants.FLAVOR_PREF_MULTIPLIER else None
+        dose_min = payload.get("dose_min")
+        dose_max = payload.get("dose_max")
+        dose_min = float(dose_min) if dose_min is not None else None
+        dose_max = float(dose_max) if dose_max is not None else None
         results = optimize(
             roast_code=roast_code,
             brewer_size=payload.get("brewer", "xl"),
@@ -100,7 +102,8 @@ def create_app() -> Flask:
             water_kh=water_kh,
             water_mg_frac=water_mg_frac,
             top_n=int(payload.get("top", 3)),
-            flavor_pref=flavor_pref,
+            dose_min_override=dose_min,
+            dose_max_override=dose_max,
         )
         
         # Calculate theoretical maximums for this roast level for the progress bars

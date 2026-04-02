@@ -90,18 +90,16 @@
               </div>
               <input id="top" name="top" type="number" min="1" max="10" value="3">
             </div>
-            <div class="field" data-help-key="flavor_pref">
+            <div class="field" data-help-key="dose_range">
               <div class="label-row">
-                <label for="flavor_pref">風味偏好</label>
-                <button class="hint-button" type="button" data-help-target="flavor_pref">?</button>
+                <label>豆量區間 g</label>
+                <button class="hint-button" type="button" data-help-target="dose_range">?</button>
               </div>
-              <select id="flavor_pref" name="flavor_pref">
-                <option value="">無偏好（綜合最佳）</option>
-                <option value="acidic">偏酸（明亮果酸）</option>
-                <option value="sweet">偏甜（甜感圓潤）</option>
-                <option value="aromatic">偏香（香氣豐富）</option>
-                <option value="bitter">偏苦（醇厚深沉）</option>
-              </select>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input id="dose_min" name="dose_min" type="number" step="0.5" min="0" placeholder="min" style="width:50%">
+                <span>–</span>
+                <input id="dose_max" name="dose_max" type="number" step="0.5" min="0" placeholder="max" style="width:50%">
+              </div>
             </div>
             <div class="field" data-help-key="t_env">
               <div class="label-row">

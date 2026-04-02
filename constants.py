@@ -418,23 +418,3 @@ RATIO_WEIGHT = 0.15            # 比值獎勵權重（最多降 15% compound_los
 RATIO_W_AC_CGA = 1.0           # AC/CGA 比值權重
 RATIO_W_SW_BITTER = 1.0        # SW/(MEL+CGA) 比值權重
 
-# 風味偏好篩選：門檻 = ideal_abs[key] × 乘數
-# 各維度乘數設計依據：
-#   AC  ×1.05 → 酸感需稍高於理想，才能和一般配方有效區隔
-#   SW  ×1.00 → 甜感達到理想即入選（已是優化目標，不需抬高門檻）
-#   PS  ×1.00 → 香氣達到理想即入選（同上）
-#   苦味 ×1.10 → Bitter 合計需明確超標，才算「偏苦」配方
-FLAVOR_PREF_MULTIPLIER: dict[str, float] = {
-    "acidic":   1.05,
-    "sweet":    1.00,
-    "aromatic": 1.00,
-    "bitter":   1.10,
-}
-
-# "bitter" 同時比較 CA + CGA + MEL 的合計；其餘單一 key
-FLAVOR_PREF_KEYS: dict[str, list[str]] = {
-    "acidic":   ["AC"],
-    "sweet":    ["SW"],
-    "aromatic": ["PS"],
-    "bitter":   ["CA", "CGA", "MEL"],
-}

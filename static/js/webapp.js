@@ -67,10 +67,10 @@
       body: "控制回傳幾組最佳結果，方便你看多一點組合或只專注最前面的排序。",
       meta: "若主要是比較前三名，維持 3 就足夠。",
     },
-    flavor_pref: {
-      title: "風味偏好",
-      body: "Rank 1 永遠是綜合最高分配方。選擇偏好後，Rank 2 起會從符合該風味門檻的配方中挑出整體品質最高的。",
-      meta: "例如選『偏酸』，Rank 2、3 的 AC 值會明確高於該焙度理想值，但整體仍保持品質優先。",
+    dose_range: {
+      title: "豆量區間",
+      body: "手動限制搜尋的豆量範圍（克）。留空則使用該焙度的預設區間。只填一端也可以：只填 min 表示下限，只填 max 表示上限。",
+      meta: "例如手上只剩 18g 豆子，填 max=18 就能確保推薦不超量。",
     },
     t_env: {
       title: "環境溫度",
@@ -781,11 +781,9 @@
     submitButton.textContent = "計算中...";
 
     const payload = Object.fromEntries(new FormData(form).entries());
-    ["gh", "kh", "mg_frac", "top", "t_env", "altitude"].forEach((key) => {
+    ["gh", "kh", "mg_frac", "top", "t_env", "altitude", "dose_min", "dose_max"].forEach((key) => {
       payload[key] = payload[key] === "" ? null : Number(payload[key]);
     });
-    // flavor_pref: keep as string (empty string = no preference)
-    if (!payload["flavor_pref"]) payload["flavor_pref"] = "";
 
     try {
       const response = await fetch("/api/optimize", {
