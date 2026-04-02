@@ -99,10 +99,20 @@ EY_CA_EXP = 0.05  # CA 對 EY 極輕度敏感
 # 發展型化合物（SW + PS）sigmoid 門控
 # 糖類/香氣/多醣需足夠萃取才能充分釋放；取代 PS 的冪律 EY_PS_EXP
 # gate(ey) = floor + (1 - floor) * sigmoid(k * (ey - ey_prefer * center_frac))
-# 設計：Hoffman(EY=21) → gate≈1.0；Championship(EY=15.6) → gate≈0.95；Under(EY=9.5) → gate≈0.58
-EY_DEV_GATE_CENTER_FRAC = 0.62  # gate=0.5 對應 EY_PREFER 的 62%（light: 13.0%）
-EY_DEV_GATE_FLOOR = 0.55        # 即使極低 EY 仍保留 55% 基底
-EY_DEV_GATE_K = 0.80            # 門控陡峭度（每 %EY）
+# SW/PS 發展門控：物理閾值（糖類/多醣需足夠萃取才溶出）
+# center 基於豆體密度的物理溶出閾值，不綁 EY_PREFER
+# 淺焙豆密實 → 需更高 EY 才釋放；深焙結構疏鬆 → 較低 EY 即可
+EY_DEV_GATE_CENTER = {
+    "very_light":      14.5,   # 最密實，需高 EY
+    "light":           14.0,
+    "medium_light":    13.5,
+    "medium":          13.0,
+    "moderately_dark": 12.5,
+    "dark":            12.0,
+    "very_dark":       11.5,   # 最疏鬆，低 EY 即可
+}
+EY_DEV_GATE_FLOOR = 0.45        # 極低 EY 保留 45% 基底
+EY_DEV_GATE_K = 0.90            # 門控陡峭度（每 %EY）
 
 # EY Gaussian 懲罰（分焙度，上下不對稱）
 # sigma_lo：低於 EY_PREFER 一側（欠萃）；sigma_hi：高於 EY_PREFER 一側（過萃）
@@ -124,7 +134,7 @@ EY_SIGMA_HI = {
     "dark":            2.5,
     "very_dark":       3.0,
 }
-EY_GAUSS_WEIGHT = 0.06  # EY 是過程變數非杯中物品質指標，保留最小防欠萃底線即可
+EY_GAUSS_WEIGHT = 0.0   # EY 是物理過程變數，不進口感評分；化合物模型已通過 DEV_GATE + 冪律間接反映
 
 ARRHENIUS_COEFF = 0.05
 # 低溫萃取補正：輸入溫度（temp_initial）低於 K_LOW_TEMP_FLOOR 時啟動飽和補正
@@ -201,9 +211,9 @@ TDS_PREFER = {
     "very_dark": 1.09,
 }
 TDS_GAUSS_SIGMA_LOW = 0.15   # 低 TDS 側 sigma（Super-Gaussian）：April 1.17% 不嚴懲
-TDS_GAUSS_SIGMA_HIGH = 0.50  # 高 TDS 側 sigma（Super-Gaussian）：Championship 1.56% 寬容
+TDS_GAUSS_SIGMA_HIGH = 0.65  # 高 TDS 側 sigma 適度放寬（0.50→0.65），解除 dose 鎖定但防極端
 TDS_SIGMA_BLEND_K = 5.0      # TDS sigma 平滑混合斜率
-TDS_SUPER_GAUSS_EXP = 4      # Super-Gaussian 指數（>2 = 平頂效果）
+TDS_SUPER_GAUSS_EXP = 4      # 超高斯（平頂 → dose 多元性需靠寬 sigma）
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
 K_SW = 0.003  # 從 0.004 降至 0.003（更慢增長，鼓勵長時間浸泡）

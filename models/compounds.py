@@ -172,9 +172,8 @@ def predict_compounds(
     ey_prefer = constants.EY_PREFER[roast_code]
 
     # SW + PS：sigmoid 發展門控（糖類/香氣/多醣需萃取才能充分釋放）
-    # 設計：center = EY_PREFER × 0.62 → under-extract(EY<center) 強抑制；
-    #        Championship(EY>center) 幾乎不受影響
-    ey_center = ey_prefer * constants.EY_DEV_GATE_CENTER_FRAC
+    # center 基於豆體密度的物理溶出閾值，不綁 EY_PREFER
+    ey_center = constants.EY_DEV_GATE_CENTER[roast_code]
     dev_gate = constants.EY_DEV_GATE_FLOOR + (
         1.0 - constants.EY_DEV_GATE_FLOOR
     ) * _sigmoid(ey, center=ey_center, k=constants.EY_DEV_GATE_K)

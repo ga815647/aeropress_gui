@@ -60,7 +60,7 @@ ANCHOR = {
     "fixed_steep":  120,              # 注水→swirl 前 120s
     # Top 3 整體驗證範圍（standard 11g/200ml）
     "tds_lo":     1.05,
-    "tds_hi":     1.36,
+    "tds_hi":     1.45,   # 放寬 TDS 上限以配合 SIGMA_HIGH=0.80 的 dose 多元化
     "ey_min":     16.0,   # 防欠萃底線
     "dial_lo":    3.8,
     "dial_hi":    4.8,
