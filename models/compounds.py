@@ -64,14 +64,18 @@ def _predict_closed_compounds(
     # ── SW (sweetness / aroma) ───────────────────────────────────
     sw = base_profile["SW"]
     optimal_sw_temp = constants.ROAST_TABLE[roast_code]["base_temp"] - 2
-    sw *= 1 - abs(temp - optimal_sw_temp) * 0.01
-    sw += constants.SW_TIME_MAX * (1.0 - math.exp(-constants.K_SW * effective_steep))
+    sw *= 1 - abs(temp - optimal_sw_temp) * 0.015
+    # 乘法時間函數：短浸泡 = 糖類未充分發展（floor），長浸泡 → 1.0
+    sw *= constants.SW_TIME_FLOOR + (1.0 - constants.SW_TIME_FLOOR) * (
+        1.0 - math.exp(-constants.K_SW * effective_steep))
     sw *= ac_sw_mult
 
     # ── PS (polysaccharides / body) ──────────────────────────────
     ps = base_profile["PS"] * (1.0 + _softplus(constants.DIAL_BASE - dial, k=3.0) * 0.20)
-    ps += constants.PS_TIME_MAX * (1.0 - math.exp(-constants.K_PS * effective_steep))
-    ps *= _softplus(1.0 + (temp - 90) * 0.015, k=10.0)
+    # 乘法時間函數：多醣體需更長時間溶出
+    ps *= constants.PS_TIME_FLOOR + (1.0 - constants.PS_TIME_FLOOR) * (
+        1.0 - math.exp(-constants.K_PS * effective_steep))
+    ps *= _softplus(1.0 + (temp - 90) * 0.022, k=10.0)
     ps *= ps_cga_mult
     ps = _soft_cap(ps, 1.0, k=10.0)
 
@@ -171,16 +175,7 @@ def predict_compounds(
     # ── EY 感知修正 ───────────────────────────────────────────────
     ey_prefer = constants.EY_PREFER[roast_code]
 
-    # SW + PS：sigmoid 發展門控（糖類/香氣/多醣需萃取才能充分釋放）
-    # center 基於豆體密度的物理溶出閾值，不綁 EY_PREFER
-    ey_center = constants.EY_DEV_GATE_CENTER[roast_code]
-    dev_gate = constants.EY_DEV_GATE_FLOOR + (
-        1.0 - constants.EY_DEV_GATE_FLOOR
-    ) * _sigmoid(ey, center=ey_center, k=constants.EY_DEV_GATE_K)
-    profile["SW"] *= dev_gate
-    profile["PS"] *= dev_gate
-
-    # CGA / AC / MEL / CA：冪律修正（無硬截斷，ey_ratio 不設上限）
+    # ── EY 冪律修正（保留：大分子溶出需萃取能量，非口感偏好） ────
     ey_ratio = ey / max(ey_prefer, 1e-6)
     profile["CGA"] *= ey_ratio ** constants.EY_CGA_EXP
     profile["AC"]  *= ey_ratio ** constants.EY_AC_EXP

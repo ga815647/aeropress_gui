@@ -99,20 +99,9 @@ EY_CA_EXP = 0.05  # CA 對 EY 極輕度敏感
 # 發展型化合物（SW + PS）sigmoid 門控
 # 糖類/香氣/多醣需足夠萃取才能充分釋放；取代 PS 的冪律 EY_PS_EXP
 # gate(ey) = floor + (1 - floor) * sigmoid(k * (ey - ey_prefer * center_frac))
-# SW/PS 發展門控：物理閾值（糖類/多醣需足夠萃取才溶出）
-# center 基於豆體密度的物理溶出閾值，不綁 EY_PREFER
-# 淺焙豆密實 → 需更高 EY 才釋放；深焙結構疏鬆 → 較低 EY 即可
-EY_DEV_GATE_CENTER = {
-    "very_light":      14.5,   # 最密實，需高 EY
-    "light":           14.0,
-    "medium_light":    13.5,
-    "medium":          13.0,
-    "moderately_dark": 12.5,
-    "dark":            12.0,
-    "very_dark":       11.5,   # 最疏鬆，低 EY 即可
-}
-EY_DEV_GATE_FLOOR = 0.45        # 極低 EY 保留 45% 基底
-EY_DEV_GATE_K = 0.90            # 門控陡峭度（每 %EY）
+# [已移除] DEV_GATE：SW/PS 不再用 EY 門控
+# SW/PS 的萃取發展完全通過時間/溫度/研磨敏感度表達（K_SW, K_PS, 溫度係數）
+# 理由：EY 和 SW/PS 都是 temp/time/grind 的輸出，用 EY gate SW/PS 是因果倒置
 
 # EY Gaussian 懲罰（分焙度，上下不對稱）
 # sigma_lo：低於 EY_PREFER 一側（欠萃）；sigma_hi：高於 EY_PREFER 一側（過萃）
@@ -177,7 +166,7 @@ COMPOUND_SIGMA_HI = {
     "SW": 0.60,   # 甜超標非常寬鬆
     "PS": 0.60,   # 醇厚超標非常寬鬆
     "CA": 0.25,   # 苦超標懲罰
-    "CGA": 0.18,  # CGA 超標強懲罰（澀感）
+    "CGA": 0.18,  # CGA 超標懲罰（澀感）
     "MEL": 0.25,  # MEL 超標懲罰（焦苦）
 }
 
@@ -216,12 +205,12 @@ TDS_SIGMA_BLEND_K = 5.0      # TDS sigma 平滑混合斜率
 TDS_SUPER_GAUSS_EXP = 4      # 超高斯（平頂 → dose 多元性需靠寬 sigma）
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
-K_SW = 0.003  # 從 0.004 降至 0.003（更慢增長，鼓勵長時間浸泡）
-SW_TIME_MAX = 0.28  # 從 0.25 升至 0.28（更高上限，讓長時間浸泡更有優勢）
+K_SW = 0.010  # 乘法時間函數速率
+SW_TIME_FLOOR = 0.70  # t=0 時 SW 有 70% 基底（較溫和的時間門控）
 
 # 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
-K_PS = 0.005  # 從 0.006 降至 0.005（更慢增長，鼓勵長時間浸泡）
-PS_TIME_MAX = 0.38  # 從 0.35 升至 0.38（更高上限，強化 Aeropress 醇厚度優勢）
+K_PS = 0.008  # 乘法時間函數速率（PS 比 SW 慢）
+PS_TIME_FLOOR = 0.60  # t=0 時 PS 有 60% 基底
 
 # CGA 時間函數參數
 K_CGA_TIME = 0.015
@@ -369,10 +358,10 @@ IDEAL_FLAVOR = {
     ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
     ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 淺焙：Phase 3 校準 — 對齊 Hoffman 120s 預測值（SW≈0.358, PS≈0.378, MEL≈0.037）
-    ("light", "low"): {"AC": 0.13, "SW": 0.36, "PS": 0.34, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    ("light", "mid"): {"AC": 0.12, "SW": 0.36, "PS": 0.37, "CA": 0.06, "CGA": 0.05, "MEL": 0.04},
-    ("light", "high"): {"AC": 0.10, "SW": 0.38, "PS": 0.38, "CA": 0.06, "CGA": 0.04, "MEL": 0.04},
+    # 淺焙：乘法時間模型。CGA/MEL ≤ 0.05 確保超標容易被懲罰
+    ("light", "low"): {"AC": 0.20, "SW": 0.35, "PS": 0.25, "CA": 0.10, "CGA": 0.05, "MEL": 0.05},
+    ("light", "mid"): {"AC": 0.16, "SW": 0.36, "PS": 0.29, "CA": 0.09, "CGA": 0.05, "MEL": 0.05},
+    ("light", "high"): {"AC": 0.13, "SW": 0.37, "PS": 0.29, "CA": 0.11, "CGA": 0.05, "MEL": 0.05},
     ("medium_light", "low"): {"AC": 0.15, "SW": 0.37, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.04},
     ("medium_light", "mid"): {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
     ("medium_light", "high"): {"AC": 0.11, "SW": 0.41, "PS": 0.27, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
