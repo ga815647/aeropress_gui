@@ -117,6 +117,12 @@ EY_SIGMA_HI = {
 EY_GAUSS_WEIGHT = 0.12  # 從 0.18 降至 0.12（進一步降低 EY 懲罰，允許更多萃取變化）
 
 ARRHENIUS_COEFF = 0.05
+# 低溫萃取補正：輸入溫度（temp_initial）低於 K_LOW_TEMP_FLOOR 時啟動飽和補正
+# optimizer 最低搜尋溫度：medium roast 88°C / light roast 93°C → 均高於 87°C 閾值，完全不受影響
+# April 85°C / Championship 80°C 才會觸發補正
+K_LOW_TEMP_FLOOR = 87.0   # °C，基於 temp_initial（注水溫度），非 t_avg
+K_LOW_TEMP_BOOST = 3.0    # 最大補正量（total = 1 + BOOST = 最高 4×）
+K_LOW_TEMP_DECAY = 2.0    # 飽和衰減參數（°C）；deficit / DECAY 作為指數輸入
 CONC_GRADIENT_COEFF = 0.5
 # §16 再評估後：貼近實務，漏水量由低估修正（0.30→0.38、η 1→1.2、上限 12%→18%）
 PRE_SEAL_DRIP_RATE_REF = 0.38
@@ -124,6 +130,7 @@ PRE_SEAL_DRIP_DIAL_EXP = 1.2
 PRE_SEAL_DRIP_MAX_RATIO = 0.18
 DOSE_DRIP_REF = 18.0  # 豆量阻力修正基準值（g）；dose=18g 時修正係數為 1.0
                        # 指數 0.3 為保守估算，待實測「不同豆量 × 固定刻度」漏水量後校正
+PARTIAL_SEAL_FLOW_FACTOR = 0.35  # 半密封（活塞插入 ~1cm）的相對流量係數；待實測後校正
 PRE_SEAL_CONTACT_FRACTION = 0.20
 PRE_SEAL_PERCOLATION_EFFICIENCY = 0.03
 PRE_SEAL_AC_MULT = 1.35
@@ -363,7 +370,7 @@ COMPOUND_BASE = {
 # Hoffman 錨點（standard 11g/200ml/120s）約 86-87 分（日常好喝配方，非極限）
 SCORE_NORM_MU = {
     "very_light":      0.926,
-    "light":           0.975,
+    "light":           0.960,
     "medium_light":    0.937,
     "medium":          0.928,
     "moderately_dark": 0.931,

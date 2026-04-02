@@ -28,6 +28,7 @@ def _calc_phase_ey(
     t_kinetic: float,
     dose: float,
     free_water: float,
+    k_low_boost: float = 1.0,
 ) -> float:
     cfg = constants.ROAST_TABLE[roast_code]
     r = constants.COOL_RATE
@@ -40,7 +41,7 @@ def _calc_phase_ey(
     else:
         t_avg = temp_slurry
 
-    k_base_dynamic = constants.K_BASE * math.exp((t_avg - 90) * constants.ARRHENIUS_COEFF)
+    k_base_dynamic = constants.K_BASE * math.exp((t_avg - 90) * constants.ARRHENIUS_COEFF) * k_low_boost
     k_b = k_base_dynamic * constants.K_BOULDERS_MULT * (1.8 ** ((constants.DIAL_BASE - dial) / 0.5))
     k_b = max(constants.K_MIN, min(k_b, constants.K_MAX))
     k_f = min(k_b * constants.K_FINES_MULT, constants.K_MAX * constants.K_FINES_MULT)
@@ -77,6 +78,12 @@ def calc_ey(
     seal_delay: float = constants.SEAL_DELAY_DEFAULT,
     swirl_wait_sec: int = 0,
     area_cm2: float = 43.0,
+    inverted: bool = False,
+    pre_pour_ml: float = 0.0,
+    pre_pour_sec: float = 0.0,
+    n_swirls: int = 1,
+    partial_seal_sec: float = 0.0,
+    partial_seal_water_ml: float = 0.0,
 ) -> float:
     heat_water = water_ml
     heat_coffee = dose * constants.COFFEE_SPECIFIC_HEAT_RATIO
@@ -85,26 +92,57 @@ def calc_ey(
 
     swirl_mult = 1.0 + constants.SWIRL_CONVECTION_BASE * (constants.SWIRL_DOSE_REF / dose)
     t_kinetic = (max(0.0, steep_sec - pour_offset)
-                 + constants.SWIRL_TIME_SEC * swirl_mult
+                 + constants.SWIRL_TIME_SEC * swirl_mult * max(n_swirls, 1)
                  + swirl_wait_sec * constants.SWIRL_WAIT_EXT_MULT
                  + press_equiv)
 
     retention_water = dose * calc_retention(roast_code, dial)
     drip_time = water_ml / constants.POUR_RATE + seal_delay
-    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2=area_cm2)
-    main_free_water = max(water_ml - drip_volume - retention_water, 1.0)
-    main_ey = _calc_phase_ey(roast_code, t_slurry, dial, t_kinetic, dose, main_free_water)
 
-    drip_contact_time = drip_time * constants.PRE_SEAL_CONTACT_FRACTION
-    drip_ey = _calc_phase_ey(
-        roast_code,
-        t_slurry,
-        dial,
-        drip_contact_time,
-        dose,
-        max(drip_volume, 1.0),
-    )
-    ey = main_ey + drip_ey * constants.PRE_SEAL_PERCOLATION_EFFICIENCY
+    # 倒置法：無濾杯底部 → 無預密封漏水
+    if inverted:
+        drip_volume = 0.0
+    else:
+        drip_volume = calc_drip_volume(
+            water_ml, dial, drip_time, dose, area_cm2=area_cm2,
+            partial_seal_sec=partial_seal_sec,
+            partial_seal_water_ml=partial_seal_water_ml,
+        )
+
+    main_free_water = max(water_ml - drip_volume - retention_water, 1.0)
+
+    # 二段注水補正（April 式：pre_pour_ml 先行接觸 pre_pour_sec 秒，濃度梯度較高）
+    if pre_pour_ml > 0 and pre_pour_sec > 0 and steep_sec > 0:
+        retention_p1 = retention_water * (pre_pour_ml / water_ml)
+        free_water_p1 = max(pre_pour_ml - retention_p1, 1.0)
+        w1 = min(pre_pour_sec / steep_sec, 1.0)
+        effective_free_water = free_water_p1 * w1 + main_free_water * (1.0 - w1)
+    else:
+        effective_free_water = main_free_water
+
+    # 低溫萃取補正：基於 temp_initial，確保 optimizer 搜尋範圍（medium 88°C+）完全不受影響
+    if temp_initial < constants.K_LOW_TEMP_FLOOR:
+        deficit = constants.K_LOW_TEMP_FLOOR - temp_initial
+        k_low_boost = 1.0 + constants.K_LOW_TEMP_BOOST * (1.0 - math.exp(-deficit / constants.K_LOW_TEMP_DECAY))
+    else:
+        k_low_boost = 1.0
+
+    main_ey = _calc_phase_ey(roast_code, t_slurry, dial, t_kinetic, dose, effective_free_water, k_low_boost)
+
+    if inverted:
+        ey = main_ey
+    else:
+        drip_contact_time = drip_time * constants.PRE_SEAL_CONTACT_FRACTION
+        drip_ey = _calc_phase_ey(
+            roast_code,
+            t_slurry,
+            dial,
+            drip_contact_time,
+            dose,
+            max(drip_volume, 1.0),
+            k_low_boost,
+        )
+        ey = main_ey + drip_ey * constants.PRE_SEAL_PERCOLATION_EFFICIENCY
 
     if water_gh < 20:
         ey *= 0.94

@@ -11,6 +11,8 @@ def calc_drip_volume(
     drip_time: float,
     dose: float = 18.0,
     area_cm2: float = 43.0,
+    partial_seal_sec: float = 0.0,
+    partial_seal_water_ml: float = 0.0,
 ) -> float:
     if water_ml <= 0 or drip_time <= 0:
         return 0.0
@@ -24,6 +26,21 @@ def calc_drip_volume(
     # XL 內徑 90mm vs Standard 74mm → area_mult = 63.6/43.0 ≈ 1.48
     area_mult = area_cm2 / constants.DRIP_AREA_REF_CM2
     raw_volume = constants.PRE_SEAL_DRIP_RATE_REF * drip_time * dial_mult * dose_resist_mult * area_mult
+
+    # 半密封補正（April 式：活塞插入 ~1cm，產生額外受控滲流）
+    # 物理：半密封允許約 PARTIAL_SEAL_FLOW_FACTOR 倍的全開流量，
+    #       但腔內僅 partial_seal_water_ml 產生靜水壓
+    if partial_seal_sec > 0 and partial_seal_water_ml > 0:
+        hydrostatic_ratio = min(partial_seal_water_ml / max(water_ml, 1.0), 1.0)
+        ps_drip = (constants.PRE_SEAL_DRIP_RATE_REF
+                   * constants.PARTIAL_SEAL_FLOW_FACTOR
+                   * partial_seal_sec
+                   * dial_mult
+                   * dose_resist_mult
+                   * area_mult
+                   * hydrostatic_ratio)
+        raw_volume += ps_drip
+
     capped_volume = min(raw_volume, water_ml * constants.PRE_SEAL_DRIP_MAX_RATIO)
     return round(max(0.0, capped_volume), 3)
 

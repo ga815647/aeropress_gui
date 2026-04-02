@@ -79,15 +79,29 @@ def predict_compounds(
     dose: float = 18.0,
     press_sec: float = 30.0,
     area_cm2: float = 43.0,
+    inverted: bool = False,
+    n_swirls: int = 1,
+    partial_seal_sec: float = 0.0,
+    partial_seal_water_ml: float = 0.0,
 ) -> dict:
-    effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv
+    # n_swirls: 多次攪拌增加有效接觸時間（每次額外 SWIRL_TIME_SEC 的動能補正）
+    extra_swirl_time = constants.SWIRL_TIME_SEC * max(n_swirls - 1, 0)
+    effective_steep = max(0.0, steep_sec - pour_offset) + press_equiv + extra_swirl_time
     main_profile = _predict_closed_compounds(
         roast_code, temp, dial, effective_steep, water_mg_frac, water_gh
     )
 
-    drip_time = water_ml / constants.POUR_RATE + seal_delay
-    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2=area_cm2)
-    drip_ratio = min(max(drip_volume / max(water_ml, 1e-6), 0.0), 0.35)
+    # 倒置法：無預密封漏水 → drip_ratio = 0
+    if inverted:
+        drip_ratio = 0.0
+    else:
+        drip_time = water_ml / constants.POUR_RATE + seal_delay
+        drip_volume = calc_drip_volume(
+            water_ml, dial, drip_time, dose, area_cm2=area_cm2,
+            partial_seal_sec=partial_seal_sec,
+            partial_seal_water_ml=partial_seal_water_ml,
+        )
+        drip_ratio = min(max(drip_volume / max(water_ml, 1e-6), 0.0), 0.35)
 
     if drip_ratio > 0:
         drip_profile = _predict_closed_compounds(
