@@ -49,14 +49,14 @@ def optimize(
     if temp_range is not None:
         temp_lo, temp_hi = temp_range
     else:
-        temp_lo = base_temp - 3
+        temp_lo = base_temp - 15
         temp_hi = int(min(base_temp + 3, constants.TEMP_BOILING_POINT))
 
-    steep_values = [fixed_steep] if fixed_steep is not None else range(60, 241, constants.STEEP_STEP)
+    steep_values = [fixed_steep] if fixed_steep is not None else range(30, 421, constants.STEEP_STEP)
     dose_values = [int(fixed_dose * 2)] if fixed_dose is not None else range(dose_min_x2, dose_max_x2 + 1)
 
     for temp in range(temp_lo, temp_hi + 1):
-        for dial_x10 in range(35, 66):
+        for dial_x10 in range(30, 76):
             dial = dial_x10 / 10
             for steep in steep_values:
                 for dose_x2 in dose_values:

@@ -4,31 +4,9 @@ import math
 
 import constants
 
-_SQRT2 = math.sqrt(2)
-
-
-def _norm_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / _SQRT2))
-
 _TDS_ANCHOR_LIST = [1.00, 1.20, 1.40]
 _WEIGHT_TOTAL = sum(constants.WEIGHTS.values())
 _CONC_FLOOR = 1e-8
-_W1 = constants.BALANCE_PENALTY_WEIGHT
-_W2 = constants.BODY_BITTER_PENALTY_WEIGHT
-
-
-def _huber(x: float, delta: float) -> float:
-    ax = abs(x)
-    return 0.5 * ax * ax if ax <= delta else delta * (ax - 0.5 * delta)
-
-
-def _huber_asym(x: float, delta: float, compound: str) -> float:
-    base = _huber(x, delta)
-    if compound in ("CA", "CGA", "MEL") and x > 0:
-        return base * constants.ASYM_BITTER_MULT
-    if compound == "SW" and x < 0:
-        return base * constants.ASYM_SWEET_MULT
-    return base
 
 
 def compute_actual_abs(actual_raw: dict, tds: float) -> dict:
@@ -71,190 +49,71 @@ def flavor_score(
     ey: float = 0.0,
     steep_sec: float = 0.0,
 ) -> float:
+
+    # ── 1. 感知前處理（物理，非評分邏輯） ────────────────────────────────
     actual_abs = compute_actual_abs(actual_raw, tds)
-    kh_penalty = max(0.65, math.exp(-water_kh / constants.KH_PERCEPT_DECAY))
     actual_perceived = dict(actual_abs)
-    actual_perceived["AC"] = actual_abs["AC"] * kh_penalty
 
-    if temp_initial > constants.SW_AROMA_THRESH:
-        sw_loss = min(
-            (temp_initial - constants.SW_AROMA_THRESH) * constants.SW_AROMA_SLOPE,
-            constants.SW_AROMA_CAP,
-        )
-        actual_perceived["SW"] = actual_abs["SW"] * (1.0 - sw_loss)
+    # KH 壓制酸質感知
+    actual_perceived["AC"] = actual_abs["AC"] * max(0.65, math.exp(-water_kh / constants.KH_PERCEPT_DECAY))
 
+    # 高溫 SW 香氣損失（連續，max 僅作數值保護）
+    excess_temp = max(temp_initial - constants.SW_AROMA_THRESH, 0.0)
+    sw_loss = min(excess_temp * constants.SW_AROMA_SLOPE, constants.SW_AROMA_CAP)
+    actual_perceived["SW"] = actual_abs["SW"] * (1.0 - sw_loss)
+
+    # 高溫焦苦放大（深焙焦化物理，焙度分支合法）
     scorch_threshold, cga_sens, mel_sens = constants.SCORCH_PARAMS[roast_code]
     if t_slurry > scorch_threshold:
         excess = t_slurry - scorch_threshold
         if cga_sens > 0:
-            actual_perceived["CGA"] = actual_abs["CGA"] * (1.0 + excess * cga_sens)
+            actual_perceived["CGA"] *= (1.0 + excess * cga_sens)
         if mel_sens > 0:
-            actual_perceived["MEL"] = actual_abs["MEL"] * (1.0 + excess * mel_sens)
+            actual_perceived["MEL"] *= (1.0 + excess * mel_sens)
 
-    # v5.11: 理想苦味下修，縮小模型與實感落差（高溫苦突出）
+    # 軟水放大苦味感知（preprocessing，取代舊的 soft_water_penalty 分數乘數）
+    gh_soft_factor = max(1.0 - water_gh / constants.LOW_GH_THRESHOLD, 0.0)
+    if gh_soft_factor > 0:
+        for k in ("CA", "CGA", "MEL"):
+            actual_perceived[k] *= (1.0 + gh_soft_factor * constants.SOFT_WATER_BITTER_AMP)
+
+    # ── 2. 理想苦味微調 ────────────────────────────────────────────────
     ideal_adj = dict(ideal_abs)
     for k in ("CA", "CGA", "MEL"):
         ideal_adj[k] = ideal_abs[k] * constants.IDEAL_BITTER_REDUCTION
 
-    dot = sum(
-        constants.WEIGHTS[k]
-        * actual_perceived[k]
-        * (ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k])
-        for k in constants.KEYS
-    )
-    norm_a = math.sqrt(
-        sum(constants.WEIGHTS[k] * actual_perceived[k] ** 2 for k in constants.KEYS)
-    )
-    norm_i = math.sqrt(
-        sum(
-            constants.WEIGHTS[k]
-            * (ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k]) ** 2
-            for k in constants.KEYS
-        )
-    )
-    cosine_sim = dot / (norm_a * norm_i) if (norm_a > 0 and norm_i > 0) else 0.0
+    # ── 3. 化合物品質獎勵（log-ratio Gaussian，黃金交叉在 actual = ideal） ──
+    # 每個化合物：接近理想 → 貢獻滿分；偏離依 sigma 衰減
+    # 非對稱 sigma：苦超標嚴懲（sigma_hi 小）、甜/醇不足嚴懲（sigma_lo 小）
+    compound_loss = 0.0
+    for k in constants.KEYS:
+        ref = max(ideal_adj[k], _CONC_FLOOR)
+        log_dev = math.log(max(actual_perceived[k], _CONC_FLOOR) / ref)
+        sigma = constants.COMPOUND_SIGMA_HI[k] if log_dev > 0 else constants.COMPOUND_SIGMA_LO[k]
+        compound_loss += constants.WEIGHTS[k] * (log_dev / sigma) ** 2
+    compound_reward = math.exp(-compound_loss / _WEIGHT_TOTAL)
 
-    conc_loss = sum(
-        constants.WEIGHTS[k]
-        * _huber_asym(
-            (actual_perceived[k] - max(ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k], constants.CONC_SENSITIVITY_FLOOR))
-            / max(ideal_adj[k] if k in ("CA", "CGA", "MEL") else ideal_abs[k], constants.CONC_SENSITIVITY_FLOOR),
-            constants.CONC_HUBER_DELTA,
-            k,
-        )
-        for k in constants.KEYS
-    ) / _WEIGHT_TOTAL
-    conc_score = math.exp(-conc_loss)
-
-    i_ac_sw = ideal_abs["AC"] / max(ideal_abs["SW"], _CONC_FLOOR)
-    a_ac_sw = actual_perceived["AC"] / max(actual_perceived["SW"], _CONC_FLOOR)
-    b_ac_sw = math.exp(-_huber((a_ac_sw - i_ac_sw) / max(i_ac_sw, _CONC_FLOOR), constants.CONC_HUBER_DELTA))
-
-    mel_coeff = constants.MEL_BITTER_COEFF[roast_code]
-    i_bitter = max(ideal_adj["CA"] + ideal_adj["CGA"] + ideal_adj["MEL"] * mel_coeff, _CONC_FLOOR)
-    a_bitter = max(
-        actual_perceived["CA"] + actual_perceived["CGA"] + actual_perceived["MEL"] * mel_coeff,
-        _CONC_FLOOR,
-    )
-    i_ps_r = ideal_abs["PS"] / i_bitter
-    a_ps_r = actual_perceived["PS"] / a_bitter
-    b_ps = math.exp(-_huber((a_ps_r - i_ps_r) / max(i_ps_r, _CONC_FLOOR), constants.CONC_HUBER_DELTA))
-
-    # v5.11: 軟水（如 RO）苦味感知加權：低 GH 時苦味更明顯，超標加重懲罰
-    soft_water_penalty = 1.0
-    if water_gh < constants.LOW_GH_THRESHOLD and a_bitter > i_bitter:
-        excess_ratio = (a_bitter - i_bitter) / max(i_bitter, _CONC_FLOOR)
-        soft_water_penalty = math.exp(-constants.SOFT_WATER_BITTER_SLOPE * excess_ratio)
-
-    # v5.11: 酸高甜低（低溫酸出、香味不足）懲罰
-    acid_without_sweet_penalty = 1.0
-    if actual_perceived["AC"] > ideal_abs["AC"] and actual_perceived["SW"] < ideal_abs["SW"]:
-        ac_excess = (actual_perceived["AC"] - ideal_abs["AC"]) / max(ideal_abs["AC"], _CONC_FLOOR)
-        sw_deficit = (ideal_abs["SW"] - actual_perceived["SW"]) / max(ideal_abs["SW"], _CONC_FLOOR)
-        acid_without_sweet_penalty = math.exp(
-            -constants.AC_WITHOUT_SWEET_SLOPE * min(ac_excess, sw_deficit)
-        )
-
+    # ── 4. TDS 品質因子（非對稱 Gaussian） ────────────────────────────
     tds_prefer = constants.TDS_PREFER[roast_code]
     diff = tds - tds_prefer
-    sigma = constants.TDS_GAUSS_SIGMA_LOW if diff < 0 else constants.TDS_GAUSS_SIGMA_HIGH
-    tds_gauss = math.exp(-0.5 * (diff / sigma) ** 2)
+    sigma_tds = constants.TDS_GAUSS_SIGMA_LOW if diff < 0 else constants.TDS_GAUSS_SIGMA_HIGH
+    tds_gauss = math.exp(-0.5 * (diff / sigma_tds) ** 2)
     w3 = constants.TDS_W3_LOW if diff < 0 else constants.TDS_W3_HIGH
     tds_factor = 1 - w3 + w3 * tds_gauss
 
-    cga_anchor_ideal = build_ideal_abs(roast_code, constants.TDS_PREFER[roast_code])
-    cga_ideal_anchor = max(cga_anchor_ideal["CGA"], _CONC_FLOOR)
-    cga_actual = actual_perceived["CGA"]
-    cga_ratio = cga_actual / cga_ideal_anchor
-    cga_astringency = 1.0
-    if cga_ratio > constants.CGA_ASTRINGENCY_THRESHOLD:
-        excess_ratio = cga_ratio / constants.CGA_ASTRINGENCY_THRESHOLD - 1.0
-        cga_astringency = math.exp(-constants.CGA_ASTRINGENCY_SLOPE * excess_ratio**2)
-
-    ac_excess_ratio = max(actual_perceived["AC"] / max(ideal_abs["AC"], _CONC_FLOOR) - 1.0, 0)
-    cga_excess_ratio = max(cga_ratio / constants.CGA_ASTRINGENCY_THRESHOLD - 1.0, 0)
-    harshness_product = ac_excess_ratio * cga_excess_ratio
-    harshness_penalty = math.exp(-constants.HARSHNESS_SLOPE * harshness_product) if harshness_product > 0 else 1.0
-
-    ashy_penalty = 1.0
-    if roast_code in ("moderately_dark", "dark", "very_dark"):
-        mel_excess_ratio = max(actual_perceived["MEL"] / max(ideal_abs["MEL"], _CONC_FLOOR) - 1.0, 0)
-        ashy_product = mel_excess_ratio * cga_excess_ratio
-        ashy_penalty = math.exp(-constants.ASHY_SLOPE * ashy_product) if ashy_product > 0 else 1.0
-
-    # 口感平衡綜合懲罰：避免 AC/SW/PS 三者中任何一項過度突出
-    # 計算理想比例與實際比例的差異
-    i_ac_sw_ps_sum = ideal_abs["AC"] + ideal_abs["SW"] + ideal_abs["PS"]
-    a_ac_sw_ps_sum = actual_perceived["AC"] + actual_perceived["SW"] + actual_perceived["PS"]
-    
-    if i_ac_sw_ps_sum > 0 and a_ac_sw_ps_sum > 0:
-        # 計算各項的相對比例
-        i_ac_ratio = ideal_abs["AC"] / i_ac_sw_ps_sum
-        i_sw_ratio = ideal_abs["SW"] / i_ac_sw_ps_sum
-        i_ps_ratio = ideal_abs["PS"] / i_ac_sw_ps_sum
-        
-        a_ac_ratio = actual_perceived["AC"] / a_ac_sw_ps_sum
-        a_sw_ratio = actual_perceived["SW"] / a_ac_sw_ps_sum
-        a_ps_ratio = actual_perceived["PS"] / a_ac_sw_ps_sum
-        
-        # 計算比例差異的平方和
-        ratio_diff_sq = (
-            (a_ac_ratio - i_ac_ratio) ** 2 +
-            (a_sw_ratio - i_sw_ratio) ** 2 +
-            (a_ps_ratio - i_ps_ratio) ** 2
-        )
-        
-        # 應用懲罰：差異越大，懲罰越重
-        triad_penalty = math.exp(-constants.BALANCE_TRIAD_SLOPE * ratio_diff_sq)
-    else:
-        triad_penalty = 1.0
-
+    # ── 5. EY 底線（過程變數，極低權重） ─────────────────────────────
     ey_prefer = constants.EY_PREFER[roast_code]
     ey_diff = ey - ey_prefer
-    ey_sigma = (
-        constants.EY_SIGMA_HI[roast_code] if ey_diff > 0
-        else constants.EY_SIGMA_LO[roast_code]
-    )
+    ey_sigma = constants.EY_SIGMA_HI[roast_code] if ey_diff > 0 else constants.EY_SIGMA_LO[roast_code]
     ey_gauss = math.exp(-0.5 * (ey_diff / ey_sigma) ** 2)
     ey_factor = 1.0 - constants.EY_GAUSS_WEIGHT + constants.EY_GAUSS_WEIGHT * ey_gauss
 
-    # 口感平衡綜合懲罰加權納入
-    triad_weighted = 1.0 - constants.BALANCE_TRIAD_WEIGHT + constants.BALANCE_TRIAD_WEIGHT * triad_penalty
-    
-    # 淺焙短時間不均勻萃取懲罰 (Uneven Extraction Penalty)
-    uneven_penalty = 1.0
-    if roast_code in ("very_light", "light") and 0 < steep_sec < constants.SHORT_STEEP_PENALTY_THRESH:
-        deficit_ratio = (constants.SHORT_STEEP_PENALTY_THRESH - steep_sec) / constants.SHORT_STEEP_PENALTY_THRESH
-        uneven_penalty = 1.0 - constants.UNEVEN_EXTRACTION_WEIGHT * (deficit_ratio ** 1.5)
+    # ── 6. TDS 硬底線（連續，太淡無口感） ────────────────────────────
+    tds_floor_factor = min(tds / constants.TDS_BROWN_WATER_FLOOR, 1.0) ** 2
 
-    final = (
-        cosine_sim
-        * conc_score
-        * (1 - _W1 + _W1 * b_ac_sw)
-        * (1 - _W2 + _W2 * b_ps)
-        * tds_factor
-        * cga_astringency
-        * harshness_penalty
-        * ashy_penalty
-        * soft_water_penalty
-        * acid_without_sweet_penalty
-        * ey_factor
-        * triad_weighted
-        * uneven_penalty
-    )
-
-    if tds < constants.TDS_BROWN_WATER_FLOOR:
-        final *= (tds / constants.TDS_BROWN_WATER_FLOOR) ** 2
-
-    return final
+    return compound_reward * tds_factor * ey_factor * tds_floor_factor
 
 
 def score_to_display(raw: float, roast_code: str) -> float:
-    """將 flavor_score 回傳的 raw (0–1) 透過 Normal CDF 映射到顯示用分數 (0–100)。
-    各焙度使用獨立的 μ，讓每個焙度的典型最佳都能得約 97-98 分。
-    """
-    mu = constants.SCORE_NORM_MU[roast_code]
-    z = (raw - mu) / constants.SCORE_NORM_SIGMA
-    z_max = (1.0 - mu) / constants.SCORE_NORM_SIGMA
-    display = _norm_cdf(z) / _norm_cdf(z_max) * 100
-    return round(display, 1)
+    """raw (0–1) → 顯示用分數 (0–100)。直接線性映射。"""
+    return round(raw * 100, 1)
