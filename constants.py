@@ -2,16 +2,16 @@ BREWER_PRESETS = {
     "standard": {
         "name": "AeroPress 標準版",
         "water_ml": 200,
-        "dose_min": 9.0,
-        "dose_max": 18.0,
+        "dose_min": 7.0,
+        "dose_max": 21.0,
         "fixed_press_sec": 30,
         "area_cm2": 43.0,   # 內徑 ~74mm → π×37²≈43 cm²
     },
     "xl": {
         "name": "AeroPress XL",
         "water_ml": 400,
-        "dose_min": 18.0,
-        "dose_max": 30.0,
+        "dose_min": 15.0,
+        "dose_max": 36.0,
         "fixed_press_sec": 40,
         "area_cm2": 63.6,   # 內徑 ~90mm → π×45²≈63.6 cm²
     },
@@ -90,9 +90,19 @@ EY_PREFER = {
 }
 
 # EY 感知修正指數（待實測校正，保守估算）
-EY_PS_EXP = 0.7   # PS 對 EY 最敏感（大分子萃出慢）；Hoffman 校正：強化短浸泡欠萃懲罰
-EY_CGA_EXP = 0.2  # CGA 對 EY 中等敏感
-EY_AC_EXP = 0.1   # AC 對 EY 最不敏感（小分子早期萃出）
+EY_PS_EXP = 0.65  # [已棄用] PS 改用 EY_DEV_GATE sigmoid 門控；保留供向後相容
+EY_CGA_EXP = 0.55 # CGA 對 EY 敏感（大分子結合型，需充分萃取才大量釋出）
+EY_AC_EXP = 0.05  # AC 對 EY 最不敏感（小分子最早萃出，EY 依賴極低）
+EY_MEL_EXP = 0.15 # MEL 隨萃取輕度增加（梅納反應產物）
+EY_CA_EXP = 0.05  # CA 對 EY 極輕度敏感
+
+# 發展型化合物（SW + PS）sigmoid 門控
+# 糖類/香氣/多醣需足夠萃取才能充分釋放；取代 PS 的冪律 EY_PS_EXP
+# gate(ey) = floor + (1 - floor) * sigmoid(k * (ey - ey_prefer * center_frac))
+# 設計：Hoffman(EY=21) → gate≈1.0；Championship(EY=15.6) → gate≈0.95；Under(EY=9.5) → gate≈0.58
+EY_DEV_GATE_CENTER_FRAC = 0.62  # gate=0.5 對應 EY_PREFER 的 62%（light: 13.0%）
+EY_DEV_GATE_FLOOR = 0.55        # 即使極低 EY 仍保留 55% 基底
+EY_DEV_GATE_K = 0.80            # 門控陡峭度（每 %EY）
 
 # EY Gaussian 懲罰（分焙度，上下不對稱）
 # sigma_lo：低於 EY_PREFER 一側（欠萃）；sigma_hi：高於 EY_PREFER 一側（過萃）
@@ -114,7 +124,7 @@ EY_SIGMA_HI = {
     "dark":            2.5,
     "very_dark":       3.0,
 }
-EY_GAUSS_WEIGHT = 0.12  # 從 0.18 降至 0.12（進一步降低 EY 懲罰，允許更多萃取變化）
+EY_GAUSS_WEIGHT = 0.06  # EY 是過程變數非杯中物品質指標，保留最小防欠萃底線即可
 
 ARRHENIUS_COEFF = 0.05
 # 低溫萃取補正：輸入溫度（temp_initial）低於 K_LOW_TEMP_FLOOR 時啟動飽和補正
@@ -140,33 +150,42 @@ PRE_SEAL_CA_MULT = 0.78
 PRE_SEAL_CGA_MULT = 0.88
 PRE_SEAL_MEL_MULT = 0.60
 
-CONC_HUBER_DELTA = 0.5
-BALANCE_PENALTY_WEIGHT = 0.15  # 從 0.22 降至 0.15（降低酸甜平衡懲罰，允許更豐富風味）
-BODY_BITTER_PENALTY_WEIGHT = 0.18  # 從 0.25 降至 0.18（降低醇苦比懲罰，接受更多層次）
+# 化合物感知 sigma（log-ratio 空間，非對稱）
+# 黃金交叉：actual_perceived = ideal 時 compound_reward = 1.0；偏離按 sigma 衰減
+# sigma_lo：低於理想（加分化合物不足 / 苦味化合物不足均寬鬆）
+# sigma_hi：高於理想（苦味超標嚴懲、甜感/醇厚超標寬鬆）
+COMPOUND_SIGMA_LO = {
+    "AC": 0.30,   # 酸不足中等容忍
+    "SW": 0.15,   # 甜不足嚴懲（口感核心）
+    "PS": 0.15,   # 醇厚不足嚴懲（body 核心）
+    "CA": 0.80,   # 苦不足完全寬鬆
+    "CGA": 0.80,  # CGA 不足完全寬鬆
+    "MEL": 0.80,  # MEL 不足完全寬鬆
+}
+COMPOUND_SIGMA_HI = {
+    "AC": 0.35,   # 酸超標中等容忍（淺焙特性）
+    "SW": 0.60,   # 甜超標非常寬鬆
+    "PS": 0.60,   # 醇厚超標非常寬鬆
+    "CA": 0.25,   # 苦超標懲罰
+    "CGA": 0.18,  # CGA 超標強懲罰（澀感）
+    "MEL": 0.25,  # MEL 超標懲罰（焦苦）
+}
 
-# 口感平衡綜合懲罰：避免任何風味過度突出而破壞整體均衡
-# 計算 AC/SW/PS 三者比率的懲罰項
-BALANCE_TRIAD_WEIGHT = 0.06  # 從 0.10 降至 0.06（大幅降低三元平衡懲罰）
-BALANCE_TRIAD_SLOPE = 1.0    # 從 1.5 降至 1.0（降低懲罰斜率）
+# 輸出顯示用（terminal.py / export.py / webapp.py 使用，不進評分公式）
 MEL_BITTER_COEFF = {
     "very_light": 0.0,
     "light": 0.0,
     "medium_light": 0.0,
-    "medium": 0.1,  # 微調：medium 錨定在 #55 City，其焦苦係數應從 0.0 微調至 0.1，以反映 City Roast 的輕微苦味起始
+    "medium": 0.1,
     "moderately_dark": 0.5,
     "dark": 0.5,
     "very_dark": 0.5,
 }
 
 KH_PERCEPT_DECAY = 150
-ASYM_BITTER_MULT = 2.2  # v5.10: 加強苦味超標懲罰
-ASYM_SWEET_MULT = 1.5
-
-# v5.11: RO/實測口感矯正（高溫苦突出、低溫酸無香、水質權重）
 IDEAL_BITTER_REDUCTION = 0.95  # 理想苦味下修 5%，縮小模型與實感落差
-LOW_GH_THRESHOLD = 20  # ppm；低於此視為軟水（如 RO），苦味感知加權
-SOFT_WATER_BITTER_SLOPE = 2.0  # 軟水時苦味超標之額外懲罰斜率
-AC_WITHOUT_SWEET_SLOPE = 4.0   # 酸高甜低（低溫酸無香）懲罰斜率
+LOW_GH_THRESHOLD = 20          # ppm；低於此視為軟水（如 RO）
+SOFT_WATER_BITTER_AMP = 0.25   # 軟水苦味感知放大係數：GH→0 時苦味感知 +25%（preprocessing）
 
 # 全面上調 TDS 偏好值，鼓勵更濃郁、有層次的萃取（Aeropress 哲學）
 TDS_PREFER = {
@@ -178,8 +197,8 @@ TDS_PREFER = {
     "dark": 1.12,
     "very_dark": 1.09,
 }
-TDS_GAUSS_SIGMA_LOW = 0.15
-TDS_GAUSS_SIGMA_HIGH = 0.20  # v5.10: 收緊過濃懲罰
+TDS_GAUSS_SIGMA_LOW = 0.10   # 太淡懲罰收緊：偏低 TDS 對口感強度影響更直接
+TDS_GAUSS_SIGMA_HIGH = 0.20  # 高 TDS 保持較寬：Championship 1.56% 屬合法高濃縮風格
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
 K_SW = 0.003  # 從 0.004 降至 0.003（更慢增長，鼓勵長時間浸泡）
@@ -192,23 +211,19 @@ PS_TIME_MAX = 0.38  # 從 0.35 升至 0.38（更高上限，強化 Aeropress 醇
 # CGA 時間函數參數
 K_CGA_TIME = 0.015
 CGA_TIME_MAX = 0.50
+CGA_TIME_ONSET = 150  # CGA 時間累積起始點（秒）；softplus 平滑過渡
 
 # 酸質（AC）衰減參數：調整開始衰減時間
 K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
 AC_DECAY_START = 150  # 酸質開始衰減的時間點（從 140 測試值進一步推到 150，確保長浸泡不失酸）
+AC_HIGH_TEMP_THRESH = 95.0  # 揮發性有機酸高溫降解閾值（°C）；softplus 平滑過渡
+AC_HIGH_TEMP_DECAY = 0.020  # 高溫降解斜率（每 softplus 單位損失 2%）
 
-CGA_ASTRINGENCY_THRESHOLD = 1.25
-CGA_ASTRINGENCY_SLOPE = 2.5  # 從 3.0 降至 2.5（稍微放寬長浸泡苦味懲罰，讓 120s+ 更有競爭力）
-HARSHNESS_SLOPE = 5.0
-
-# 淺焙短時間不均勻萃取懲罰（Uneven Extraction Penalty）
-SHORT_STEEP_PENALTY_THRESH = 120  # 秒；低於此視為淺焙不均勻萃取
-UNEVEN_EXTRACTION_WEIGHT = 0.12   # 影響因子
+CGA_ASTRINGENCY_THRESHOLD = 1.25  # diagnose_anchor.py 顯示用，不進評分公式
 
 SW_AROMA_SLOPE = 0.015   # Hoffman 校正：降低高溫懲罰斜率（99°C 僅 3% 損失）
 SW_AROMA_THRESH = 97.0   # Hoffman 校正：96–97°C 完全無懲罰（light 搜尋範圍 93–99°C）
 SW_AROMA_CAP = 0.25      # Hoffman 校正：收緊極端高溫上限
-ASHY_SLOPE = 3.0
 
 MG_PPM_REF = 20.0
 CA_PPM_REF = 30.0
@@ -364,25 +379,11 @@ COMPOUND_BASE = {
     "very_dark":       {"AC": 0.04, "SW": 0.28, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.29},
 }
 
-# 評分展開：Normal CDF 映射，讓分數分布符合鐘形直覺
-# μ 各焙度獨立校準：display(raw_best, μ) ≈ 90（正常條件下典型最佳 ≈ 90 分）
-# 100 分 = raw=1.0 理論上限（天時地利人和：氣溫 + 海拔 + 水質全部理想）
-# Hoffman 錨點（standard 11g/200ml/120s）約 86-87 分（日常好喝配方，非極限）
-SCORE_NORM_MU = {
-    "very_light":      0.926,
-    "light":           0.960,
-    "medium_light":    0.937,
-    "medium":          0.928,
-    "moderately_dark": 0.931,
-    "dark":            0.928,
-    "very_dark":       0.926,
-}
-SCORE_NORM_SIGMA = 0.021
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
 WEIGHTS = {"AC": 1.0, "SW": 1.8, "PS": 2.0, "CA": 1.3, "CGA": 1.3, "MEL": 1.3}
-TDS_W3_LOW = 0.15
-TDS_W3_HIGH = 0.05
+TDS_W3_LOW = 0.70   # 太淡扣分（floor=0.30）：低 TDS 顯著影響口感強度感知
+TDS_W3_HIGH = 0.15  # 高 TDS 輕度懲罰（floor=0.85）：過萃靠 CGA 澀感扣分，不靠 TDS
 CONC_SENSITIVITY_FLOOR = 0.02
 TDS_BROWN_WATER_FLOOR = 0.80
 

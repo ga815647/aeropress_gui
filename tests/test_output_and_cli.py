@@ -105,7 +105,7 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
 
     assert 88 <= temp <= 94
     assert 4.0 <= dial <= 6.5
-    assert 90 <= steep <= 180
+    assert 30 <= steep <= 210
     assert 20 <= dose <= 28
     assert 14 <= ey <= 22
     assert 1.10 <= tds <= 1.35
