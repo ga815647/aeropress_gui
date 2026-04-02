@@ -93,7 +93,7 @@ EY_PREFER = {
 EY_PS_EXP = 0.65  # [已棄用] PS 改用 EY_DEV_GATE sigmoid 門控；保留供向後相容
 EY_CGA_EXP = 0.55 # CGA 對 EY 敏感（大分子結合型，需充分萃取才大量釋出）
 EY_AC_EXP = 0.05  # AC 對 EY 最不敏感（小分子最早萃出，EY 依賴極低）
-EY_MEL_EXP = 0.15 # MEL 隨萃取輕度增加（梅納反應產物）
+EY_MEL_EXP = 0.40 # MEL 隨萃取增加（大分子聚合物需充分萃取）
 EY_CA_EXP = 0.05  # CA 對 EY 極輕度敏感
 
 # 發展型化合物（SW + PS）sigmoid 門控
@@ -218,6 +218,11 @@ K_CGA_TIME = 0.015
 CGA_TIME_MAX = 0.50
 CGA_TIME_ONSET = 150  # CGA 時間累積起始點（秒）；softplus 平滑過渡
 
+# MEL 時間函數參數（大分子聚合物需時間溶出，比 CGA 慢）
+K_MEL_TIME = 0.008      # 溶解速率
+MEL_TIME_MAX = 0.35     # 最大時間增益
+MEL_TIME_ONSET = 80     # 起始時間（秒）；softplus 平滑過渡
+
 # 酸質（AC）衰減參數：調整開始衰減時間
 K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
 AC_DECAY_START = 150  # 酸質開始衰減的時間點（從 140 測試值進一步推到 150，確保長浸泡不失酸）
@@ -242,8 +247,8 @@ STEEP_STEP = 30
 
 # 各焙度研磨粗細偏好（Hoffman 450–600µm EK43 → ZP6 等效 dial ≈ 4.3 為錨點）
 # 懲罰公式：score × (1 - W + W × exp(-0.5 × ((dial - prefer)/sigma)²))
-DIAL_PREFER_WEIGHT = 0.06  # 最大 6% 懲罰（軟約束）
-DIAL_PREFER_SIGMA = 1.0    # ±1.0 dial 以內 < 2.5% 懲罰
+DIAL_PREFER_WEIGHT = 0.15  # 最大 15% 懲罰（Phase 3 提升鑑別度）
+DIAL_PREFER_SIGMA = 0.6    # ±0.6 dial 懲罰區間（Phase 3 收緊）
 
 TEMP_BOILING_POINT = 100.0
 SCORCH_PARAMS = {
@@ -354,11 +359,10 @@ IDEAL_FLAVOR = {
     ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
     ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 淺焙：對齊化合物模型實際預測值（PS~0.355, SW~0.381 for Hoffman anchor）
-    # 原 PS=0.27 遠低於模型預測，造成濃度懲罰系統性壓制長浸泡配方
-    ("light", "low"): {"AC": 0.13, "SW": 0.37, "PS": 0.33, "CA": 0.08, "CGA": 0.06, "MEL": 0.03},
-    ("light", "mid"): {"AC": 0.12, "SW": 0.38, "PS": 0.35, "CA": 0.07, "CGA": 0.05, "MEL": 0.03},
-    ("light", "high"): {"AC": 0.10, "SW": 0.39, "PS": 0.38, "CA": 0.06, "CGA": 0.04, "MEL": 0.03},
+    # 淺焙：Phase 3 校準 — 對齊 Hoffman 120s 預測值（SW≈0.358, PS≈0.378, MEL≈0.037）
+    ("light", "low"): {"AC": 0.13, "SW": 0.36, "PS": 0.34, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
+    ("light", "mid"): {"AC": 0.12, "SW": 0.36, "PS": 0.37, "CA": 0.06, "CGA": 0.05, "MEL": 0.04},
+    ("light", "high"): {"AC": 0.10, "SW": 0.38, "PS": 0.38, "CA": 0.06, "CGA": 0.04, "MEL": 0.04},
     ("medium_light", "low"): {"AC": 0.15, "SW": 0.37, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.04},
     ("medium_light", "mid"): {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
     ("medium_light", "high"): {"AC": 0.11, "SW": 0.41, "PS": 0.27, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},

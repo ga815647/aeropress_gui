@@ -89,6 +89,10 @@ def _predict_closed_compounds(
 
     # ── MEL (melanoidins / roasty bitterness) ────────────────────
     mel = base_profile["MEL"] * (1 + (temp - 90) * 0.01)
+    mel *= 1.0 + constants.MEL_TIME_MAX * (
+        1.0 - math.exp(-constants.K_MEL_TIME * _softplus(
+            effective_steep - constants.MEL_TIME_ONSET, k=0.10))
+    )
 
     return {
         "AC": ac,
