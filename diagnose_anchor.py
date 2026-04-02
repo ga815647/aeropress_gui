@@ -9,33 +9,31 @@
   好喝不好喝跟泡法無關。評分看的是杯中物（化合物比例 + TDS），
   不是過程（幾度水、幾秒浸泡）。EY 是過程變數，不得作為主要扣分依據。
 
-  April/Championship 使用各自的 ideal 向量和 TDS_prefer，
-  這不是偷吃步——而是正確以「該食譜的目標風格」作為評分基準：
-  • 酸質食譜應以酸質 ideal 評估（ACIDITY_IDEAL + TDS_prefer=1.17）
-  • 甜感醇厚應以甜感 ideal 評估（SWEETNESS_IDEAL + TDS_prefer=1.56）
-  高濃縮配方（Championship TDS=1.56%）不應被 TDS_PREFER=1.27 的 Gaussian 嚴懲，
-  因為高濃縮下化合物品質（SW+PS>0.70、無苦澀超標）本身仍優秀。
+  所有錨點（Hoffman / April / Championship）使用同一個 flavor_score()。
+  偏酸（April）和偏甜（Championship）食譜的分數低於平衡（Hoffman）是正常現象，
+  因為它們偏離了 IDEAL_FLAVOR 均衡目標。化合物比值獎勵（AC/CGA、SW/bitter）
+  會部分補償這些偏離，但不會完全抵消。
 
   三食譜「分數不低」的物理原因：
-  • Hoffman  (TDS=1.23%)：化合物均衡，接近 balanced ideal；TDS 僅低 0.04
-  • April    (TDS=1.17%)：AC > CGA/MEL（純淨酸質）；TDS 在 SCA ideal 範圍
-  • Champion (TDS=1.56%)：SW+PS > 0.70；SW > MEL/CGA；刻意高濃縮
+  • Hoffman  (TDS=1.27%)：化合物均衡，接近 balanced ideal；TDS 接近 TDS_PREFER
+  • April    (TDS=1.17%)：AC > CGA/MEL（純淨酸質）；ratio_bonus 補償
+  • Champion (TDS=1.56%)：SW+PS > 0.70；ratio_bonus 補償；TDS 寬腰 Super-Gaussian
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 錨點一（Hoffman 平衡）：
   研磨：4 EK43 / 450-600um -> ZP6 dial ~4.3
   水溫：208°F = 97.8°C；浸泡：120s；劑量：11g / 200ml
-  TDS：1.23%（實測）；門檻：score >= 84（score 鑑別度改革後需重新校準）
+  TDS：1.23%（實測）
 
 錨點二（April Coffee 酸質）：
   研磨：6.75 EK43 / 810um -> ZP6 dial ~6.0
   水溫：185°F = 85°C；浸泡：90s；劑量：13g / 200ml；半密封 25s
-  TDS：1.17%（實測）；門檻：score >= 82（以 ACIDITY_IDEAL 評分）
+  TDS：1.17%（實測）；統一 flavor_score() 評分
 
 錨點三（2021 世界冠軍 甜感醇厚）：
   研磨：6.75 EK43 / 810um -> ZP6 dial ~6.0
   水溫：176°F = 80°C；浸泡：100s；劑量：17g / 200ml；倒置法；下壓 20s
-  TDS：1.56%（實測）；門檻：score >= 78（以 SWEETNESS_IDEAL 評分）
+  TDS：1.56%（實測）；統一 flavor_score() 評分
 """
 
 import math
@@ -46,21 +44,8 @@ import runtime
 from models.ey_model import calc_ey
 from models.compounds import predict_compounds
 from models.tds_model import calc_press_time, calc_tds
+from models.scoring import flavor_score, build_ideal_abs, score_to_display
 from optimizer import optimize
-
-# ── 錨點二：April Coffee 酸質 ideal profile ────────────────────────────────
-ACIDITY_IDEAL = {
-    "AC": 0.22, "SW": 0.35, "PS": 0.25,
-    "CA": 0.08, "CGA": 0.06, "MEL": 0.04,
-}
-ACIDITY_TDS_PREFER = 1.17
-
-# ── 錨點三：2021 世界冠軍 甜感醇厚 ideal profile ───────────────────────────
-SWEETNESS_IDEAL = {
-    "AC": 0.09, "SW": 0.40, "PS": 0.38,
-    "CA": 0.07, "CGA": 0.04, "MEL": 0.02,
-}
-SWEETNESS_TDS_PREFER = 1.56
 
 # ── 錨點定義 ──────────────────────────────────────────────────────────────────
 ANCHOR = {
@@ -93,10 +78,6 @@ def _fmt(ok: bool) -> str:
 
 def _get_overextract_score() -> float:
     """回傳過萃低分錨點的分數，供高分錨點做相對比較用。"""
-    from models.ey_model import calc_ey
-    from models.compounds import predict_compounds
-    from models.tds_model import calc_press_time, calc_tds
-    from models.scoring import flavor_score, build_ideal_abs, score_to_display
     roast, temp, dial, steep, dose, water = "light", 99.0, 3.5, 240.0, 11.0, 200.0
     area = constants.BREWER_PRESETS["standard"]["area_cm2"]
     press_s  = calc_press_time(dose, dial, steep, brewer_size="standard")
@@ -199,28 +180,10 @@ def run_anchor_check(verbose: bool = True) -> bool:
     return all_pass
 
 
-def _anchor_cosine_score(compounds: dict, ideal: dict, tds: float, tds_prefer: float) -> float:
-    """加權 cosine 相似度 × TDS Gaussian → 0–100 分。
-    供 April / Championship 錨點使用（不依賴 scoring.py）。
-    """
-    keys = constants.KEYS
-    actual_sum = sum(compounds[k] for k in keys)
-    ideal_sum  = sum(ideal[k]     for k in keys)
-    if actual_sum <= 0 or ideal_sum <= 0:
-        return 0.0
-    a = [compounds[k] / actual_sum for k in keys]
-    b = [ideal[k]     / ideal_sum  for k in keys]
-    dot   = sum(a[i] * b[i] for i in range(len(keys)))
-    mag_a = math.sqrt(sum(x ** 2 for x in a))
-    mag_b = math.sqrt(sum(x ** 2 for x in b))
-    cos_sim = dot / (mag_a * mag_b) if (mag_a > 0 and mag_b > 0) else 0.0
-    tds_factor = math.exp(-0.5 * ((tds - tds_prefer) / 0.15) ** 2)
-    return round(cos_sim * tds_factor * 100, 1)
-
-
 def run_april_anchor(verbose: bool = True) -> bool:
     """April Coffee Roasters 酸質錨點（固定參數，不跑 optimizer）。
     85°C / dial ~5.0 (EK43 6.75=810um; ZP6 mapping estimated) / 13g / 90s / 半密封 25s / 標準壓 30s
+    統一 flavor_score() 評分。
     """
     roast   = "light"
     temp    = 85.0
@@ -250,11 +213,16 @@ def run_april_anchor(verbose: bool = True) -> bool:
         partial_seal_sec=25.0, partial_seal_water_ml=50.0,
     )
 
-    score = _anchor_cosine_score(compounds, ACIDITY_IDEAL, tds, ACIDITY_TDS_PREFER)
+    ideal = build_ideal_abs(roast, tds)
+    raw   = flavor_score(compounds, ideal, tds, roast,
+                         water_kh=30, water_gh=50,
+                         t_slurry=temp - 4.0, temp_initial=temp,
+                         ey=ey, steep_sec=steep)
+    score = score_to_display(raw, roast)
 
     tds_ok    = abs(tds - 1.17) <= 0.20
     ac_ok     = compounds["AC"] > compounds["CGA"] and compounds["AC"] > compounds["MEL"]
-    score_ok  = score >= 82.0
+    score_ok  = score >= 60.0
 
     all_pass = tds_ok and ac_ok and score_ok
 
@@ -268,7 +236,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
         print(f"\nChecks:")
         print(f"  {_fmt(tds_ok)}  |TDS - 1.17| = {abs(tds-1.17):.3f} <= 0.20")
         print(f"  {_fmt(ac_ok)}  AC ({compounds['AC']:.4f}) > CGA ({compounds['CGA']:.4f}) & MEL ({compounds['MEL']:.4f})")
-        print(f"  {_fmt(score_ok)}  score {score} >= 82.0 (vs ACIDITY_IDEAL)")
+        print(f"  {_fmt(score_ok)}  score {score} >= 60.0 (unified flavor_score)")
         print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - check constants.py ]'}")
         print("=" * 60)
 
@@ -278,6 +246,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
 def run_championship_anchor(verbose: bool = True) -> bool:
     """2021 世界冠軍甜感醇厚錨點（固定參數，不跑 optimizer）。
     80°C / dial ~5.0 (EK43 6.75=810um; ZP6 mapping estimated) / 17g / 100s / 倒置法 / 下壓 20s / 攪拌 2 次
+    統一 flavor_score() 評分。
     """
     roast   = "light"
     temp    = 80.0
@@ -306,12 +275,17 @@ def run_championship_anchor(verbose: bool = True) -> bool:
         inverted=True, n_swirls=2,
     )
 
-    score = _anchor_cosine_score(compounds, SWEETNESS_IDEAL, tds, SWEETNESS_TDS_PREFER)
+    ideal = build_ideal_abs(roast, tds)
+    raw   = flavor_score(compounds, ideal, tds, roast,
+                         water_kh=30, water_gh=50,
+                         t_slurry=temp - 4.0, temp_initial=temp,
+                         ey=ey, steep_sec=steep)
+    score = score_to_display(raw, roast)
 
     tds_ok       = abs(tds - 1.56) <= 0.25
     sweet_ok     = compounds["SW"] > compounds["MEL"] and compounds["SW"] > compounds["CGA"]
     ps_sw_ok     = (compounds["PS"] + compounds["SW"]) >= 0.70
-    score_ok     = score >= 78.0
+    score_ok     = score >= 55.0
 
     all_pass = tds_ok and sweet_ok and ps_sw_ok and score_ok
 
@@ -327,7 +301,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
         print(f"  {_fmt(sweet_ok)}  SW ({compounds['SW']:.4f}) > MEL ({compounds['MEL']:.4f}) & CGA ({compounds['CGA']:.4f})")
         ps_sw = compounds["PS"] + compounds["SW"]
         print(f"  {_fmt(ps_sw_ok)}  PS+SW = {ps_sw:.4f} >= 0.70")
-        print(f"  {_fmt(score_ok)}  score {score} >= 78.0 (vs SWEETNESS_IDEAL)")
+        print(f"  {_fmt(score_ok)}  score {score} >= 55.0 (unified flavor_score)")
         print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - check constants.py ]'}")
         print("=" * 60)
 
@@ -360,7 +334,6 @@ def run_underextract_anchor(verbose: bool = True) -> bool:
         water_ml=water, dose=dose,
         press_sec=press_s, area_cm2=area,
     )
-    from models.scoring import flavor_score, build_ideal_abs, score_to_display
     ideal = build_ideal_abs(roast, tds)
     raw   = flavor_score(compounds, ideal, tds, roast,
                          water_kh=30, water_gh=50,
@@ -415,7 +388,6 @@ def run_overextract_anchor(verbose: bool = True) -> bool:
         water_ml=water, dose=dose,
         press_sec=press_s, area_cm2=area,
     )
-    from models.scoring import flavor_score, build_ideal_abs, score_to_display
     ideal = build_ideal_abs(roast, tds)
     raw   = flavor_score(compounds, ideal, tds, roast,
                          water_kh=30, water_gh=50,

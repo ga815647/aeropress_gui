@@ -182,10 +182,13 @@ MEL_BITTER_COEFF = {
     "very_dark": 0.5,
 }
 
-KH_PERCEPT_DECAY = 150
-IDEAL_BITTER_REDUCTION = 0.95  # 理想苦味下修 5%，縮小模型與實感落差
-LOW_GH_THRESHOLD = 20          # ppm；低於此視為軟水（如 RO）
-SOFT_WATER_BITTER_AMP = 0.25   # 軟水苦味感知放大係數：GH→0 時苦味感知 +25%（preprocessing）
+KH_PERCEPT_DECAY = 150          # [舊公式用] 保留供參考；新公式用 KH_FLOOR + KH_PERCEPT_DECAY_SMOOTH
+KH_FLOOR = 0.65                 # KH 酸質壓制漸近底線（kh→∞ 時 AC 感知最低保留 65%）
+KH_PERCEPT_DECAY_SMOOTH = 42.0  # 平滑 KH 衰減常數；對齊 kh=30 → kh_factor≈0.82
+IDEAL_BITTER_REDUCTION = 0.95   # 理想苦味下修 5%，縮小模型與實感落差
+LOW_GH_THRESHOLD = 20           # ppm；低於此視為軟水（如 RO）
+SOFT_WATER_BITTER_AMP = 0.25    # 軟水苦味感知放大係數：GH→0 時苦味感知 +25%（preprocessing）
+GH_SOFT_SIGMOID_K = 0.3         # 軟水 sigmoid 平滑過渡斜率
 
 # 全面上調 TDS 偏好值，鼓勵更濃郁、有層次的萃取（Aeropress 哲學）
 TDS_PREFER = {
@@ -197,8 +200,10 @@ TDS_PREFER = {
     "dark": 1.12,
     "very_dark": 1.09,
 }
-TDS_GAUSS_SIGMA_LOW = 0.10   # 太淡懲罰收緊：偏低 TDS 對口感強度影響更直接
-TDS_GAUSS_SIGMA_HIGH = 0.20  # 高 TDS 保持較寬：Championship 1.56% 屬合法高濃縮風格
+TDS_GAUSS_SIGMA_LOW = 0.15   # 低 TDS 側 sigma（Super-Gaussian）：April 1.17% 不嚴懲
+TDS_GAUSS_SIGMA_HIGH = 0.50  # 高 TDS 側 sigma（Super-Gaussian）：Championship 1.56% 寬容
+TDS_SIGMA_BLEND_K = 5.0      # TDS sigma 平滑混合斜率
+TDS_SUPER_GAUSS_EXP = 4      # Super-Gaussian 指數（>2 = 平頂效果）
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
 K_SW = 0.003  # 從 0.004 降至 0.003（更慢增長，鼓勵長時間浸泡）
@@ -221,9 +226,12 @@ AC_HIGH_TEMP_DECAY = 0.020  # 高溫降解斜率（每 softplus 單位損失 2%�
 
 CGA_ASTRINGENCY_THRESHOLD = 1.25  # diagnose_anchor.py 顯示用，不進評分公式
 
-SW_AROMA_SLOPE = 0.015   # Hoffman 校正：降低高溫懲罰斜率（99°C 僅 3% 損失）
-SW_AROMA_THRESH = 97.0   # Hoffman 校正：96–97°C 完全無懲罰（light 搜尋範圍 93–99°C）
-SW_AROMA_CAP = 0.25      # Hoffman 校正：收緊極端高溫上限
+SW_AROMA_SLOPE = 0.015      # [舊公式用] 保留供參考
+SW_AROMA_THRESH = 97.0      # Sigmoid 中心溫度（低於此≈無損失，高於此平滑飽和）
+SW_AROMA_CAP = 0.25         # 最大香氣損失比例
+SW_AROMA_SIGMOID_K = 3.0    # SW 香氣損失 sigmoid 斜率（每°C）
+
+SCORCH_SOFTPLUS_K = 0.5     # 焦苦放大 softplus 平滑度（越小越平滑）
 
 MG_PPM_REF = 20.0
 CA_PPM_REF = 30.0
@@ -382,10 +390,23 @@ COMPOUND_BASE = {
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
 WEIGHTS = {"AC": 1.0, "SW": 1.8, "PS": 2.0, "CA": 1.3, "CGA": 1.3, "MEL": 1.3}
-TDS_W3_LOW = 0.70   # 太淡扣分（floor=0.30）：低 TDS 顯著影響口感強度感知
-TDS_W3_HIGH = 0.15  # 高 TDS 輕度懲罰（floor=0.85）：過萃靠 CGA 澀感扣分，不靠 TDS
-CONC_SENSITIVITY_FLOOR = 0.02
-TDS_BROWN_WATER_FLOOR = 0.80
+SIGMA_BLEND_K = 8.0            # 化合物不對稱 sigma sigmoid 混合斜率
+EY_BLEND_K = 8.0               # EY 不對稱 sigma sigmoid 混合斜率
+
+# TDS 底線 sigmoid（取代 min(tds/floor, 1)²）
+TDS_FLOOR_MID = 0.50           # Sigmoid 中心：TDS=0.50 → factor=0.5
+TDS_FLOOR_K = 8.0              # Sigmoid 斜率
+
+# Ideal 內插 Gaussian basis 寬度
+IDEAL_INTERP_SIGMA = 0.15      # TDS 錨點間 Gaussian 基函數寬度
+
+# 化合物比值獎勵（純淨酸質 + 甜感主導）
+AC_CGA_RATIO_IDEAL = 2.0       # AC/CGA 理想比值（高 = 純淨酸質）
+SW_BITTER_RATIO_IDEAL = 3.0    # SW/(MEL+CGA) 理想比值（高 = 甜感主導）
+RATIO_SIGMOID_K = 1.0          # 比值評分 sigmoid 斜率
+RATIO_WEIGHT = 0.15            # 比值獎勵權重（最多降 15% compound_loss）
+RATIO_W_AC_CGA = 1.0           # AC/CGA 比值權重
+RATIO_W_SW_BITTER = 1.0        # SW/(MEL+CGA) 比值權重
 
 # 風味偏好篩選：門檻 = ideal_abs[key] × 乘數
 # 各維度乘數設計依據：
