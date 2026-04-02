@@ -2,7 +2,7 @@ import constants
 from models.compounds import predict_compounds
 from models.ey_model import calc_ey, calc_fines_ratio
 from models.scoring import build_ideal_abs, flavor_score
-from models.tds_model import calc_drip_volume, calc_press_time, calc_retention, calc_swirl_wait
+from models.tds_model import calc_drip_volume, calc_retention, calc_swirl_wait
 
 
 def test_calc_fines_ratio_clamps() -> None:

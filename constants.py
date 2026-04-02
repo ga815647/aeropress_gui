@@ -206,11 +206,11 @@ TDS_SUPER_GAUSS_EXP = 4      # 超高斯（平頂 → dose 多元性需靠寬 si
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
 K_SW = 0.010  # 乘法時間函數速率
-SW_TIME_FLOOR = 0.70  # t=0 時 SW 有 70% 基底（較溫和的時間門控）
+SW_TIME_FLOOR = 0.50  # t=0 時 SW 有 50% 基底（加強時間鑑別：短浸泡糖類未發展）
 
 # 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
 K_PS = 0.008  # 乘法時間函數速率（PS 比 SW 慢）
-PS_TIME_FLOOR = 0.60  # t=0 時 PS 有 60% 基底
+PS_TIME_FLOOR = 0.50  # t=0 時 PS 有 50% 基底（加強時間鑑別，80°C 仍可通過 Championship）
 
 # CGA 時間函數參數
 K_CGA_TIME = 0.015
@@ -288,6 +288,7 @@ ROAST_TABLE = {
         "base_temp": 97,
         "base_ey": 17.0,
         "dial_prefer": 4.2,  # 豆質最硬，細研磨穿透細胞壁
+        "dose_per_100ml": (5.0, 7.0),  # 預設豆量範圍 g/100ml（XL: 20-28g, std: 10-14g）
         "note": "SCA: Light/Cinnamon (Agtron #85-95)。淺肉桂色，表面皺褶多、體積小。豆質極硬。100°C 封頂動能破壁。",
     },
     "light": {
@@ -298,6 +299,7 @@ ROAST_TABLE = {
         "base_temp": 96,
         "base_ey": 17.0,
         "dial_prefer": 4.3,  # Hoffman 錨點：450–600µm EK43 ≈ ZP6 dial 4.3
+        "dose_per_100ml": (5.0, 7.0),  # Hoffman 11g/200ml=5.5; Championship 17g/200ml=8.5 用 fixed_dose
         "note": "SCA: Medium (Agtron #75)。栗子色，表面乾燥無油。一爆剛結束。維持高溫動能以推動甜感發展。",
     },
     "medium_light": {
@@ -308,6 +310,7 @@ ROAST_TABLE = {
         "base_temp": 95,
         "base_ey": 19.0,
         "dial_prefer": 4.5,  # 溶出性提升，稍粗
+        "dose_per_100ml": (4.5, 6.5),  # 溶出提升，可稍減量
         "note": "SCA: High (Agtron #65)。褐棕色。一爆完全結束，皺褶撐開。台灣精品市場最大公約數，酸甜平衡基準。",
     },
     "medium": {
@@ -318,6 +321,7 @@ ROAST_TABLE = {
         "base_temp": 91,
         "base_ey": 19.0,
         "dial_prefer": 4.7,  # City 焙溶出最佳，可稍粗
+        "dose_per_100ml": (4.5, 6.0),  # 溶出佳，豆量需求降
         "note": "SCA: City (Agtron #55)。巧克力色。酸質退場、堅果轉強。若遇標示模糊豆，往下靠攏選此項最穩妥。",
     },
     "moderately_dark": {
@@ -328,6 +332,7 @@ ROAST_TABLE = {
         "base_temp": 86,
         "base_ey": 21.0,
         "dial_prefer": 4.5,  # 回細，低溫 + 過萃保護
+        "dose_per_100ml": (4.0, 5.5),  # 深焙溶出快，省豆
         "note": "SCA: Full City (Agtron #45)。暗棕色帶油光。剛過二爆。系統啟動最大幅度急煞，嚴防焦苦物質瞬間爆發。",
     },
     "dark": {
@@ -338,6 +343,7 @@ ROAST_TABLE = {
         "base_temp": 82,
         "base_ey": 21.0,
         "dial_prefer": 4.3,  # 細研磨補償低溫萃取動能不足
+        "dose_per_100ml": (3.5, 5.0),  # 結構疏鬆易萃，少量即足
         "note": "SCA: French (Agtron #35)。表面佈滿油脂。結構極疏鬆。接近萃取底線，平滑降溫以保留糖蜜與 Body。",
     },
     "very_dark": {
@@ -348,6 +354,7 @@ ROAST_TABLE = {
         "base_temp": 80,
         "base_ey": 21.5,
         "dial_prefer": 4.1,  # 最細補償，防空洞口感
+        "dose_per_100ml": (3.5, 5.0),  # 極易萃，最省豆
         "note": "SCA: Italian (Agtron #25)。極亮黏膩感。觸及 80°C 物理地板。守住最低熱能以溶出基本醇厚度，防止焦炭化。",
     },
 }

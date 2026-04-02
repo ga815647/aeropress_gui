@@ -40,6 +40,14 @@ def optimize(
     dose_min_x2 = int(brewer["dose_min"] * 2)
     dose_max_x2 = int(brewer["dose_max"] * 2)
 
+    # 各焙度豆量預設範圍（g/100ml）：收窄搜尋，省豆優先
+    dose_range = cfg.get("dose_per_100ml")
+    if dose_range and fixed_dose is None:
+        roast_min_x2 = int(dose_range[0] * water_ml / 100 * 2)
+        roast_max_x2 = int(dose_range[1] * water_ml / 100 * 2)
+        dose_min_x2 = max(dose_min_x2, roast_min_x2)
+        dose_max_x2 = min(dose_max_x2, roast_max_x2)
+
     pour_time = water_ml / constants.POUR_RATE
     pour_offset = pour_time / 2.0
     seal_delay = constants.SEAL_DELAY_DEFAULT

@@ -1,5 +1,4 @@
 import optimizer
-import constants
 
 def print_result(label, r):
     print(f"[{label}] Score={r['score']} | Temp={r['temp']}°C | Dial={r['dial']} | Steep={r['steep_sec']}s | EY={r['ey']:.2f}% | Body(PS)={r['compounds']['PS']:.4f} | Bitter(CGA/CA/MEL)={r['compounds']['CGA']:.4f}/{r['compounds']['CA']:.4f}/{r['compounds']['MEL']:.4f} | AC={r['compounds']['AC']:.4f} | SW={r['compounds']['SW']:.4f} | Dose={r['dose']}g")

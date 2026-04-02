@@ -20,13 +20,16 @@ yaml.add_representer(list, represent_list_block, Dumper=yaml.SafeDumper)
 def extract_balanced_json(text):
     """Finds the first '{' and extracts the substring until the matching '}'."""
     start_index = text.find('{')
-    if start_index == -1: return None
+    if start_index == -1:
+        return None
     brace_level = 0
     for i, char in enumerate(text[start_index:]):
-        if char == '{': brace_level += 1
+        if char == '{':
+            brace_level += 1
         elif char == '}':
             brace_level -= 1
-            if brace_level == 0: return text[start_index : start_index + i + 1]
+            if brace_level == 0:
+                return text[start_index : start_index + i + 1]
     return None
 
 def parse_mcp_servers_md(markdown_content: str) -> list:
@@ -83,9 +86,11 @@ def parse_mcp_servers_md(markdown_content: str) -> list:
             tool_blocks = re.split(r'\n\s*-\s+(?=[\w_-]+:)', '\n' + tools_content)
             for block in tool_blocks:
                 block = block.strip()
-                if not block: continue
+                if not block:
+                    continue
                 name_match = re.match(r'^-?\s*([\w_-]+):', block)
-                if not name_match: continue
+                if not name_match:
+                    continue
                 tool_name = name_match.group(1)
                 block_after_name = re.sub(r'^-?\s*' + re.escape(tool_name) + r':\s*', '', block, count=1).strip()
                 schema_marker = 'Input Schema:'
@@ -124,7 +129,7 @@ def parse_mcp_servers_md(markdown_content: str) -> list:
         servers.append(current_server)
 
     if not server_found and mcp_section_content.strip():
-        print(f"Warning: No servers found matching '## name (command)' pattern within extracted MCP section.", file=sys.stderr)
+        print("Warning: No servers found matching '## name (command)' pattern within extracted MCP section.", file=sys.stderr)
 
     return servers
 

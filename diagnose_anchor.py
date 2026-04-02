@@ -36,7 +36,6 @@
   TDS：1.56%（實測）；統一 flavor_score() 評分
 """
 
-import math
 import sys
 
 import constants
@@ -166,7 +165,7 @@ def run_anchor_check(verbose: bool = True) -> bool:
             for r in hoffman_results:
                 print(f"  steep={r['steep_sec']}s: EY={r['ey']:.1f}%, TDS={r['tds']:.3f}%")
 
-        print(f"\nChecks:")
+        print("\nChecks:")
         print(f"  {_fmt(score_ok)}  Top1 score {top1_score} > over-extract {_over_score} (相對比較)")
         print(f"  {_fmt(tds_ok)}  Top3 TDS in [{ANCHOR['tds_lo']}, {ANCHOR['tds_hi']}]%")
         print(f"  {_fmt(ey_ok)}  Top3 EY >= {ANCHOR['ey_min']}% (no under-extraction)")
@@ -233,7 +232,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
         cstr = "  ".join(f"{k}={v:.4f}" for k, v in compounds.items())
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
         print(f"  compounds: {cstr}")
-        print(f"\nChecks:")
+        print("\nChecks:")
         print(f"  {_fmt(tds_ok)}  |TDS - 1.17| = {abs(tds-1.17):.3f} <= 0.20")
         print(f"  {_fmt(ac_ok)}  AC ({compounds['AC']:.4f}) > CGA ({compounds['CGA']:.4f}) & MEL ({compounds['MEL']:.4f})")
         print(f"  {_fmt(score_ok)}  score {score} >= 60.0 (unified flavor_score)")
@@ -296,7 +295,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
         cstr = "  ".join(f"{k}={v:.4f}" for k, v in compounds.items())
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
         print(f"  compounds: {cstr}")
-        print(f"\nChecks:")
+        print("\nChecks:")
         print(f"  {_fmt(tds_ok)}  |TDS - 1.56| = {abs(tds-1.56):.3f} <= 0.25")
         print(f"  {_fmt(sweet_ok)}  SW ({compounds['SW']:.4f}) > MEL ({compounds['MEL']:.4f}) & CGA ({compounds['CGA']:.4f})")
         ps_sw = compounds["PS"] + compounds["SW"]
@@ -352,7 +351,7 @@ def run_underextract_anchor(verbose: bool = True) -> bool:
         print("Under-extraction anchor (light / 93C / dial6.5 / 60s / 11g / std)")
         print("=" * 60)
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
-        print(f"\nChecks:")
+        print("\nChecks:")
         print(f"  {_fmt(ey_ok)}   EY {ey:.1f}% < 15.0%  (under-extracted)")
         print(f"  {_fmt(tds_ok)}  TDS {tds:.3f}% < 0.85%  (too weak)")
         print(f"  {_fmt(score_ok)}  score {score} < 40.0  (bad recipes must score low)")
@@ -409,7 +408,7 @@ def run_overextract_anchor(verbose: bool = True) -> bool:
         print("Over-extraction anchor (light / 99C / dial3.5 / 240s / 11g / std)")
         print("=" * 60)
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
-        print(f"\nChecks:")
+        print("\nChecks:")
         print(f"  {_fmt(ey_ok)}   EY {ey:.1f}% > 22.0%  (over-extracted)")
         print(f"  {_fmt(cga_ok)}  CGA ratio {cga_ratio:.3f} > {constants.CGA_ASTRINGENCY_THRESHOLD}  (astringency triggered)")
         print(f"  {_fmt(score_ok)}  score {score} < 50.0  (不能喝的配方必須低於 50)")

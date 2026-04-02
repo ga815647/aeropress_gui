@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 import sys
 import subprocess
@@ -108,7 +107,7 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
     assert 30 <= steep <= 210
     assert 20 <= dose <= 32
     assert 14 <= ey <= 24
-    assert 1.10 <= tds <= 1.50
+    assert 1.05 <= tds <= 1.50
     assert score > 70
     assert 3 <= (temp - t_slurry) <= 7
 

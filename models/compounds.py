@@ -64,18 +64,18 @@ def _predict_closed_compounds(
     # ── SW (sweetness / aroma) ───────────────────────────────────
     sw = base_profile["SW"]
     optimal_sw_temp = constants.ROAST_TABLE[roast_code]["base_temp"] - 2
-    sw *= 1 - abs(temp - optimal_sw_temp) * 0.015
+    sw *= 1 - abs(temp - optimal_sw_temp) * 0.018
     # 乘法時間函數：短浸泡 = 糖類未充分發展（floor），長浸泡 → 1.0
     sw *= constants.SW_TIME_FLOOR + (1.0 - constants.SW_TIME_FLOOR) * (
         1.0 - math.exp(-constants.K_SW * effective_steep))
     sw *= ac_sw_mult
 
     # ── PS (polysaccharides / body) ──────────────────────────────
-    ps = base_profile["PS"] * (1.0 + _softplus(constants.DIAL_BASE - dial, k=3.0) * 0.20)
+    ps = base_profile["PS"] * (1.0 + _softplus(constants.DIAL_BASE - dial, k=3.0) * 0.28)
     # 乘法時間函數：多醣體需更長時間溶出
     ps *= constants.PS_TIME_FLOOR + (1.0 - constants.PS_TIME_FLOOR) * (
         1.0 - math.exp(-constants.K_PS * effective_steep))
-    ps *= _softplus(1.0 + (temp - 90) * 0.022, k=10.0)
+    ps *= _softplus(1.0 + (temp - 90) * 0.028, k=10.0)
     ps *= ps_cga_mult
     ps = _soft_cap(ps, 1.0, k=10.0)
 
@@ -84,7 +84,7 @@ def _predict_closed_compounds(
 
     # ── CGA (chlorogenic acid / astringency) ─────────────────────
     cga = base_profile["CGA"]
-    cga *= 1 + _softplus(temp - 92, k=2.0) * 0.03
+    cga *= 1 + _softplus(temp - 92, k=2.0) * 0.02
     cga *= 1.0 + constants.CGA_TIME_MAX * (
         1.0 - math.exp(-constants.K_CGA_TIME * _softplus(
             effective_steep - constants.CGA_TIME_ONSET, k=0.10))
