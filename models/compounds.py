@@ -69,6 +69,8 @@ def _predict_closed_compounds(
     sw *= constants.SW_TIME_FLOOR + (1.0 - constants.SW_TIME_FLOOR) * (
         1.0 - math.exp(-constants.K_SW * effective_steep))
     sw *= ac_sw_mult
+    # 研磨粗細對香氣揮發物的影響：細研磨增加接觸面積，提升揮發性香氣萃取
+    sw *= math.exp(constants.SW_DIAL_COEFF * (constants.DIAL_BASE - dial))
 
     # ── PS (polysaccharides / body) ──────────────────────────────
     ps = base_profile["PS"] * (1.0 + _softplus(constants.DIAL_BASE - dial, k=3.0) * 0.28)

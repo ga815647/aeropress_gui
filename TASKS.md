@@ -30,17 +30,23 @@
 
 **目標：** 讓欠萃配方的化合物 profile 與正萃明顯不同，消除模型鑑別力不足問題。
 
-**已知問題：**
-- Under-extract (93C/6.5/60s) 的 SW fraction 比 Hoffman (98C/4.6/120s) 還高（欠萃比正萃還甜？）
-- 根本原因：`COMPOUND_BASE` 基底佔比過大，時間/溫度修正幅度太小
-- 壞配方和好配方的化合物 profile 幾乎相同，鑑別完全靠 TDS floor
+**已知問題（已解決）：**
+- ~~Under-extract (93C/6.5/60s) 的 SW fraction 比 Hoffman (98C/4.6/120s) 還高（欠萃比正萃還甜？）~~
+- ~~根本原因：`COMPOUND_BASE` 基底佔比過大，時間/溫度修正幅度太小~~
+- ~~壞配方和好配方的化合物 profile 幾乎相同，鑑別完全靠 TDS floor~~
 
-**要做的事：**
-- [ ] 引入 EY-gated 基底：SW/PS 等發展型化合物需足夠 EY 才完整釋放
-- [ ] 修正時間函數：短浸泡 + 粗研磨應顯著壓低 SW/PS
-- [ ] 確保 under-extract SW fraction < Hoffman SW fraction
-- [ ] CGA/MEL 在過萃時應明顯超標，欠萃時應明顯偏低
-- [ ] 修改後必須跑 `python diagnose_anchor.py`，全部 `[ OK ]` 才算完成
+**實作內容（2026-04-09）：**
+- `constants.py`：新增 `SW_DIAL_COEFF = 0.10`（每 dial 單位 10% 對數線性修正）
+- `compounds.py`：`_predict_closed_compounds()` 中 SW 計算末尾加入 `sw *= exp(SW_DIAL_COEFF * (DIAL_BASE - dial))`
+- 物理意義：細研磨 → 更多接觸面積 → 更多香氣揮發物萃取。不用 EY 門控（因果倒置，見 constants.py 設計說明）
+- 效果：Under SW_frac 0.376 → 0.335，Hoffman SW_frac 0.339；Under < Hoffman ✓
+
+**完成狀態：**
+- [x] 研磨粗細（粗研磨）顯著壓低 SW（`SW_DIAL_COEFF`）— EY-gate 改用研磨直接修正避免因果倒置
+- [x] 確保 under-extract SW fraction < Hoffman SW fraction（0.335 < 0.339）
+- [x] CGA/MEL 在過萃時明顯超標，欠萃時明顯偏低（Over CGA_frac 0.082 > Hoffman 0.067 > Under 0.052）
+- [x] `python diagnose_anchor.py` 全部 `[ OK ]`（Hoffman/April/Championship/Under/Over 全 PASS）
+- [ ] **待續（Phase 1.5 可選）：** SW_TIME_FLOOR 目前仍 0.50，短浸泡鑑別力尚有改善空間（但改動有破壞 Championship 風險，留 Phase 3 校準時評估）
 
 ---
 
