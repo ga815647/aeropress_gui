@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 待辦任務
+
+見 [`TASKS.md`](TASKS.md)，包含四個階段的具體 checklist：
+1. **UI — Chip 標籤重寫**（⚠️ 等 Phase 1-3 完成後才能做，模型不準確則標籤無意義）
+2. **Phase 1** — 化合物模型修正（EY-gated base）
+3. **Phase 2** — 評分邊際曲線
+4. **Phase 3** — 錨點重新校準
+
 ## Commands
 
 ```bash
