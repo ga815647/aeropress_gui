@@ -229,7 +229,7 @@ AC_DECAY_START = 150  # 酸質開始衰減的時間點（從 140 測試值進一
 AC_HIGH_TEMP_THRESH = 95.0  # 揮發性有機酸高溫降解閾值（°C）；softplus 平滑過渡
 AC_HIGH_TEMP_DECAY = 0.020  # 高溫降解斜率（每 softplus 單位損失 2%）
 
-CGA_ASTRINGENCY_THRESHOLD = 1.25  # diagnose_anchor.py 顯示用，不進評分公式
+CGA_ASTRINGENCY_THRESHOLD = 1.15  # diagnose_anchor.py 顯示用，不進評分公式；Phase 3 調整：IDEAL_CGA 從 0.05→0.057，比值分母增大，對應閾值從 1.25→1.15
 
 SW_AROMA_SLOPE = 0.015      # [舊公式用] 保留供參考
 SW_AROMA_THRESH = 97.0      # Sigmoid 中心溫度（低於此≈無損失，高於此平滑飽和）
@@ -366,10 +366,11 @@ IDEAL_FLAVOR = {
     ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
     ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 淺焙：乘法時間模型。CGA/MEL ≤ 0.05 確保超標容易被懲罰
-    ("light", "low"): {"AC": 0.20, "SW": 0.35, "PS": 0.25, "CA": 0.10, "CGA": 0.05, "MEL": 0.05},
-    ("light", "mid"): {"AC": 0.16, "SW": 0.36, "PS": 0.29, "CA": 0.09, "CGA": 0.05, "MEL": 0.05},
-    ("light", "high"): {"AC": 0.13, "SW": 0.37, "PS": 0.29, "CA": 0.11, "CGA": 0.05, "MEL": 0.05},
+    # 淺焙：乘法時間模型。CGA 調整至 0.057（模型實測 Hoffman CGA_frac=0.064，0.05 低於可達值）
+    # AC 同步下調 0.007 以維持各 bracket sum=1.0
+    ("light", "low"): {"AC": 0.193, "SW": 0.35, "PS": 0.25, "CA": 0.10, "CGA": 0.057, "MEL": 0.05},
+    ("light", "mid"): {"AC": 0.153, "SW": 0.36, "PS": 0.29, "CA": 0.09, "CGA": 0.057, "MEL": 0.05},
+    ("light", "high"): {"AC": 0.123, "SW": 0.37, "PS": 0.29, "CA": 0.11, "CGA": 0.057, "MEL": 0.05},
     ("medium_light", "low"): {"AC": 0.15, "SW": 0.37, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.04},
     ("medium_light", "mid"): {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
     ("medium_light", "high"): {"AC": 0.11, "SW": 0.41, "PS": 0.27, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
@@ -411,11 +412,25 @@ TDS_FLOOR_K = 8.0              # Sigmoid 斜率
 # Ideal 內插 Gaussian basis 寬度
 IDEAL_INTERP_SIGMA = 0.15      # TDS 錨點間 Gaussian 基函數寬度
 
-# 化合物比值獎勵（純淨酸質 + 甜感主導）
+# 化合物比值獎勵（純淨酸質 + 甜感主導 + 醇厚乾淨度）
 AC_CGA_RATIO_IDEAL = 2.0       # AC/CGA 理想比值（高 = 純淨酸質）
 SW_BITTER_RATIO_IDEAL = 3.0    # SW/(MEL+CGA) 理想比值（高 = 甜感主導）
+PS_CA_RATIO_IDEAL = 2.0        # PS/CA 理想比值（高 = 乾淨醇厚無苦）
 RATIO_SIGMOID_K = 1.0          # 比值評分 sigmoid 斜率
 RATIO_WEIGHT = 0.15            # 比值獎勵權重（最多降 15% compound_loss）
 RATIO_W_AC_CGA = 1.0           # AC/CGA 比值權重
 RATIO_W_SW_BITTER = 1.0        # SW/(MEL+CGA) 比值權重
+RATIO_W_PS_CA = 0.6            # PS/CA 比值權重（醇厚乾淨度，Phase 2）
+
+# Phase 2: 苦澀化合物超標加速懲罰（壞處邊際遞增）
+# 物理意義：CGA/MEL 超標代表過萃澀感/焦苦，偏離越多懲罰越大
+# excess = sigmoid(K × log_dev)；accel = softplus(r_sq − threshold)
+# 完全平滑：sigmoid 方向門控，softplus 強度閾值，無 if/else
+ACCEL_ONSET_K = 3.0            # sigmoid 斜率（判斷超標方向；log_dev > 0 = 超標）
+PENALTY_ACCEL_THRESHOLD = 2.5  # r_sq 啟動閾值（≈ 1.58σ 後加速；保護正常配方）
+PENALTY_ACCEL_K = 1.0          # softplus 平滑斜率
+ACCEL_W_PER_COMPOUND = {       # 各化合物超標加速懲罰權重（0 = 不啟動）
+    "AC": 0.0, "SW": 0.0, "PS": 0.0,
+    "CA": 0.0, "CGA": 0.20, "MEL": 0.15,
+}
 

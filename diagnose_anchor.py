@@ -299,7 +299,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
         print(f"  {_fmt(tds_ok)}  |TDS - 1.56| = {abs(tds-1.56):.3f} <= 0.25")
         print(f"  {_fmt(sweet_ok)}  SW ({compounds['SW']:.4f}) > MEL ({compounds['MEL']:.4f}) & CGA ({compounds['CGA']:.4f})")
         ps_sw = compounds["PS"] + compounds["SW"]
-        print(f"  {_fmt(ps_sw_ok)}  PS+SW = {ps_sw:.4f} >= 0.70")
+        print(f"  {_fmt(ps_sw_ok)}  PS+SW = {ps_sw:.4f} >= 0.40")
         print(f"  {_fmt(score_ok)}  score {score} >= 55.0 (unified flavor_score)")
         print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - check constants.py ]'}")
         print("=" * 60)

@@ -105,24 +105,36 @@ def flavor_score(
         s_hi = constants.COMPOUND_SIGMA_HI[k]
         blend = _sigmoid(constants.SIGMA_BLEND_K * log_dev)
         sigma = s_lo + (s_hi - s_lo) * blend
-        compound_loss += constants.WEIGHTS[k] * (log_dev / sigma) ** 2
+        r_sq = (log_dev / sigma) ** 2
+        # 壞處邊際遞增：超標加速懲罰（sigmoid 方向門控 + softplus 強度閾值，全程平滑）
+        # excess ≈ 0 當 log_dev < 0（不足），≈ 1 當 log_dev > 0（超標）
+        excess = _sigmoid(constants.ACCEL_ONSET_K * log_dev)
+        accel = excess * _softplus(r_sq - constants.PENALTY_ACCEL_THRESHOLD,
+                                   k=constants.PENALTY_ACCEL_K)
+        r_sq = r_sq + constants.ACCEL_W_PER_COMPOUND[k] * accel
+        compound_loss += constants.WEIGHTS[k] * r_sq
 
     # ── 3b. 化合物比值獎勵（降低 compound_loss，保持 reward ∈ [0,1]） ──
     ac_p  = actual_perceived["AC"]  + _CONC_FLOOR
     sw_p  = actual_perceived["SW"]  + _CONC_FLOOR
+    ps_p  = actual_perceived["PS"]  + _CONC_FLOOR
+    ca_p  = actual_perceived["CA"]  + _CONC_FLOOR
     cga_p = actual_perceived["CGA"] + _CONC_FLOOR
     mel_p = actual_perceived["MEL"] + _CONC_FLOOR
 
-    r_ac_cga   = ac_p / cga_p                 # 純淨酸質指標
-    r_sw_bitter = sw_p / (mel_p + cga_p)      # 甜感 vs 苦澀指標
+    r_ac_cga    = ac_p / cga_p                 # 純淨酸質指標
+    r_sw_bitter = sw_p / (mel_p + cga_p)       # 甜感 vs 苦澀指標
+    r_ps_ca     = ps_p / ca_p                  # 醇厚乾淨度指標
 
-    r1_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_ac_cga - constants.AC_CGA_RATIO_IDEAL))
-    r2_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_sw_bitter - constants.SW_BITTER_RATIO_IDEAL))
+    r1_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_ac_cga    - constants.AC_CGA_RATIO_IDEAL))
+    r2_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_sw_bitter  - constants.SW_BITTER_RATIO_IDEAL))
+    r3_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_ps_ca      - constants.PS_CA_RATIO_IDEAL))
 
     ratio_bonus = (
-        constants.RATIO_W_AC_CGA * r1_score
+        constants.RATIO_W_AC_CGA    * r1_score
         + constants.RATIO_W_SW_BITTER * r2_score
-    ) / (constants.RATIO_W_AC_CGA + constants.RATIO_W_SW_BITTER)
+        + constants.RATIO_W_PS_CA     * r3_score
+    ) / (constants.RATIO_W_AC_CGA + constants.RATIO_W_SW_BITTER + constants.RATIO_W_PS_CA)
 
     # ratio bonus 降低 compound_loss → compound_reward 保持 [0, 1]
     adjusted_loss = compound_loss * (1.0 - constants.RATIO_WEIGHT * ratio_bonus)
