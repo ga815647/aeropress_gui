@@ -81,8 +81,8 @@ EY_MIN = 15.0  # 上調以排除大豆量極淺萃組合（brew_capacity 修正�
 
 EY_PREFER = {
     "very_light": 17.5,
-    "light": 21.0,  # 修正：XL 淺焙實際萃取範圍 20~22%；EY_PREFER=19 過低導致 EY 懲罰強迫選 120s 短浸泡，壓制 PS/SW 發展
-    "medium_light": 19.0,
+    "light": 21.0,  # Nordic 真淺焙：硬豆需充分萃取（21%）才能展開香氣
+    "medium_light": 21.0,  # Hoffman 錨點搬遷：原 light=21.0 對應 El Tambo (Agtron 65) 中淺焙，實際 20-22%
     "medium": 19.0,
     "moderately_dark": 20.0,
     "dark": 20.0,
@@ -108,7 +108,7 @@ EY_CA_EXP = 0.05  # CA 對 EY 極輕度敏感
 EY_SIGMA_LO = {
     "very_light":      1.5,
     "light":           1.5,
-    "medium_light":    2.0,
+    "medium_light":    1.5,  # Hoffman 錨點搬遷：原 light=1.5
     "medium":          2.0,
     "moderately_dark": 2.5,
     "dark":            2.5,
@@ -117,7 +117,7 @@ EY_SIGMA_LO = {
 EY_SIGMA_HI = {
     "very_light":      1.5,
     "light":           1.5,
-    "medium_light":    2.0,
+    "medium_light":    1.5,  # Hoffman 錨點搬遷：原 light=1.5
     "medium":          2.0,
     "moderately_dark": 2.5,
     "dark":            2.5,
@@ -192,8 +192,8 @@ GH_SOFT_SIGMOID_K = 0.3         # 軟水 sigmoid 平滑過渡斜率
 # 全面上調 TDS 偏好值，鼓勵更濃郁、有層次的萃取（Aeropress 哲學）
 TDS_PREFER = {
     "very_light": 1.28,
-    "light": 1.27,
-    "medium_light": 1.25,
+    "light": 1.30,           # Nordic 真淺焙：高 TDS 才壓得住酸刺、撐得起香氣
+    "medium_light": 1.27,    # Hoffman 錨點搬遷：原 light=1.27（El Tambo 實測 1.23）
     "medium": 1.20,
     "moderately_dark": 1.15,
     "dark": 1.12,
@@ -294,25 +294,25 @@ ROAST_TABLE = {
     },
     "light": {
         "name": "淺焙",
-        "sca_level": "Medium",
+        "sca_level": "Light",
         "agtron_min": 75,
-        "agtron_max": 75,
-        "base_temp": 96,
+        "agtron_max": 85,
+        "base_temp": 99,
         "base_ey": 17.0,
-        "dial_prefer": 4.3,  # Hoffman 錨點：450–600µm EK43 ≈ ZP6 dial 4.3
-        "dose_per_100ml": (5.0, 7.0),  # Hoffman 11g/200ml=5.5; Championship 17g/200ml=8.5 用 fixed_dose
-        "note": "SCA: Medium (Agtron #75)。栗子色，表面乾燥無油。一爆剛結束。維持高溫動能以推動甜感發展。",
+        "dial_prefer": 4.0,  # Nordic 硬豆需更細研磨穿透密實細胞壁
+        "dose_per_100ml": (5.5, 7.5),  # 推高豆量補低 TDS，避免酸刺澀無香的欠濃陷阱
+        "note": "SCA: Light (Agtron #75-85)。Nordic 風格淺焙，豆質硬密。需 99°C 沸點水＋細研磨＋足夠豆量推完整萃取，否則低濃高萃象限（酸刺/澀/無香）。",
     },
     "medium_light": {
         "name": "中淺焙",
-        "sca_level": "High",
+        "sca_level": "Medium-Light",
         "agtron_min": 65,
-        "agtron_max": 65,
-        "base_temp": 95,
-        "base_ey": 19.0,
-        "dial_prefer": 4.5,  # 溶出性提升，稍粗
-        "dose_per_100ml": (4.5, 6.5),  # 溶出提升，可稍減量
-        "note": "SCA: High (Agtron #65)。褐棕色。一爆完全結束，皺褶撐開。台灣精品市場最大公約數，酸甜平衡基準。",
+        "agtron_max": 75,
+        "base_temp": 96,
+        "base_ey": 17.0,
+        "dial_prefer": 4.3,  # Hoffman 錨點搬遷：450–600µm EK43 ≈ ZP6 dial 4.3
+        "dose_per_100ml": (5.0, 7.0),  # Hoffman 11g/200ml=5.5；Championship 17g/200ml=8.5 用 fixed_dose
+        "note": "SCA: Medium-Light (Agtron #65-75)。Hoffmann/Square Mile filter roast 標竿，El Tambo 等中淺焙水洗豆。栗子色，一爆剛結束。台灣精品市場最大公約數。",
     },
     "medium": {
         "name": "中焙",
@@ -366,14 +366,15 @@ IDEAL_FLAVOR = {
     ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
     ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 淺焙：乘法時間模型。CGA 調整至 0.057（模型實測 Hoffman CGA_frac=0.064，0.05 低於可達值）
-    # AC 同步下調 0.007 以維持各 bracket sum=1.0
-    ("light", "low"): {"AC": 0.193, "SW": 0.35, "PS": 0.25, "CA": 0.10, "CGA": 0.057, "MEL": 0.05},
-    ("light", "mid"): {"AC": 0.153, "SW": 0.36, "PS": 0.29, "CA": 0.09, "CGA": 0.057, "MEL": 0.05},
-    ("light", "high"): {"AC": 0.123, "SW": 0.37, "PS": 0.29, "CA": 0.11, "CGA": 0.057, "MEL": 0.05},
-    ("medium_light", "low"): {"AC": 0.15, "SW": 0.37, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.04},
-    ("medium_light", "mid"): {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
-    ("medium_light", "high"): {"AC": 0.11, "SW": 0.41, "PS": 0.27, "CA": 0.11, "CGA": 0.06, "MEL": 0.04},
+    # 淺焙（Nordic, Agtron 75-85）：暫用 very_light 同款 profile（豆質接近，差別在發展度）
+    # 待真淺焙實測食譜後重校
+    ("light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
+    ("light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
+    ("light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
+    # 中淺焙（Hoffman 錨點搬遷自原 light）：CGA=0.057 對齊 El Tambo 模型實測 CGA_frac≈0.064
+    ("medium_light", "low"): {"AC": 0.193, "SW": 0.35, "PS": 0.25, "CA": 0.10, "CGA": 0.057, "MEL": 0.05},
+    ("medium_light", "mid"): {"AC": 0.153, "SW": 0.36, "PS": 0.29, "CA": 0.09, "CGA": 0.057, "MEL": 0.05},
+    ("medium_light", "high"): {"AC": 0.123, "SW": 0.37, "PS": 0.29, "CA": 0.11, "CGA": 0.057, "MEL": 0.05},
     ("medium", "low"): {"AC": 0.12, "SW": 0.38, "PS": 0.22, "CA": 0.14, "CGA": 0.08, "MEL": 0.06},
     ("medium", "mid"): {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
     ("medium", "high"): {"AC": 0.09, "SW": 0.42, "PS": 0.24, "CA": 0.12, "CGA": 0.07, "MEL": 0.06},
@@ -391,8 +392,8 @@ IDEAL_FLAVOR = {
 # 萃取模型用的豆子原始化合物基準（與 IDEAL_FLAVOR 評分目標獨立）
 COMPOUND_BASE = {
     "very_light":      {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
-    "light":           {"AC": 0.14, "SW": 0.42, "PS": 0.27, "CA": 0.08, "CGA": 0.05, "MEL": 0.04},
-    "medium_light":    {"AC": 0.13, "SW": 0.39, "PS": 0.26, "CA": 0.12, "CGA": 0.06, "MEL": 0.04},
+    "light":           {"AC": 0.16, "SW": 0.40, "PS": 0.26, "CA": 0.07, "CGA": 0.05, "MEL": 0.04},   # Nordic 真淺焙暫定
+    "medium_light":    {"AC": 0.14, "SW": 0.42, "PS": 0.27, "CA": 0.08, "CGA": 0.05, "MEL": 0.04},   # Hoffman 錨點搬遷自原 light（El Tambo Agtron 65-75）
     "medium":          {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
     "moderately_dark": {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
     "dark":            {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},

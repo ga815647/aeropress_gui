@@ -6,9 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 見 [`TASKS.md`](TASKS.md)。
 
-**已完成（2026-04-12）：** Phase 1（化合物模型修正，引入 `SW_DIAL_COEFF`）、Phase 2（評分邊際曲線 + 比值評分 + `ACCEL_W_PER_COMPOUND` 加速懲罰）、Phase 3（錨點重新校準，IDEAL_CGA 0.05→0.057、`CGA_ASTRINGENCY_THRESHOLD` 1.25→1.15）。五錨點現況：Hoffman 95.6 / April 90.1 / Championship 70.4 / Under 0.0 / Over 46.9。
+**已完成（2026-04-12）：** Phase 1（化合物模型修正，引入 `SW_DIAL_COEFF`）、Phase 2（評分邊際曲線 + 比值評分 + `ACCEL_W_PER_COMPOUND` 加速懲罰）、Phase 3（錨點重新校準，IDEAL_CGA 0.05→0.057、`CGA_ASTRINGENCY_THRESHOLD` 1.25→1.15）。
 
-**僅剩待辦：** UI — Chip 標籤重寫（基於校準後模型重新設計風味描述；機制保留，文字描述待重做）。
+**已完成（2026-04-25）：** 焙度錨點重貼標。經查證 Hoffmann/El Tambo (Agtron 65-75) 實際是 **medium-light**（不是淺焙）；過去整套 Hoffmann 校準掛在 `light` 槽屬於誤標。已將 Hoffmann 校準參數（`EY_PREFER`/`TDS_PREFER`/`ROAST_TABLE`/`IDEAL_FLAVOR`/`COMPOUND_BASE`/`EY_SIGMA_*`）整體搬到 `medium_light`，新 `light` 槽改填 Nordic 真淺焙暫定值（`base_temp=99`、`dial_prefer=4.0`、`TDS_PREFER=1.30`、`dose_per_100ml=(5.5, 7.5)`），`diagnose_anchor.py` 五錨點 roast key 改為 `medium_light`。五錨點現況：Hoffman 94.6 / April 90.0 / Championship 69.8 / Under 0.0 / Over 35.2。
+
+**僅剩待辦：**
+- UI — Chip 標籤重寫（基於校準後模型重新設計風味描述；機制保留，文字描述待重做）
+- `light` 槽真淺焙錨點待補（目前用 `very_light` IDEAL_FLAVOR 暫頂；找到 Nordic-style AeroPress 食譜後校準）
 
 ## Commands
 
@@ -48,11 +52,13 @@ python diagnose_anchor.py
 
 ### 錨點基準（勿偏離）
 
+**注意：Hoffmann/April/Championship 三錨點現掛在 `medium_light` 槽**（El Tambo 實際 Agtron 65-75 = 中淺焙）。`light` 槽留給 Nordic 真淺焙，與 Hoffmann 校準無關。
+
 | 參數 | Hoffman 實測值 | 模型目標 |
 |------|--------------|---------|
-| TDS | 1.23%（稍粗）→ 原版 ~1.27% | TDS_PREFER["light"] = 1.27 |
-| EY | 20–22% | EY_PREFER["light"] = 21.0 |
-| 研磨 | 450–600µm EK43 → ZP6 dial ≈ 4.3 | dial_prefer["light"] = 4.3 |
+| TDS | 1.23%（稍粗）→ 原版 ~1.27% | TDS_PREFER["medium_light"] = 1.27 |
+| EY | 20–22% | EY_PREFER["medium_light"] = 21.0 |
+| 研磨 | 450–600µm EK43 → ZP6 dial ≈ 4.3 | dial_prefer["medium_light"] = 4.3 |
 | 水溫 | 97.8°C（208°F） | 錨點檢查固定 98–99°C |
 | 浸泡 | 2:00 → swirl → press | 錨點 fixed_steep=120s |
 
@@ -72,7 +78,7 @@ python diagnose_anchor.py
 
 ## 三錨點食譜原始參數與評分原則
 
-來源：2022 年文章《Brewing for Balance, Acidity, or Sweetness》，使用哥倫比亞 El Tambo 水洗豆。
+來源：2022 年文章《Brewing for Balance, Acidity, or Sweetness》，使用哥倫比亞 El Tambo 水洗豆（Agtron 65-75，Square Mile filter style，**對應本系統 `medium_light` 焙度槽**——早期版本誤標 `light` 已修正）。
 
 ### 三食譜實測值（原始資料）
 
