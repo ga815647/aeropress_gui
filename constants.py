@@ -5,6 +5,7 @@ BREWER_PRESETS = {
         "dose_min": 7.0,
         "dose_max": 21.0,
         "fixed_press_sec": 30,
+        "swirl_wait_sec": 30,  # 旋轉後靜置等沉粉（容器固定，不依 dial）
         "area_cm2": 43.0,   # 內徑 ~74mm → π×37²≈43 cm²
     },
     "xl": {
@@ -13,6 +14,7 @@ BREWER_PRESETS = {
         "dose_min": 15.0,
         "dose_max": 36.0,
         "fixed_press_sec": 40,
+        "swirl_wait_sec": 30,  # 暫與 standard 同；若實測 XL 深床沉降較慢再調高至 40
         "area_cm2": 63.6,   # 內徑 ~90mm → π×45²≈63.6 cm²
     },
 }
@@ -25,10 +27,6 @@ DOSE_STEP = 0.5
 POUR_RATE = 12
 SEAL_DELAY_DEFAULT = 5.0
 SWIRL_TIME_SEC = 5
-SWIRL_WAIT_BASE = 30
-SWIRL_WAIT_SLOPE = 10
-SWIRL_WAIT_MIN = 10
-SWIRL_WAIT_MAX = 45
 SWIRL_CONVECTION_BASE = 1.0
 SWIRL_WAIT_EXT_MULT = 0.3
 SWIRL_DOSE_REF = 18.0

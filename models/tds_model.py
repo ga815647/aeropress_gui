@@ -60,10 +60,9 @@ def calc_tds(roast_code: str, dose: float, ey: float, dial: float, water_ml: flo
     return round((extracted_solids_g / yield_mass_g) * 100, 4)
 
 
-def calc_swirl_wait(dial: float) -> int:
-    raw = constants.SWIRL_WAIT_BASE + (constants.DIAL_BASE - dial) * constants.SWIRL_WAIT_SLOPE
-    clamped = max(constants.SWIRL_WAIT_MIN, min(raw, constants.SWIRL_WAIT_MAX))
-    return int(round(clamped / 10) * 10)
+def calc_swirl_wait(brewer_size: str = "xl") -> int:
+    """旋轉後靜置等沉粉時間（秒），由容器決定，與研磨刻度無關。"""
+    return constants.BREWER_PRESETS[brewer_size]["swirl_wait_sec"]
 
 
 def calc_press_time(dose: float, dial: float, steep_sec: float = 120, brewer_size: str = "xl") -> int:

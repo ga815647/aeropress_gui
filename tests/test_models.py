@@ -14,8 +14,8 @@ def test_calc_fines_ratio_clamps() -> None:
 def test_retention_and_swirl_wait_boundaries() -> None:
     assert calc_retention("very_light", 3.5) >= 1.60
     assert calc_retention("very_dark", 6.5) <= 2.80
-    assert calc_swirl_wait(3.5) == 40
-    assert calc_swirl_wait(6.5) == 10
+    assert calc_swirl_wait("standard") == constants.BREWER_PRESETS["standard"]["swirl_wait_sec"]
+    assert calc_swirl_wait("xl") == constants.BREWER_PRESETS["xl"]["swirl_wait_sec"]
 
 
 
