@@ -14,7 +14,7 @@ BREWER_PRESETS = {
         "dose_min": 15.0,
         "dose_max": 36.0,
         "fixed_press_sec": 40,
-        "swirl_wait_sec": 30,  # 暫與 standard 同；若實測 XL 深床沉降較慢再調高至 40
+        "swirl_wait_sec": 40,  # XL 深床（22g/400ml）沉降較慢，比 standard 多 10s
         "area_cm2": 63.6,   # 內徑 ~90mm → π×45²≈63.6 cm²
     },
 }
