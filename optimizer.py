@@ -79,7 +79,7 @@ def optimize(
                         display_press_sec = press_sec
 
                     press_equiv = collapsed_press * constants.PRESS_EQUIV_FRACTION
-                    swirl_wait = calc_swirl_wait(dial)
+                    swirl_wait = calc_swirl_wait(brewer_size)
                     ey = calc_ey(
                         roast_code,
                         temp,

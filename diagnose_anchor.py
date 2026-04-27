@@ -4,6 +4,8 @@
 
 來源：2022 年文章《Brewing for Balance, Acidity, or Sweetness》
       使用哥倫比亞 El Tambo 水洗豆；三食譜各自突出不同風味目標。
+      註：El Tambo (Agtron 65-75) 對應 codebase 的 `medium_light` 槽（中淺焙）。
+      早期版本誤標 `light`，已於重貼標時更正——「真 Nordic 淺焙」現獨立佔 light 槽。
 
 ━━━ 評分原則（勿修改） ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   好喝不好喝跟泡法無關。評分看的是杯中物（化合物比例 + TDS），
@@ -48,7 +50,7 @@ from optimizer import optimize
 
 # ── 錨點定義 ──────────────────────────────────────────────────────────────────
 ANCHOR = {
-    "roast":        "light",
+    "roast":        "medium_light",
     "brewer":       "standard",       # Hoffman 原版：11g / 200ml
     "water_gh":     50,
     "water_kh":     30,
@@ -77,7 +79,7 @@ def _fmt(ok: bool) -> str:
 
 def _get_overextract_score() -> float:
     """回傳過萃低分錨點的分數，供高分錨點做相對比較用。"""
-    roast, temp, dial, steep, dose, water = "light", 99.0, 3.5, 240.0, 11.0, 200.0
+    roast, temp, dial, steep, dose, water = "medium_light", 99.0, 3.5, 240.0, 11.0, 200.0
     area = constants.BREWER_PRESETS["standard"]["area_cm2"]
     press_s  = calc_press_time(dose, dial, steep, brewer_size="standard")
     press_eq = min(press_s, constants.CHANNELING_PRESS_THRESHOLD) * constants.PRESS_EQUIV_FRACTION
@@ -150,7 +152,7 @@ def run_anchor_check(verbose: bool = True) -> bool:
 
     if verbose:
         print("=" * 60)
-        print("Hoffman anchor check (light / standard / 11g / 98-99°C / steep=120s / GH50 KH30 / T_env=20)")
+        print("Hoffman anchor check (medium_light / standard / 11g / 98-99°C / steep=120s / GH50 KH30 / T_env=20)")
         print("=" * 60)
         print("\nTop 3:")
         for i, r in enumerate(top3):
@@ -184,7 +186,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
     85°C / dial ~5.0 (EK43 6.75=810um; ZP6 mapping estimated) / 13g / 90s / 半密封 25s / 標準壓 30s
     統一 flavor_score() 評分。
     """
-    roast   = "light"
+    roast   = "medium_light"
     temp    = 85.0
     dial    = 5.0
     dose    = 13.0
@@ -195,7 +197,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
     press_equiv = press_s * constants.PRESS_EQUIV_FRACTION
 
     ey = calc_ey(
-        roast_code="light", temp_initial=temp, dial=dial,
+        roast_code="medium_light", temp_initial=temp, dial=dial,
         steep_sec=steep, dose=dose, water_ml=water,
         area_cm2=area, water_gh=50,
         press_equiv=press_equiv,
@@ -227,7 +229,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
 
     if verbose:
         print("=" * 60)
-        print("April anchor check (light / standard / 13g / 85C / 90s / dial ~5.0 / partial-seal 25s)")
+        print("April anchor check (medium_light / standard / 13g / 85C / 90s / dial ~5.0 / partial-seal 25s)")
         print("=" * 60)
         cstr = "  ".join(f"{k}={v:.4f}" for k, v in compounds.items())
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
@@ -247,7 +249,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
     80°C / dial ~5.0 (EK43 6.75=810um; ZP6 mapping estimated) / 17g / 100s / 倒置法 / 下壓 20s / 攪拌 2 次
     統一 flavor_score() 評分。
     """
-    roast   = "light"
+    roast   = "medium_light"
     temp    = 80.0
     dial    = 5.0
     dose    = 17.0
@@ -258,7 +260,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
     press_equiv = press_s * constants.PRESS_EQUIV_FRACTION
 
     ey = calc_ey(
-        roast_code="light", temp_initial=temp, dial=dial,
+        roast_code="medium_light", temp_initial=temp, dial=dial,
         steep_sec=steep, dose=dose, water_ml=water,
         area_cm2=area, water_gh=50,
         press_equiv=press_equiv,
@@ -290,7 +292,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
 
     if verbose:
         print("=" * 60)
-        print("Championship anchor check (light / standard / 17g / 80C / 100s / dial ~5.0 / inverted / press 20s)")
+        print("Championship anchor check (medium_light / standard / 17g / 80C / 100s / dial ~5.0 / inverted / press 20s)")
         print("=" * 60)
         cstr = "  ".join(f"{k}={v:.4f}" for k, v in compounds.items())
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
@@ -312,7 +314,7 @@ def run_underextract_anchor(verbose: bool = True) -> bool:
     93°C / dial 6.5 / steep 60s / 11g / 200ml / standard
     預期：EY < 15%，TDS < 0.85%，score < 40
     """
-    roast  = "light"
+    roast  = "medium_light"
     temp   = 93.0
     dial   = 6.5
     dose   = 11.0
@@ -348,7 +350,7 @@ def run_underextract_anchor(verbose: bool = True) -> bool:
 
     if verbose:
         print("=" * 60)
-        print("Under-extraction anchor (light / 93C / dial6.5 / 60s / 11g / std)")
+        print("Under-extraction anchor (medium_light / 93C / dial6.5 / 60s / 11g / std)")
         print("=" * 60)
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
         print("\nChecks:")
@@ -366,7 +368,7 @@ def run_overextract_anchor(verbose: bool = True) -> bool:
     99°C / dial 3.5 / steep 240s / 11g / 200ml / standard
     預期：EY > 22%，CGA 超標（觸發澀感懲罰），score < 80
     """
-    roast  = "light"
+    roast  = "medium_light"
     temp   = 99.0
     dial   = 3.5
     dose   = 11.0
@@ -405,7 +407,7 @@ def run_overextract_anchor(verbose: bool = True) -> bool:
 
     if verbose:
         print("=" * 60)
-        print("Over-extraction anchor (light / 99C / dial3.5 / 240s / 11g / std)")
+        print("Over-extraction anchor (medium_light / 99C / dial3.5 / 240s / 11g / std)")
         print("=" * 60)
         print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
         print("\nChecks:")

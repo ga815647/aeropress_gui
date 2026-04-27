@@ -4,11 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 待辦任務
 
-見 [`TASKS.md`](TASKS.md)，包含四個階段的具體 checklist：
-1. **UI — Chip 標籤重寫**（⚠️ 等 Phase 1-3 完成後才能做，模型不準確則標籤無意義）
-2. **Phase 1** — 化合物模型修正（EY-gated base）
-3. **Phase 2** — 評分邊際曲線
-4. **Phase 3** — 錨點重新校準
+見 [`TASKS.md`](TASKS.md)。
+
+**已完成（2026-04-12）：** Phase 1（化合物模型修正，引入 `SW_DIAL_COEFF`）、Phase 2（評分邊際曲線 + 比值評分 + `ACCEL_W_PER_COMPOUND` 加速懲罰）、Phase 3（錨點重新校準，IDEAL_CGA 0.05→0.057、`CGA_ASTRINGENCY_THRESHOLD` 1.25→1.15）。
+
+**已完成（2026-04-25）：** 焙度錨點重貼標。經查證 Hoffmann/El Tambo (Agtron 65-75) 實際是 **medium-light**（不是淺焙）；過去整套 Hoffmann 校準掛在 `light` 槽屬於誤標。已將 Hoffmann 校準參數（`EY_PREFER`/`TDS_PREFER`/`ROAST_TABLE`/`IDEAL_FLAVOR`/`COMPOUND_BASE`/`EY_SIGMA_*`）整體搬到 `medium_light`，新 `light` 槽改填 Nordic 真淺焙暫定值（`base_temp=99`、`dial_prefer=4.0`、`TDS_PREFER=1.30`、`dose_per_100ml=(5.5, 7.5)`），`diagnose_anchor.py` 五錨點 roast key 改為 `medium_light`。五錨點現況：Hoffman 94.6 / April 90.0 / Championship 69.8 / Under 0.0 / Over 35.2。
+
+**僅剩待辦：**
+- UI — Chip 標籤重寫（基於校準後模型重新設計風味描述；機制保留，文字描述待重做）
+- `light` 槽真淺焙錨點待補（目前用 `very_light` IDEAL_FLAVOR 暫頂；找到 Nordic-style AeroPress 食譜後校準）
 
 ## Commands
 
@@ -48,11 +52,13 @@ python diagnose_anchor.py
 
 ### 錨點基準（勿偏離）
 
+**注意：Hoffmann/April/Championship 三錨點現掛在 `medium_light` 槽**（El Tambo 實際 Agtron 65-75 = 中淺焙）。`light` 槽留給 Nordic 真淺焙，與 Hoffmann 校準無關。
+
 | 參數 | Hoffman 實測值 | 模型目標 |
 |------|--------------|---------|
-| TDS | 1.23%（稍粗）→ 原版 ~1.27% | TDS_PREFER["light"] = 1.27 |
-| EY | 20–22% | EY_PREFER["light"] = 21.0 |
-| 研磨 | 450–600µm EK43 → ZP6 dial ≈ 4.3 | dial_prefer["light"] = 4.3 |
+| TDS | 1.23%（稍粗）→ 原版 ~1.27% | TDS_PREFER["medium_light"] = 1.27 |
+| EY | 20–22% | EY_PREFER["medium_light"] = 21.0 |
+| 研磨 | 450–600µm EK43 → ZP6 dial ≈ 4.3 | dial_prefer["medium_light"] = 4.3 |
 | 水溫 | 97.8°C（208°F） | 錨點檢查固定 98–99°C |
 | 浸泡 | 2:00 → swirl → press | 錨點 fixed_steep=120s |
 
@@ -72,7 +78,7 @@ python diagnose_anchor.py
 
 ## 三錨點食譜原始參數與評分原則
 
-來源：2022 年文章《Brewing for Balance, Acidity, or Sweetness》，使用哥倫比亞 El Tambo 水洗豆。
+來源：2022 年文章《Brewing for Balance, Acidity, or Sweetness》，使用哥倫比亞 El Tambo 水洗豆（Agtron 65-75，Square Mile filter style，**對應本系統 `medium_light` 焙度槽**——早期版本誤標 `light` 已修正）。
 
 ### 三食譜實測值（原始資料）
 
@@ -113,43 +119,18 @@ python diagnose_anchor.py
 
 April 和 Championship 在 `diagnose_anchor.py` 使用各自的 `ACIDITY_IDEAL`/`SWEETNESS_IDEAL` 及對應的 `TDS_prefer`，這**不是偷吃步**——而是正確地以「該食譜的目標風格」作為評分基準。高濃縮配方（Championship TDS=1.56%）不應被主力 TDS_PREFER=1.27 的 Gaussian 嚴懲，因為高濃縮下化合物品質本身仍優秀。
 
-### 評分鑑別度改革進度
+### 評分鑑別度改革紀錄（已完成）
 
-**已完成：**
-1. ~~移除 CDF~~ → `score_to_display` = raw × 100（直接線性映射）
-2. ~~增強化合物平衡懲罰~~ → log-ratio Gaussian（取代舊 cosine_sim + conc_score）
-3. ~~TDS 懲罰不對稱化~~ → sigma_low=0.10（太淡嚴懲）, sigma_high=0.20（高濃縮寬鬆）
-4. ~~EY 懲罰降到最低~~ → EY_GAUSS_WEIGHT=0.06
-5. **禁止**為了讓某錨點通過而削弱某項懲罰 → 應找出物理根本原因
-
-**已知問題：化合物模型鑑別力不足**
-
-Under-extract (93C/6.5/60s) 的化合物 fraction 比 Hoffman (98C/4.6/120s) 還「好看」：
-- SW 0.446 > Hoffman 0.361（欠萃比正萃還甜？）
-- CGA 0.049 ≈ Hoffman 0.048（欠萃和正萃一樣乾淨？）
-- MEL 0.042 > Hoffman 0.034（欠萃焦苦更高？）
-
-根本原因：`COMPOUND_BASE` 基底值佔比過大（SW base=0.42），時間/溫度/研磨修正幅度太小。
-結果：壞配方和好配方的化合物 profile 幾乎相同，分數鑑別完全依靠 TDS floor。
-
-**待實施改革路線（三階段）：**
-
-**Phase 1 — 化合物模型修正（compounds.py + constants.py）**
-- 引入 EY-gated 基底：SW/PS 等「發展型」化合物需足夠 EY 才會完整釋放
-- 修正時間函數：短浸泡 + 粗研磨應顯著壓低 SW/PS
-- 確保 under-extract SW fraction < Hoffman SW fraction
-- CGA/MEL 在過萃時應明顯超標，欠萃時應明顯低
-
-**Phase 2 — 評分邊際曲線（scoring.py）**
-- 化合物好處邊際遞減（diminishing returns）：接近理想高報酬，超過後趨平
-- 化合物壞處邊際遞增（steeper penalty）：偏離理想越多，懲罰加速
-- 化合物比值評分：AC/CGA（純淨酸質）、SW/MEL（甜苦比）、PS/CA（醇厚乾淨度）
-- 各比值使用獨立的加分/扣分曲線
-
-**Phase 3 — 重新校準錨點**
-- 所有 5 錨點重跑（Hoffman + April + Championship + Under + Over）
-- 確認化合物物理合理性（不只看分數，看每個化合物的絕對值和比例）
-- 調整 IDEAL_FLAVOR 對齊新的化合物模型預測
+1. **score_to_display** = raw × 100（線性映射，無 CDF）
+2. **log-ratio Gaussian compound_reward**（取代舊 cosine_sim + conc_score）
+3. **TDS Super-Gaussian 不對稱**：`TDS_GAUSS_SIGMA_LOW=0.15`、`TDS_GAUSS_SIGMA_HIGH=0.65`、`TDS_SUPER_GAUSS_EXP=4`（平頂寬容區，平滑混合斜率 `TDS_SIGMA_BLEND_K=5.0`）
+4. **EY 完全退出評分**：`EY_GAUSS_WEIGHT=0.0`（EY 是過程變數；化合物模型已通過時間/溫度/研磨敏感度間接反映萃取程度）
+5. **化合物比值獎勵**（`scoring.py`）：AC/CGA、SW/(MEL+CGA)、PS/CA — sigmoid 加分曲線，最多降 15% compound_loss（`RATIO_WEIGHT=0.15`）
+6. **苦澀超標加速懲罰**：`ACCEL_W_PER_COMPOUND` 對 CGA(0.20)/MEL(0.15) 啟動，超過 `PENALTY_ACCEL_THRESHOLD=2.5` 後 softplus 加速
+7. **TDS floor 改 sigmoid**：`1 / (1 + exp(-K(tds - MID)))`，`TDS_FLOOR_MID=0.50, K=8.0`（取代舊 `min(tds/0.80, 1)²`，全域連續可導）
+8. **Phase 1 SW 研磨敏感度**：`SW_DIAL_COEFF=0.10`（log-線性，每 dial 單位 10%；細研磨 → 接觸面積大 → 香氣揮發物多）— 不用 EY-gate，避免因果倒置
+9. **Phase 3 IDEAL_CGA 校準**：0.05→0.057 對齊 Hoffman 實測 CGA_frac≈0.064；AC 同步下調維持 sum=1.0
+10. **禁止**為了讓某錨點通過而削弱某項懲罰 → 必須找出物理根本原因
 
 ---
 
@@ -191,25 +172,28 @@ Results sorted by score; top-N returned (always includes unconstrained #1).
 | CGA | Chlorogenic acid (astringency) |
 | MEL | Melanoidins (roasty bitterness) |
 
-`predict_compounds` in `models/compounds.py` models each compound as time/temp/grind functions, with pre-seal drip correction and press percolation selectivity.
+`predict_compounds` in `models/compounds.py` models each compound as time/temp/grind functions, with pre-seal drip correction and press percolation selectivity. SW 額外乘上 `exp(SW_DIAL_COEFF * (DIAL_BASE - dial))`（細研磨增強香氣），確保短浸泡 + 粗研磨 SW fraction < Hoffman SW fraction（鑑別欠萃 vs 正萃）。
 
 ### Scoring Formula (models/scoring.py)
 
-`flavor_score = compound_reward × tds_factor × ey_factor × tds_floor_factor`
+`flavor_score = compound_reward × tds_factor × tds_floor_factor`（EY 不進評分，`EY_GAUSS_WEIGHT=0.0`）
 
 - **compound_reward**: log-ratio Gaussian — 每個化合物計算 `log(actual_perceived / ideal)` 偏差，以非對稱 sigma 衰減，加權平均後取 exp。黃金交叉在 actual = ideal（reward = 1.0）
-  - `COMPOUND_SIGMA_LO`：化合物不足側（SW/PS 不足嚴懲，苦味不足寬鬆）
-  - `COMPOUND_SIGMA_HI`：化合物超標側（CGA/MEL 超標嚴懲，SW/PS 超標寬鬆）
-- **ideal_abs**: interpolated from `IDEAL_FLAVOR` table keyed by `(roast_code, tds_bracket)`；苦味化合物再乘 `IDEAL_BITTER_REDUCTION=0.95`
-- **tds_factor**: asymmetric Gaussian around `TDS_PREFER[roast_code]` — sigma_low=0.10（太淡嚴懲），sigma_high=0.20（高濃縮寬鬆）
-- **ey_factor**: Gaussian around `EY_PREFER[roast_code]` with `EY_GAUSS_WEIGHT=0.06`（過程變數，極低權重）
-- **tds_floor_factor**: `min(tds / 0.80, 1)²` — TDS 低於 0.80% 連續硬懲罰
+  - `COMPOUND_SIGMA_LO`：化合物不足側（SW/PS 0.15 嚴懲，苦味 0.80 寬鬆）
+  - `COMPOUND_SIGMA_HI`：化合物超標側（CGA 0.18 / MEL 0.25 嚴懲，SW/PS 0.60 寬鬆）
+  - `WEIGHTS = {AC:1.0, SW:1.8, PS:2.0, CA/CGA/MEL:1.3}`
+  - **比值獎勵**（降 compound_loss）：AC/CGA、SW/(MEL+CGA)、PS/CA 三個 sigmoid 加分，加權後最多降 `RATIO_WEIGHT=0.15`
+  - **加速懲罰**：`ACCEL_W_PER_COMPOUND[CGA]=0.20`、`[MEL]=0.15`，超過 `PENALTY_ACCEL_THRESHOLD=2.5` 後 softplus 加速
+- **ideal_abs**: 從 `IDEAL_FLAVOR` 表以 `(roast_code, tds_bracket)` Gaussian 內插（`IDEAL_INTERP_SIGMA=0.15`）；苦味化合物再乘 `IDEAL_BITTER_REDUCTION=0.95`
+- **tds_factor**: 不對稱 Super-Gaussian（exp=4 平頂）— `TDS_GAUSS_SIGMA_LOW=0.15`（太淡）、`TDS_GAUSS_SIGMA_HIGH=0.65`（高濃縮寬鬆），sigmoid 平滑混合 `TDS_SIGMA_BLEND_K=5.0`
+- **tds_floor_factor**: sigmoid `1 / (1 + exp(-TDS_FLOOR_K × (tds - TDS_FLOOR_MID)))`（`MID=0.50, K=8.0`），全域連續可導，取代舊 `min(tds/0.80, 1)²`
 
 **感知前處理（物理，在評分之前）：**
-- KH 壓制酸質感知：`AC × exp(−KH/150)`
-- 高溫 SW 香氣損失：溫度超過 97°C 啟動，斜率 0.015/°C，上限 25%
-- 高溫焦苦放大（深焙）：`SCORCH_PARAMS` per-roast 閾值
-- 軟水苦味放大：GH < 20 時 CA/CGA/MEL +25%
+- KH 壓制酸質感知：`AC × (KH_FLOOR + (1 - KH_FLOOR) × exp(−KH / KH_PERCEPT_DECAY_SMOOTH))`，`KH_FLOOR=0.65`、`KH_PERCEPT_DECAY_SMOOTH=42.0`（kh=30 → factor≈0.82；kh→∞ 漸近 0.65）
+- 高溫 SW 香氣損失：sigmoid 中心 `SW_AROMA_THRESH=97°C`，上限 `SW_AROMA_CAP=0.25`，斜率 `SW_AROMA_SIGMOID_K=3.0`
+- 高溫焦苦放大（深焙）：`SCORCH_PARAMS` per-roast 閾值，softplus 平滑（`SCORCH_SOFTPLUS_K=0.5`）
+- 軟水苦味放大：GH→0 時 CA/CGA/MEL ×(1+0.25)，sigmoid 過渡（`LOW_GH_THRESHOLD=20`、`GH_SOFT_SIGMOID_K=0.3`）
+- 低溫萃取補正（K_factor）：`temp_initial < K_LOW_TEMP_FLOOR=87°C` 時飽和補正最高 4×（April 85°C / Championship 80°C 觸發）
 
 ### Key Files
 
@@ -238,7 +222,7 @@ Results sorted by score; top-N returned (always includes unconstrained #1).
 
 Water affects scoring through three channels:
 - **GH (hardness)**: controls compound extraction efficiency
-- **KH (alkalinity)**: `KH_PERCEPT_DECAY=150` → suppresses perceived acidity (AC × exp(−KH/150))
+- **KH (alkalinity)**: 平滑公式 `KH_FLOOR=0.65 + 0.35 × exp(−KH / KH_PERCEPT_DECAY_SMOOTH=42.0)` 壓制酸質感知（舊常數 `KH_PERCEPT_DECAY=150` 已棄用）
 - **mg_frac**: Mg²⁺ fraction boosts AC/SW, Ca²⁺ fraction boosts PS/CGA
 - Soft water (GH < `LOW_GH_THRESHOLD=20`, e.g. RO) triggers extra bitter penalty
 

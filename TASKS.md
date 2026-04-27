@@ -84,7 +84,7 @@
 - [x] 調整閾值：`CGA_ASTRINGENCY_THRESHOLD` 1.25→1.15（對齊新 IDEAL_CGA 比值基準）
 - [x] `diagnose_anchor.py` 全部 `[ OK ]` ✓
 
-**校準後分數（Phase 3 最終狀態）：**
+**校準後分數（Phase 3 最終狀態，2026-04-12）：**
 | 錨點 | 分數 | 閾值 |
 |------|------|------|
 | Hoffman | 95.6 | > over-extract |
@@ -92,6 +92,15 @@
 | Championship | 70.4 | ≥ 55 |
 | Under-extract | 0.0 | < 40 |
 | Over-extract | 46.9 | < 50 |
+
+**焙度錨點重貼標後分數（2026-04-25，Hoffmann 校準從 `light` 搬到 `medium_light`）：**
+| 錨點 | 分數 | 閾值 |
+|------|------|------|
+| Hoffman | 94.6 | > over-extract |
+| April | 90.0 | ≥ 60 |
+| Championship | 69.8 | ≥ 55 |
+| Under-extract | 0.0 | < 40 |
+| Over-extract | 35.2 | < 50 |
 
 **物理解釋（CGA 校準）：**
 原 IDEAL_CGA=0.05 低於任何可達配方（Hoffman 實測 0.064），造成評分恆懲罰 CGA。
