@@ -58,6 +58,7 @@ def flavor_score(
     temp_initial: float = 90,
     ey: float = 0.0,
     steep_sec: float = 0.0,
+    dial: float = 4.5,
 ) -> float:
 
     # ── 1. 感知前處理（物理，非評分邏輯） ────────────────────────────────
@@ -163,7 +164,20 @@ def flavor_score(
     # ── 6. TDS 底線 — sigmoid（太淡無口感） ────────────────────────────
     tds_floor_factor = _sigmoid(constants.TDS_FLOOR_K * (tds - constants.TDS_FLOOR_MID))
 
-    return compound_reward * tds_factor * ey_factor * tds_floor_factor
+    # ── 7. Grind-dependent EY deficit 懲罰（Phase 5 lite，單側）─────
+    # 細磨：目標 Hoffman 風格高 EY；EY 不足要扣分
+    # 粗磨：April/Hedrick 風格刻意低 EY；不扣分
+    # softplus k=5.0 讓 EY=PREFER 時殘留懲罰 ≈ 0（避免 Hoffman 達標仍被誤扣）
+    grind_ey_demand = _sigmoid(
+        constants.GRIND_EY_DEMAND_K * (constants.DIAL_BASE - dial)
+    )
+    ey_deficit = _softplus(ey_prefer - ey, k=5.0)
+    ey_z = ey_deficit / ey_s_lo
+    grind_ey_factor = math.exp(
+        -constants.EY_DEMAND_WEIGHT * grind_ey_demand * ey_z * ey_z
+    )
+
+    return compound_reward * tds_factor * ey_factor * tds_floor_factor * grind_ey_factor
 
 
 def score_to_display(raw: float, roast_code: str) -> float:

@@ -203,13 +203,13 @@ TDS_SIGMA_BLEND_K = 5.0      # TDS sigma 平滑混合斜率
 TDS_SUPER_GAUSS_EXP = 4      # 超高斯（平頂 → dose 多元性需靠寬 sigma）
 
 # 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
-K_SW = 0.010  # 乘法時間函數速率
-SW_TIME_FLOOR = 0.50  # t=0 時 SW 有 50% 基底（加強時間鑑別：短浸泡糖類未發展）
+K_SW = 0.014  # 速率提高（0.010→0.014），讓 90-120s 接近平台、60s 明顯落後
+SW_TIME_FLOOR = 0.30  # t=0 時 SW 基底（從 0.50 收緊到 0.30，讓 60s 欠萃明顯低於 120s 完整發展）
 SW_DIAL_COEFF = 0.10  # SW 研磨敏感度：對數線性，每 dial 單位 10%（細研磨接觸面積大，香氣揮發物萃取多）
 
 # 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
-K_PS = 0.008  # 乘法時間函數速率（PS 比 SW 慢）
-PS_TIME_FLOOR = 0.50  # t=0 時 PS 有 50% 基底（加強時間鑑別，80°C 仍可通過 Championship）
+K_PS = 0.012  # 速率提高（0.008→0.012），配合 floor 降低後仍保 100-120s 飽和度
+PS_TIME_FLOOR = 0.30  # t=0 時 PS 基底（從 0.50 收緊到 0.30，配合 SW 加強短浸泡欠發展懲罰）
 
 # CGA 時間函數參數
 K_CGA_TIME = 0.015
@@ -226,6 +226,20 @@ K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
 AC_DECAY_START = 150  # 酸質開始衰減的時間點（從 140 測試值進一步推到 150，確保長浸泡不失酸）
 AC_HIGH_TEMP_THRESH = 95.0  # 揮發性有機酸高溫降解閾值（°C）；softplus 平滑過渡
 AC_HIGH_TEMP_DECAY = 0.020  # 高溫降解斜率（每 softplus 單位損失 2%）
+
+# 研磨粗細對 AC 衰減 / CGA 累積動力學的耦合（Fuller & Rao 2017 Sci. Reports + coffeeadastra）
+# 粗磨內部擴散慢 → 起始延後 + 速率降低；細磨表面積大 → 起始提前 + 速率加快
+# 同時作用：(a) 速率乘以 grind_kinetics；(b) 起始時間除以 grind_kinetics
+# >1 for fine（dial < DIAL_BASE）, <1 for coarse（dial > DIAL_BASE）
+GRIND_KINETICS_COEFF = 0.40
+
+# Grind-dependent EY 欠萃懲罰（Phase 5 lite）
+# 細磨（dial < DIAL_BASE）目標 Hoffman 風格，EY 不足要扣分；
+# 粗磨（dial > DIAL_BASE）刻意低 EY 是 April/Hedrick 風格，EY 不足不扣分。
+# 公式：factor = exp(-EY_DEMAND_WEIGHT × sigmoid(GRIND_EY_DEMAND_K × (DIAL_BASE - dial)) × ey_z²)
+# 其中 ey_z = max(0, (EY_PREFER - EY) / EY_SIGMA_LO[roast])（單側、softplus 平滑）
+GRIND_EY_DEMAND_K = 10.0      # sigmoid 銳度（dial 4.5 為中心；±0.1 dial 差距即足以區分）
+EY_DEMAND_WEIGHT = 0.30       # 最大懲罰強度（細磨 + EY 差 1 個 sigma → ~25% 扣分）
 
 CGA_ASTRINGENCY_THRESHOLD = 1.15  # diagnose_anchor.py 顯示用，不進評分公式；Phase 3 調整：IDEAL_CGA 從 0.05→0.057，比值分母增大，對應閾值從 1.25→1.15
 
@@ -247,6 +261,11 @@ STEEP_STEP = 30
 # 懲罰公式：score × (1 - W + W × exp(-0.5 × ((dial - prefer)/sigma)²))
 DIAL_PREFER_WEIGHT = 0.15  # 最大 15% 懲罰（Phase 3 提升鑑別度）
 DIAL_PREFER_SIGMA = 0.6    # ±0.6 dial 懲罰區間（Phase 3 收緊）
+
+# Top N 多樣化門檻（#2 起每名強制與已選方案在三軸至少一軸差異 ≥ 閾值）
+TOP_DIVERSITY_DIAL_MIN = 1.0   # dial 至少差 1 格（粗磨/細磨明確區分）
+TOP_DIVERSITY_STEEP_MIN = 60   # steep 至少差 60s（2 個 STEEP_STEP）
+TOP_DIVERSITY_DOSE_MIN = 2.0   # dose 至少差 2g（劑量改變要明顯）
 
 TEMP_BOILING_POINT = 100.0
 SCORCH_PARAMS = {

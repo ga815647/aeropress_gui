@@ -697,16 +697,18 @@
     if (!brewer || !roast || !roast.dose_per_100ml) return [];
 
     const waterMl = brewer.water_ml;
-    const round05 = v => Math.round(v * 2) / 2;  // 捨入到 0.5g
+    // XL 以 1g 為步進，standard 以 0.5g
+    const stepG = brewerId === "xl" ? 1 : 0.5;
+    const snap = v => Math.round(v / stepG) * stepG;
 
-    const totalMin = round05(roast.dose_per_100ml[0] * waterMl / 100);
-    const totalMax = round05(roast.dose_per_100ml[1] * waterMl / 100);
+    const totalMin = snap(roast.dose_per_100ml[0] * waterMl / 100);
+    const totalMax = snap(roast.dose_per_100ml[1] * waterMl / 100);
     const step = (totalMax - totalMin) / CHIP_LABELS.length;
 
     return CHIP_LABELS.map((l, i) => ({
       ...l,
-      min: round05(totalMin + i * step),
-      max: round05(totalMin + (i + 1) * step),
+      min: snap(totalMin + i * step),
+      max: snap(totalMin + (i + 1) * step),
     }));
   }
 
@@ -805,9 +807,17 @@
     }
   }
 
+  function syncDoseInputStep() {
+    if (!brewerSelect) return;
+    const stepG = brewerSelect.value === "xl" ? "1" : "0.5";
+    if (doseMinInput) doseMinInput.step = stepG;
+    if (doseMaxInput) doseMaxInput.step = stepG;
+  }
+  syncDoseInputStep();
+
   if (doseMinInput) doseMinInput.addEventListener("input", () => { activeChipIndex = -1; syncChipActive(); updateDoseFlavorHint(); });
   if (doseMaxInput) doseMaxInput.addEventListener("input", () => { activeChipIndex = -1; syncChipActive(); updateDoseFlavorHint(); });
-  if (brewerSelect) brewerSelect.addEventListener("change", () => { activeChipIndex = -1; renderDosePresetChips(); updateDoseFlavorHint(); });
+  if (brewerSelect) brewerSelect.addEventListener("change", () => { activeChipIndex = -1; syncDoseInputStep(); renderDosePresetChips(); updateDoseFlavorHint(); });
 
   // roast 改變時重算 chip 範圍（焙度 × 器材矩陣）
   const roastSelectEl = document.getElementById("roast");

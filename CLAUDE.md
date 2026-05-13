@@ -10,8 +10,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **已完成（2026-04-25）：** 焙度錨點重貼標。經查證 Hoffmann/El Tambo (Agtron 65-75) 實際是 **medium-light**（不是淺焙）；過去整套 Hoffmann 校準掛在 `light` 槽屬於誤標。已將 Hoffmann 校準參數（`EY_PREFER`/`TDS_PREFER`/`ROAST_TABLE`/`IDEAL_FLAVOR`/`COMPOUND_BASE`/`EY_SIGMA_*`）整體搬到 `medium_light`，新 `light` 槽改填 Nordic 真淺焙暫定值（`base_temp=99`、`dial_prefer=4.0`、`TDS_PREFER=1.30`、`dose_per_100ml=(5.5, 7.5)`），`diagnose_anchor.py` 五錨點 roast key 改為 `medium_light`。五錨點現況：Hoffman 94.6 / April 90.0 / Championship 69.8 / Under 0.0 / Over 35.2。
 
-**僅剩待辦：**
-- UI — Chip 標籤重寫（基於校準後模型重新設計風味描述；機制保留，文字描述待重做）
+**已完成（2026-05-13）：** Phase 4 — 粗磨+長浸泡象限校準。原 CGA(time) 與 AC decay 速率/起始時間都跟研磨粗細無關，導致「粗+長」象限被誤判為 AC 流失 + CGA 暴增（過萃）。引入 `GRIND_KINETICS_COEFF=0.40`，讓 `K_AC_DECAY` / `AC_DECAY_START` / `K_CGA_TIME` / `CGA_TIME_ONSET` 同時隨研磨耦合（粗磨 → 起始延後、速率減緩，符合 Fuller & Rao 2017 first-order + plateau）。新增 Hedrick/Gagne 第六錨點（dial 6.0 / 14g / 95°C / 240s / target AC > CGA, score ≥ 55）驗證粗+長象限。同時加入 Top N 多樣化（`TOP_DIVERSITY_DIAL_MIN/STEEP_MIN/DOSE_MIN`）讓 Top 列表呈現「Hoffman 風 / 長浸泡 / 粗磨 / 多豆量」多樣代表，diagnose_anchor 傳 `diversify_top=False` 保留錨點驗證緊密性。六錨點全 PASS；over-extract 分數從 35→12（細磨長浸泡懲罰加重）。
+
+**已完成（2026-05-13）：** Phase 4b — SW/PS 時間發展鑑別。原 `SW_TIME_FLOOR=PS_TIME_FLOOR=0.50` 太寬鬆，導致 60s 短浸泡跟 120s 完整浸泡的甜感/醇厚差距只有 ~17%（過萃 indistinguishable from 正萃）。降至 `0.30` 同時提速 `K_SW: 0.010→0.014` / `K_PS: 0.008→0.012`（讓 90-120s 仍接近平台，只懲罰 <60s 真短時）。效果：dose=22g/dial 4.3/60s 從 91.4 降到 84.5；Top 列表 Rank 2 不再是 60s 欠萃，而是 dial 4.7/180s 的正萃替代。六錨點仍全 PASS（Championship 100s/80°C 因 K 提速恰好補回 PS 損失）。
+
+**已完成（2026-05-13）：** Phase 5 lite — grind-dependent EY deficit penalty。原評分 `EY_GAUSS_WEIGHT=0.0` 完全不看 EY，導致細磨高豆量 + EY 偏低 1-2%（如 dial 4.6/23g/120s/95°C，EY 19.2% vs target 21%）的「mild under-extraction」被誤判為高分（96.9）。新增 `GRIND_EY_DEMAND_K=10.0` / `EY_DEMAND_WEIGHT=0.30`：以 sigmoid 在 `DIAL_BASE=4.5` 為中心，細磨（dial<4.5）線性轉成 EY 嚴格要求，粗磨（dial>4.5）線性豁免；EY deficit 用 softplus(k=5) 平滑單側懲罰。效果：dial 4.6/23g 從 96.9→86.3（拉開 10 分），Hoffman 4.4/22g 從 96.0→95.4（幾乎不變），April/Champion/Hedrick 因粗磨完全豁免。`flavor_score` 簽名新增 `dial` 參數，已串接 optimizer.py 與 diagnose_anchor.py。**注意 CLAUDE.md「EY 不得作為主要扣分依據」原則 — 此懲罰僅在細磨象限觸發、單側（只懲罰不足）、最大扣分 ~25%（不主導）。**
+
+**僅剩待辦（交接，詳見 [TASKS.md](TASKS.md)）：**
+- **Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準（❌ 大工程，未完成）**：subagent 研究發現 `IDEAL_FLAVOR["medium_light"]["mid"]` PS=29% 是 ~2× 文獻上限、CGA=5.7% 是 ~半數、MEL=5% 過低。Phase 5 lite 已用 grind-dep EY 懲罰 work around，但 IDEAL 本身仍未對齊文獻。完整重校涉及 IDEAL_FLAVOR / COMPOUND_BASE / ratio 閾值 / sigma 多輪 iteration，**完整步驟與目標值見 TASKS.md「Phase 5 full」**，記憶見 `project_ideal_flavor_unanchored.md`。
+- UI — Chip 標籤重寫（Phase 1-3 已完成可進行；若先做 Phase 5 full 描述語會更準）
 - `light` 槽真淺焙錨點待補（目前用 `very_light` IDEAL_FLAVOR 暫頂；找到 Nordic-style AeroPress 食譜後校準）
 
 ## Commands

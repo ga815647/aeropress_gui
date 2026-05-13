@@ -21,6 +21,7 @@ def optimize(
     fixed_steep: int | None = None,
     dose_min_override: float | None = None,
     dose_max_override: float | None = None,
+    diversify_top: bool = True,
 ) -> list[dict]:
     cfg = constants.ROAST_TABLE[roast_code]
     base_temp = cfg["base_temp"]
@@ -29,6 +30,8 @@ def optimize(
     area_cm2 = brewer.get("area_cm2", constants.DRIP_AREA_REF_CM2)
     dose_min_x2 = int(brewer["dose_min"] * 2)
     dose_max_x2 = int(brewer["dose_max"] * 2)
+    # XL 採 1g 步進（dose_x2 跨 2），standard 採 0.5g（dose_x2 跨 1）
+    dose_step_x2 = 2 if brewer_size == "xl" else 1
 
     # 各焙度豆量預設範圍（g/100ml）：收窄搜尋，省豆優先
     dose_range = cfg.get("dose_per_100ml")
@@ -57,7 +60,14 @@ def optimize(
         temp_hi = int(min(base_temp + 3, constants.TEMP_BOILING_POINT))
 
     steep_values = [fixed_steep] if fixed_steep is not None else range(30, 421, constants.STEEP_STEP)
-    dose_values = [int(fixed_dose * 2)] if fixed_dose is not None else range(dose_min_x2, dose_max_x2 + 1)
+    if fixed_dose is not None:
+        dose_values: range | list = [int(fixed_dose * 2)]
+    else:
+        # 將起點對齊到 step 邊界（避免 XL 落在 0.5g 半階）
+        remainder = dose_min_x2 % dose_step_x2
+        if remainder:
+            dose_min_x2 += dose_step_x2 - remainder
+        dose_values = range(dose_min_x2, dose_max_x2 + 1, dose_step_x2)
 
     for temp in range(temp_lo, temp_hi + 1):
         for dial_x10 in range(30, 76):
@@ -127,7 +137,7 @@ def optimize(
                         compounds, ideal_abs, tds, roast_code,
                         water_kh=water_kh, water_gh=water_gh,
                         t_slurry=t_slurry_val, temp_initial=temp,
-                        ey=ey, steep_sec=steep,
+                        ey=ey, steep_sec=steep, dial=dial,
                     )
                     dial_prefer = cfg.get("dial_prefer")
                     if dial_prefer is not None:
@@ -177,10 +187,38 @@ def optimize(
     if not results:
         return []
 
-    # Always keep the unfiltered #1 result (best overall score, no condition)
+    # #1 = 全域最高分（無條件）。
+    # #2..N = 強制與已選方案在 (dial, steep, dose) 至少一軸有顯著差異，
+    #         讓 Top 列表呈現「粗磨派、長時間派、多豆量派」等不同象限的代表，
+    #         而不是全部擠在最佳解的小鄰域。
+    # diagnose_anchor.py 需關閉多樣化以驗證 Top3 都在錨點鄰域。
+    if not diversify_top:
+        return results[:top_n]
     final: list[dict] = [results[0]]
+    if top_n <= 1:
+        return final
 
-    if top_n > 1:
-        final.extend(results[1: top_n])
+    def _diverse(candidate: dict, selected: list[dict]) -> bool:
+        for s in selected:
+            if (abs(candidate["dial"] - s["dial"]) < constants.TOP_DIVERSITY_DIAL_MIN
+                    and abs(candidate["steep_sec"] - s["steep_sec"]) < constants.TOP_DIVERSITY_STEEP_MIN
+                    and abs(candidate["dose"] - s["dose"]) < constants.TOP_DIVERSITY_DOSE_MIN):
+                return False
+        return True
+
+    for item in results[1:]:
+        if len(final) >= top_n:
+            break
+        if _diverse(item, final):
+            final.append(item)
+
+    # 若多樣化條件太嚴格使 Top N 補不滿，補回剩餘高分（仍保留排序）
+    if len(final) < top_n:
+        seen = {id(x) for x in final}
+        for item in results[1:]:
+            if len(final) >= top_n:
+                break
+            if id(item) not in seen:
+                final.append(item)
 
     return final

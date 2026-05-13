@@ -96,7 +96,7 @@ def _get_overextract_score() -> float:
     raw = flavor_score(cpd, ideal, tds, roast,
                        water_kh=30, water_gh=50,
                        t_slurry=temp - 2.0, temp_initial=temp,
-                       ey=ey, steep_sec=steep)
+                       ey=ey, steep_sec=steep, dial=dial)
     return score_to_display(raw, roast)
 
 
@@ -114,6 +114,7 @@ def run_anchor_check(verbose: bool = True) -> bool:
             fixed_dose=ANCHOR["fixed_dose"],
             temp_range=ANCHOR["temp_range"],
             fixed_steep=ANCHOR["fixed_steep"],
+            diversify_top=False,  # 錨點驗證需 Top3 都在 Hoffman 鄰域，不能被多樣化打散
         )
     finally:
         runtime.apply_environment_settings(_t_env_orig, 0)
@@ -218,7 +219,7 @@ def run_april_anchor(verbose: bool = True) -> bool:
     raw   = flavor_score(compounds, ideal, tds, roast,
                          water_kh=30, water_gh=50,
                          t_slurry=temp - 4.0, temp_initial=temp,
-                         ey=ey, steep_sec=steep)
+                         ey=ey, steep_sec=steep, dial=dial)
     score = score_to_display(raw, roast)
 
     tds_ok    = abs(tds - 1.17) <= 0.20
@@ -280,7 +281,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
     raw   = flavor_score(compounds, ideal, tds, roast,
                          water_kh=30, water_gh=50,
                          t_slurry=temp - 4.0, temp_initial=temp,
-                         ey=ey, steep_sec=steep)
+                         ey=ey, steep_sec=steep, dial=dial)
     score = score_to_display(raw, roast)
 
     tds_ok       = abs(tds - 1.56) <= 0.25
@@ -339,7 +340,7 @@ def run_underextract_anchor(verbose: bool = True) -> bool:
     raw   = flavor_score(compounds, ideal, tds, roast,
                          water_kh=30, water_gh=50,
                          t_slurry=temp - 4.0, temp_initial=temp,
-                         ey=ey, steep_sec=steep)
+                         ey=ey, steep_sec=steep, dial=dial)
     score = score_to_display(raw, roast)
 
     ey_ok    = ey  < 15.0
@@ -358,6 +359,65 @@ def run_underextract_anchor(verbose: bool = True) -> bool:
         print(f"  {_fmt(tds_ok)}  TDS {tds:.3f}% < 0.85%  (too weak)")
         print(f"  {_fmt(score_ok)}  score {score} < 40.0  (bad recipes must score low)")
         print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - scoring not penalizing bad recipes ]'}")
+        print("=" * 60)
+
+    return all_pass
+
+
+def run_hedrick_anchor(verbose: bool = True) -> bool:
+    """Hedrick / Gagne 粗磨長浸泡風格錨點（粗+長 = 甜+平衡，不澀）。
+    95°C / dial 6.0 (truly coarse) / 14g / 200ml / steep 240s / standard / no inversion
+    來源：Lance Hedrick Zuppa Lunga; Jonathan Gagne (coffeeadastra) 10-min recipe;
+          Fuller & Rao 2017 (Sci. Reports) — CGA first-order + plateau，粗磨速率減緩。
+    預期：AC > CGA（粗磨不澀）、TDS 寬鬆、score >= 55（接近 April 標準）
+    """
+    roast   = "medium_light"
+    temp    = 95.0
+    dial    = 6.0
+    dose    = 14.0
+    steep   = 240.0
+    water   = 200.0
+    area    = constants.BREWER_PRESETS["standard"]["area_cm2"]
+    press_s  = calc_press_time(dose, dial, steep, brewer_size="standard")
+    press_eq = min(press_s, constants.CHANNELING_PRESS_THRESHOLD) * constants.PRESS_EQUIV_FRACTION
+    pour_offset = (water / constants.POUR_RATE) / 2.0
+
+    ey  = calc_ey(roast, temp, dial, steep, dose, water, area, 50, press_eq)
+    tds = calc_tds(roast, dose, ey, dial, water_ml=water)
+    compounds = predict_compounds(
+        roast_code=roast, temp=temp, dial=dial,
+        steep_sec=steep, ey=ey,
+        water_gh=50, water_mg_frac=0.40,
+        press_equiv=press_eq, pour_offset=pour_offset,
+        water_ml=water, dose=dose,
+        press_sec=press_s, area_cm2=area,
+    )
+    ideal = build_ideal_abs(roast, tds)
+    raw   = flavor_score(compounds, ideal, tds, roast,
+                         water_kh=30, water_gh=50,
+                         t_slurry=temp - 2.0, temp_initial=temp,
+                         ey=ey, steep_sec=steep, dial=dial)
+    score = score_to_display(raw, roast)
+
+    # TDS 範圍寬鬆：Hedrick Zuppa Lunga 18g/250g ratio (1:14)、Gagne EY 23.5% 可達 TDS 1.5%+
+    tds_ok   = 0.95 <= tds <= 1.65
+    ac_ok    = compounds["AC"] > compounds["CGA"]
+    score_ok = score >= 55.0
+
+    all_pass = tds_ok and ac_ok and score_ok
+
+    if verbose:
+        print("=" * 60)
+        print("Hedrick/Gagne anchor (medium_light / 95C / dial6.0 / 240s / 14g / std)")
+        print("=" * 60)
+        cstr = "  ".join(f"{k}={v:.4f}" for k, v in compounds.items())
+        print(f"  EY={ey:.1f}%  TDS={tds:.3f}%  score={score}")
+        print(f"  compounds: {cstr}")
+        print("\nChecks:")
+        print(f"  {_fmt(tds_ok)}  TDS {tds:.3f}% in [0.95, 1.65]%")
+        print(f"  {_fmt(ac_ok)}  AC ({compounds['AC']:.4f}) > CGA ({compounds['CGA']:.4f})  (粗磨不澀)")
+        print(f"  {_fmt(score_ok)}  score {score} >= 55.0  (粗+長象限應可達 April 水準)")
+        print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - check constants.py ]'}")
         print("=" * 60)
 
     return all_pass
@@ -393,7 +453,7 @@ def run_overextract_anchor(verbose: bool = True) -> bool:
     raw   = flavor_score(compounds, ideal, tds, roast,
                          water_kh=30, water_gh=50,
                          t_slurry=temp - 2.0, temp_initial=temp,
-                         ey=ey, steep_sec=steep)
+                         ey=ey, steep_sec=steep, dial=dial)
     score = score_to_display(raw, roast)
 
     cga_anchor_ideal = build_ideal_abs(roast, constants.TDS_PREFER[roast])
@@ -430,8 +490,10 @@ if __name__ == "__main__":
     ok_under = run_underextract_anchor(verbose=True)
     print()
     ok_over  = run_overextract_anchor(verbose=True)
+    print()
+    ok_hedrick = run_hedrick_anchor(verbose=True)
 
-    all_ok = ok_hoffman and ok_april and ok_championship and ok_under and ok_over
+    all_ok = ok_hoffman and ok_april and ok_championship and ok_under and ok_over and ok_hedrick
     print()
     print("=" * 60)
     print(f"  Hoffman:           {'PASS' if ok_hoffman else 'FAIL'}")
@@ -439,6 +501,7 @@ if __name__ == "__main__":
     print(f"  Championship:      {'PASS' if ok_championship else 'FAIL'}")
     print(f"  Under-extraction:  {'PASS' if ok_under else 'FAIL'}")
     print(f"  Over-extraction:   {'PASS' if ok_over else 'FAIL'}")
+    print(f"  Hedrick/Gagne:     {'PASS' if ok_hedrick else 'FAIL'}")
     print(f"\n{'[ ALL PASS ]' if all_ok else '[ FAIL - check constants.py ]'}")
     print("=" * 60)
     sys.exit(0 if all_ok else 1)

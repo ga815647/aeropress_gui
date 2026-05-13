@@ -50,12 +50,20 @@ def _predict_closed_compounds(
 
     base_profile = constants.COMPOUND_BASE[roast_code]
 
+    # 研磨耦合動力學係數：粗磨內部擴散慢，AC 衰減 / CGA 累積都延後 + 變慢
+    # 參考：Fuller & Rao 2017（CGA first-order + plateau）、coffeeadastra（澀感受表面積限制）
+    grind_kinetics = math.exp(constants.GRIND_KINETICS_COEFF * (constants.DIAL_BASE - dial))
+
     # ── AC (acidity) ──────────────────────────────────────────────
     ac = base_profile["AC"]
     ac *= 1 + (temp - 90) * 0.02
-    # 酸質衰減：softplus 取代 max，在 AC_DECAY_START 附近平滑過渡
-    ac *= math.exp(-constants.K_AC_DECAY * _softplus(
-        effective_steep - constants.AC_DECAY_START, k=0.10))
+    # 酸質衰減：(a) 起始時間隨研磨延後（coarse → 慢釋放，遲衰減）
+    #          (b) 衰減速率隨研磨減緩（coarse → 內擴散慢，AC 不會被快速沖刷掉）
+    ac_decay_start_eff = constants.AC_DECAY_START / grind_kinetics
+    ac *= math.exp(
+        -constants.K_AC_DECAY * grind_kinetics
+        * _softplus(effective_steep - ac_decay_start_eff, k=0.10)
+    )
     # 高溫揮發性有機酸降解（>95°C 時揮發/熱分解加速）
     ac *= 1.0 - _softplus(
         temp - constants.AC_HIGH_TEMP_THRESH, k=0.5) * constants.AC_HIGH_TEMP_DECAY
@@ -87,9 +95,14 @@ def _predict_closed_compounds(
     # ── CGA (chlorogenic acid / astringency) ─────────────────────
     cga = base_profile["CGA"]
     cga *= 1 + _softplus(temp - 92, k=2.0) * 0.02
+    # CGA first-order + plateau，plateau 高度 grind-independent（Fuller & Rao 2017）
+    # 速率與起始時間隨研磨耦合：粗磨 → 慢累積、晚啟動
+    cga_time_onset_eff = constants.CGA_TIME_ONSET / grind_kinetics
     cga *= 1.0 + constants.CGA_TIME_MAX * (
-        1.0 - math.exp(-constants.K_CGA_TIME * _softplus(
-            effective_steep - constants.CGA_TIME_ONSET, k=0.10))
+        1.0 - math.exp(
+            -constants.K_CGA_TIME * grind_kinetics
+            * _softplus(effective_steep - cga_time_onset_eff, k=0.10)
+        )
     )
     cga *= ps_cga_mult
 
