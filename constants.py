@@ -243,9 +243,10 @@ EY_DEMAND_WEIGHT = 0.30       # 最大懲罰強度（細磨 + EY 差 1 個 sigma
 
 # TDS-EY mismatch 懲罰（Phase 5 lite+）：「低 TDS + 高 EY」=「under-concentrated 過萃」象限
 # 兩條件同時觸發才扣分（自我 gating）：dose 過瘦 → 必須過萃補 TDS → 酸感集中、澀鹹、無香
-# softplus(k=10) 確保負側 arg ≈ 0，正常配方不誤殺
-TDS_EY_MISMATCH_WEIGHT = 3.0  # 兩個 deficit/surplus 各為 1 單位時扣分強度
-TDS_EY_MISMATCH_K = 20.0      # softplus 銳度（高 k 讓「達標」殘留近 0，避免 Hoffman 誤扣）
+# 文獻基礎：Frost & Ristenpart 2020（TDS-酸質線性連續，非閾值）+ SCA brewing chart
+# k=10 較平滑的轉換對齊「gradient 感知」，Hoffman 經典輕微過 prefer 會被誠實扣分（不為保錨點過度設計）
+TDS_EY_MISMATCH_WEIGHT = 2.0  # 兩個 deficit/surplus 各為 1 單位時扣分強度
+TDS_EY_MISMATCH_K = 10.0      # softplus 銳度（中等銳度，平滑 gradient 對齊 Frost 線性 TDS 模型）
 
 CGA_ASTRINGENCY_THRESHOLD = 1.15  # diagnose_anchor.py 顯示用，不進評分公式；Phase 3 調整：IDEAL_CGA 從 0.05→0.057，比值分母增大，對應閾值從 1.25→1.15
 

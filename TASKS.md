@@ -131,14 +131,15 @@
 **目標：** Phase 5 lite 單側懲罰沒擋住「低 TDS + 高 EY」象限（SCA under-concentrated quadrant：dose 過瘦 → 模型靠過萃補 TDS → 酸感集中、澀鹹、無香）。用戶實測 4.3/20g/120s/96°C / EY 22% / TDS 1.22% 模型給 95.1 分。
 
 **完成內容：**
-- [x] `constants.py`：新增 `TDS_EY_MISMATCH_WEIGHT=3.0` / `TDS_EY_MISMATCH_K=20.0`
-- [x] `models/scoring.py`：step 8 加 `mismatch_factor = exp(-w × softplus(ey - ey_prefer, k=20) × softplus(tds_prefer - tds, k=20))`
-- [x] AND-gated（兩條件同時滿足才扣分）+ 高 k 殘留近 0（達標不誤殺）
+- [x] `constants.py`：新增 `TDS_EY_MISMATCH_WEIGHT=2.0` / `TDS_EY_MISMATCH_K=10.0`
+- [x] `models/scoring.py`：step 8 加 `mismatch_factor = exp(-w × softplus(ey - ey_prefer, k) × softplus(tds_prefer - tds, k))`
+- [x] AND-gated（兩條件同時滿足才扣分）
+- [x] **參數選擇文獻基礎**：Frost & Ristenpart 2020 顯示 TDS-酸質為線性連續關係（非閾值），故選 k=10 平滑 gradient 而非 k=20 銳閾值；不為保護 Hoffman 經典分數而調高銳度（見 `feedback_dont_overprotect_hoffman.md`）
 
 **效果：**
-- 用戶 20g 案例：95.1 → 77.8（拉開 17 分）
-- Hoffman 最佳 (4.4/22g)：完全不變
-- Hoffman 經典 (4.3/22g)：95.8 → 94.0（小殘留，可接受）
+- 用戶 20g 案例：95.1 → 77.9（拉開 17 分）
+- Hoffman 最佳 (4.4/22g)：95.4 基本不變
+- Hoffman 經典 (4.3/22g)：95.8 → 92.3（略過 TDS_PREFER 誠實扣分，非錯誤）
 - Phase 5 lite 案例 (4.6/23g)：86.3 不變
 - 六錨點全 PASS、11 pytest PASS
 
