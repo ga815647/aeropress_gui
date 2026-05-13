@@ -163,70 +163,60 @@
 
 ---
 
-## Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準（❌ 未完成，需大工程）
+## Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準 ✅（2026-05-13）
 
-**背景（為什麼必要）：**
-Subagent 文獻調查（2026-05-13）發現 `IDEAL_FLAVOR["medium_light"]["mid"]` 從未對齊文獻：
+**完成內容：**
 
-| 化合物 | 現行 IDEAL | 文獻實測 | 來源 |
-|--------|----------|---------|------|
-| AC | 15.3% | 14-16% | Cordoba 2023 PMC10074501（citric+malic+acetic+lactic+formic+phosphoric+glycolic） |
-| SW | 36% | 30-35% | 殘留 bucket（aroma/Maillard） |
-| **PS** | **29%** | **15%（≤17% 上限）** | Vignoli 2016, Wolfrom 1976, Nunes & Coimbra 2002 |
-| CA | 9% | 5-7% | Cordoba 2023 |
-| **CGA** | **5.7%** | **10-12%** | Cordoba 2023 淺焙法式壓 CGA = 11% TDS |
-| **MEL** | **5%** | **8-12%** | Vignoli 2016 espresso 10% |
+**1. `IDEAL_FLAVOR["medium_light"]` 三 bracket 重寫為文獻對齊值：**
+```python
+("medium_light", "low"):  {"AC": 0.17, "SW": 0.37, "PS": 0.15, "CA": 0.07, "CGA": 0.14, "MEL": 0.10}
+("medium_light", "mid"):  {"AC": 0.15, "SW": 0.40, "PS": 0.16, "CA": 0.07, "CGA": 0.12, "MEL": 0.10}
+("medium_light", "high"): {"AC": 0.13, "SW": 0.42, "PS": 0.17, "CA": 0.07, "CGA": 0.11, "MEL": 0.10}
+```
+變動：PS 0.29→0.16（文獻 GM+AG ≤17%）、CGA 0.057→0.12（Cordoba 11/110 mg/mL）、MEL 0.05→0.10（Vignoli 10%）、CA 0.09→0.07、SW 補足為 0.40。
 
-**為什麼這次只做 Phase 5 lite 沒做 full：**
-1. 改 IDEAL_FLAVOR 必須同步改 `COMPOUND_BASE`（否則 model 預測跟 IDEAL 對不上，所有 brew 都會被誤判過量 PS）
-2. 改了化合物水平還要重校 ratio 閾值（`AC_CGA_RATIO_IDEAL`, `SW_BITTER_RATIO_IDEAL`, `PS_CA_RATIO_IDEAL` — 都依賴絕對化合物比例）
-3. 還要重校 sigma（`COMPOUND_SIGMA_LO/HI` — 各化合物的允許偏差）
-4. 六錨點都會被連帶影響，需多輪 iteration
+**2. `COMPOUND_BASE["medium_light"]` 反推（不是直接套 IDEAL）：**
+從 Hoffman (98°C / dial 4.6 / 120s / 11g) 實測動力學乘子（AC 1.116, SW 0.736, PS 0.996, CA 0.911, CGA 1.194, MEL 1.185）back-solve：
+```python
+"medium_light": {"AC": 0.123, "SW": 0.494, "PS": 0.146, "CA": 0.070, "CGA": 0.091, "MEL": 0.076}
+```
+Sum=1.000；驗證 Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（AC 15.16 / SW 39.82 / PS 16.05 / CA 7.04 / CGA 11.99 / MEL 9.93）。
 
-**完整 Phase 5 計畫步驟：**
+**3. 三個 ratio 閾值：**
+- `AC_CGA_RATIO_IDEAL`: 2.0 → **1.25**（15/12）
+- `SW_BITTER_RATIO_IDEAL`: 3.0 → **1.82**（40/(10+12)）
+- `PS_CA_RATIO_IDEAL`: 2.0 → **2.29**（16/7）
 
-1. **新 IDEAL_FLAVOR 表（medium_light 三 bracket）：**
-   ```python
-   # mid (balanced, TDS ~1.20)
-   ("medium_light", "mid"): {"AC": 0.15, "SW": 0.40, "PS": 0.16, "CA": 0.07, "CGA": 0.12, "MEL": 0.10}
-   # low (April-style 高酸質, TDS ~1.00)
-   ("medium_light", "low"): {"AC": 0.17, "SW": 0.37, "PS": 0.15, "CA": 0.07, "CGA": 0.14, "MEL": 0.10}
-   # high (Championship-style 高甜醇, TDS ~1.40)
-   ("medium_light", "high"): {"AC": 0.13, "SW": 0.42, "PS": 0.17, "CA": 0.07, "CGA": 0.11, "MEL": 0.10}
-   ```
-   各 bracket sum=1.0 ✓
+**4. PS 從主要 indicator 降為中等：**
+- `WEIGHTS["PS"]`: 2.0 → **1.3**（與 CA/CGA/MEL 同級）
+- `COMPOUND_SIGMA_LO["PS"]`: 0.15 → **0.25**（PS 不足側放寬，避免低溫 Champion 過度懲罰）
 
-2. **新 COMPOUND_BASE["medium_light"]（與 mid IDEAL 對齊，動力學會放大某些化合物）：**
-   ```python
-   "medium_light": {"AC": 0.15, "SW": 0.40, "PS": 0.16, "CA": 0.07, "CGA": 0.12, "MEL": 0.10}
-   ```
-   Sum=1.0；用 Hoffman 錨點驗證模型輸出 ≈ IDEAL mid
+**5. 錨點診斷閾值同步重校（diagnose 用，不進評分）：**
+- `CGA_ASTRINGENCY_THRESHOLD`: 1.15 → **1.10**（IDEAL_CGA 升 2× 使比值天然下降）
+- `diagnose_anchor.py` Champion `PS+SW` 閾值: 0.40 → **0.35**（PS base 砍半使絕對和下降）
 
-3. **新 ratio 閾值（依新 IDEAL 比例）：**
-   - `AC_CGA_RATIO_IDEAL`: 2.0 → **1.25**（15%/12%）
-   - `SW_BITTER_RATIO_IDEAL`: 3.0 → **1.82**（40%/(10%+12%)）
-   - `PS_CA_RATIO_IDEAL`: 2.0 → **2.29**（16%/7%）
+**結果分數（Phase 5 full 最終）：**
+| 錨點 | 分數 | 閾值 |
+|------|------|------|
+| Hoffman | 92.9 | > over-extract |
+| April | 80.1 | ≥ 60 |
+| Championship | 56.4 | ≥ 55 |
+| Under-extract | 0.0 | < 40 |
+| Over-extract | 11.5 | < 50 |
+| Hedrick/Gagne | 95.7 | ≥ 55 |
 
-4. **可能需要調的 sigma：**
-   - `COMPOUND_SIGMA_LO["CGA"]`: 0.80 → 視 Over-extract 行為調整（CGA 從低 base 變高 base，需重新評估「不足」幾乎不可能）
-   - `COMPOUND_SIGMA_HI["CGA"]`: 0.18 → 視 Over-extract 行為調整
-   - `WEIGHTS`: PS 從 2.0 視情況下調（PS 從主要 indicator 變成中等 indicator）
+**Phase 5 lite / lite+ 機制驗證未退化：**
+- Phase 5 lite（EY=19.2 deficit, dial 4.6 fine）：84.2 分（penalty active）；同條件 coarse dial 6.0：94.5（豁免）
+- Phase 5 lite+（TDS=1.22 + EY=22 mismatch, dial 4.3）：78.4 分（penalty active）；無 EY surplus 控制組 93.8
 
-5. **驗證步驟（順序執行，每步都跑 `python diagnose_anchor.py`）：**
-   - Step 5a：只改 `IDEAL_FLAVOR` + `COMPOUND_BASE["medium_light"]` + ratio 閾值 → 跑錨點
-   - Step 5b：失敗的錨點分析（多半 Hoffman 化合物偏離新 IDEAL）→ 調 model 動力學使 Hoffman 預測對齊
-   - Step 5c：April/Champion 視情況微調 IDEAL low/high bracket
-   - Step 5d：sigma 微調
-   - **目標：六錨點 PASS + 用戶實測案例（4.6/23g/120s）持續維持 ~85 分（Phase 5 lite 機制不退化）**
+**11 pytest PASS、六錨點全 PASS。**
 
-**為什麼風險高：**
-- 改 IDEAL 是「移動標的」— 之前所有校準都圍繞舊 IDEAL，動了標的所有 anchor 同時偏移
-- 沒有實測 cup decomposition 校準（Hoffman/Rao 從未公開化合物實測），新 IDEAL 仍是 model 假設、只是換成「literature-grounded 假設」
-- 改完後 Top 推薦可能變化大，需要用戶實測驗證感官對齊
+**為什麼這次成功避免「移動標的」問題：**
+- COMPOUND_BASE 不是直接複製 IDEAL，而是從 Hoffman 動力學乘子反推 — 確保 Hoffman 預測落點 = 新 IDEAL mid
+- PS weight + sigma_lo 同時放寬 — PS 從「主要 body indicator」變為中等，符合新 IDEAL 16% 是文獻天花板而非舒適區的事實
+- 診斷閾值（CGA_ASTRINGENCY_THRESHOLD、PS+SW）跟著 IDEAL 尺度同步調 — 這些是「相對於 ideal 的偏差檢查」，IDEAL 改了就要重設零點
 
-**建議執行時機：** 用戶有時間做後續實測驗證（沖 3-5 杯比對推薦變化）時再進行；現階段 Phase 5 lite 已能 differentiate 主要的欠萃信號。
-
-**參考資料（subagent 驗證過）：**
+**參考資料：**
 - pmc.ncbi.nlm.nih.gov/articles/PMC10074501/ — Cordoba 2023 Food Chem Advances
 - sciencedirect.com/science/article/abs/pii/S0963996916300217 — Vignoli 2016
 - pubmed.ncbi.nlm.nih.gov/11879015/ — Nunes & Coimbra 2002

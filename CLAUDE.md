@@ -18,9 +18,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **已完成（2026-05-13）：** Phase 5 lite+ — TDS-EY mismatch 懲罰（「低 TDS + 高 EY」象限）。Phase 5 lite 是單側懲罰，沒處理「dose 過瘦 → 必須過萃補 TDS」這個 TASKS.md 早記錄的「SCA under-concentrated 象限：酸感集中、澀鹹、無香」。用戶實測 dial 4.3 / 20g / 120s / 96°C / EY 22.0% / TDS 1.22% 模型給 95.1 分。新增 `TDS_EY_MISMATCH_WEIGHT=2.0` / `TDS_EY_MISMATCH_K=10.0`：`softplus(ey - ey_prefer) × softplus(tds_prefer - tds)` 雙條件 AND-gated（任一不滿足則 mismatch ≈ 0）。**參數選擇基於文獻（Frost & Ristenpart 2020 — TDS-酸質線性連續、非閾值）**：k=10 較平滑符合 gradient 感知，不為保護 Hoffman 經典分數而提高銳度。效果：用戶 20g 案例 95.1→77.9（拉開 17 分），Hoffman 最佳 95.4 基本不變，Hoffman 經典 95.8→92.3（略過 TDS_PREFER 誠實扣分），Phase 5 lite 案例（4.6/23g）86.3 不受影響。
 
+**已完成（2026-05-13）：** Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準。`IDEAL_FLAVOR["medium_light"]` 三 bracket 改為文獻對齊值（mid: AC 15 / SW 40 / **PS 16** / CA 7 / **CGA 12** / **MEL 10**；low/high 對稱微調）；同步反推 `COMPOUND_BASE["medium_light"]` = (AC 0.123, SW 0.494, PS 0.146, CA 0.070, CGA 0.091, MEL 0.076)（從 Hoffman 實測動力學乘子 AC 1.116/SW 0.736/PS 0.996/CA 0.911/CGA 1.194/MEL 1.185 back-solve）；三個 ratio 閾值同步更新（`AC_CGA_RATIO_IDEAL`: 2.0→1.25、`SW_BITTER_RATIO_IDEAL`: 3.0→1.82、`PS_CA_RATIO_IDEAL`: 2.0→2.29）。PS 從主要 indicator 降為中等：`WEIGHTS["PS"]`: 2.0→1.3、`COMPOUND_SIGMA_LO["PS"]`: 0.15→0.25。診斷錨點重新校準：`CGA_ASTRINGENCY_THRESHOLD`: 1.15→1.10（IDEAL_CGA 升 2× 使比值天然下降），Championship `PS+SW` 閾值 0.40→0.35（PS base 砍半使絕對值下降）。**驗證：Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（15.16 / 39.82 / 16.05 / 7.04 / 11.99 / 9.93）**。六錨點分數：Hoffman 92.9 / April 80.1 / Championship 56.4 / Under 0 / Over 11.5 / Hedrick 95.7（全 PASS）；Phase 5 lite 機制（EY=19.2 deficit fine grind 84.2 / coarse 94.5）與 Phase 5 lite+ 機制（TDS=1.22+EY=22 mismatch 78.4）均保留；11 pytest PASS。
+
 **僅剩待辦（交接，詳見 [TASKS.md](TASKS.md)）：**
-- **Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準（❌ 大工程，未完成）**：subagent 研究發現 `IDEAL_FLAVOR["medium_light"]["mid"]` PS=29% 是 ~2× 文獻上限、CGA=5.7% 是 ~半數、MEL=5% 過低。Phase 5 lite 已用 grind-dep EY 懲罰 work around，但 IDEAL 本身仍未對齊文獻。完整重校涉及 IDEAL_FLAVOR / COMPOUND_BASE / ratio 閾值 / sigma 多輪 iteration，**完整步驟與目標值見 TASKS.md「Phase 5 full」**，記憶見 `project_ideal_flavor_unanchored.md`。
-- UI — Chip 標籤重寫（Phase 1-3 已完成可進行；若先做 Phase 5 full 描述語會更準）
+- UI — Chip 標籤重寫（Phase 1-3 已完成、Phase 5 full IDEAL 對齊文獻後可進行）
 - `light` 槽真淺焙錨點待補（目前用 `very_light` IDEAL_FLAVOR 暫頂；找到 Nordic-style AeroPress 食譜後校準）
 
 ## Commands

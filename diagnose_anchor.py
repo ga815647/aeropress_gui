@@ -286,7 +286,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
 
     tds_ok       = abs(tds - 1.56) <= 0.25
     sweet_ok     = compounds["SW"] > compounds["MEL"] and compounds["SW"] > compounds["CGA"]
-    ps_sw_ok     = (compounds["PS"] + compounds["SW"]) >= 0.40  # 乘法時間模型下 80°C 無法達 0.70
+    ps_sw_ok     = (compounds["PS"] + compounds["SW"]) >= 0.35  # Phase 5 full：PS base 0.27→0.146，絕對和下移；80°C 低 EY 下原 0.40 不可達
     score_ok     = score >= 55.0
 
     all_pass = tds_ok and sweet_ok and ps_sw_ok and score_ok
@@ -302,7 +302,7 @@ def run_championship_anchor(verbose: bool = True) -> bool:
         print(f"  {_fmt(tds_ok)}  |TDS - 1.56| = {abs(tds-1.56):.3f} <= 0.25")
         print(f"  {_fmt(sweet_ok)}  SW ({compounds['SW']:.4f}) > MEL ({compounds['MEL']:.4f}) & CGA ({compounds['CGA']:.4f})")
         ps_sw = compounds["PS"] + compounds["SW"]
-        print(f"  {_fmt(ps_sw_ok)}  PS+SW = {ps_sw:.4f} >= 0.40")
+        print(f"  {_fmt(ps_sw_ok)}  PS+SW = {ps_sw:.4f} >= 0.35")
         print(f"  {_fmt(score_ok)}  score {score} >= 55.0 (unified flavor_score)")
         print(f"\n{'[ ALL PASS ]' if all_pass else '[ FAIL - check constants.py ]'}")
         print("=" * 60)

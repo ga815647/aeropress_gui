@@ -154,7 +154,7 @@ PRE_SEAL_MEL_MULT = 0.60
 COMPOUND_SIGMA_LO = {
     "AC": 0.30,   # 酸不足中等容忍
     "SW": 0.15,   # 甜不足嚴懲（口感核心）
-    "PS": 0.15,   # 醇厚不足嚴懲（body 核心）
+    "PS": 0.25,   # Phase 5 full：PS 從主要 indicator 變為中等（IDEAL 16% 文獻上限），放寬不足側
     "CA": 0.80,   # 苦不足完全寬鬆
     "CGA": 0.80,  # CGA 不足完全寬鬆
     "MEL": 0.80,  # MEL 不足完全寬鬆
@@ -248,7 +248,7 @@ EY_DEMAND_WEIGHT = 0.30       # 最大懲罰強度（細磨 + EY 差 1 個 sigma
 TDS_EY_MISMATCH_WEIGHT = 2.0  # 兩個 deficit/surplus 各為 1 單位時扣分強度
 TDS_EY_MISMATCH_K = 10.0      # softplus 銳度（中等銳度，平滑 gradient 對齊 Frost 線性 TDS 模型）
 
-CGA_ASTRINGENCY_THRESHOLD = 1.15  # diagnose_anchor.py 顯示用，不進評分公式；Phase 3 調整：IDEAL_CGA 從 0.05→0.057，比值分母增大，對應閾值從 1.25→1.15
+CGA_ASTRINGENCY_THRESHOLD = 1.10  # diagnose_anchor.py 顯示用，不進評分公式；Phase 5 full：IDEAL_CGA 從 0.057→0.12，過萃 CGA 相對 ideal 的 ratio 從 1.287 降到 ~1.13，閾值同步降到 1.10
 
 SW_AROMA_SLOPE = 0.015      # [舊公式用] 保留供參考
 SW_AROMA_THRESH = 97.0      # Sigmoid 中心溫度（低於此≈無損失，高於此平滑飽和）
@@ -395,10 +395,12 @@ IDEAL_FLAVOR = {
     ("light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
     ("light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     ("light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 中淺焙（Hoffman 錨點搬遷自原 light）：CGA=0.057 對齊 El Tambo 模型實測 CGA_frac≈0.064
-    ("medium_light", "low"): {"AC": 0.193, "SW": 0.35, "PS": 0.25, "CA": 0.10, "CGA": 0.057, "MEL": 0.05},
-    ("medium_light", "mid"): {"AC": 0.153, "SW": 0.36, "PS": 0.29, "CA": 0.09, "CGA": 0.057, "MEL": 0.05},
-    ("medium_light", "high"): {"AC": 0.123, "SW": 0.37, "PS": 0.29, "CA": 0.11, "CGA": 0.057, "MEL": 0.05},
+    # 中淺焙（Hoffman 錨點）— Phase 5 full 對齊文獻（Cordoba 2023, Vignoli 2016, Nunes/Wolfrom）：
+    # PS 從 0.29→0.16（文獻 GM+AG 上限 ≤17%）、CGA 從 0.057→0.12（Cordoba 11/110 mg/mL）、
+    # MEL 從 0.05→0.10（Vignoli 10%）、CA 從 0.09→0.07（Cordoba 5-7%）、SW 補足為 0.40
+    ("medium_light", "low"): {"AC": 0.17, "SW": 0.37, "PS": 0.15, "CA": 0.07, "CGA": 0.14, "MEL": 0.10},
+    ("medium_light", "mid"): {"AC": 0.15, "SW": 0.40, "PS": 0.16, "CA": 0.07, "CGA": 0.12, "MEL": 0.10},
+    ("medium_light", "high"): {"AC": 0.13, "SW": 0.42, "PS": 0.17, "CA": 0.07, "CGA": 0.11, "MEL": 0.10},
     ("medium", "low"): {"AC": 0.12, "SW": 0.38, "PS": 0.22, "CA": 0.14, "CGA": 0.08, "MEL": 0.06},
     ("medium", "mid"): {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
     ("medium", "high"): {"AC": 0.09, "SW": 0.42, "PS": 0.24, "CA": 0.12, "CGA": 0.07, "MEL": 0.06},
@@ -417,7 +419,9 @@ IDEAL_FLAVOR = {
 COMPOUND_BASE = {
     "very_light":      {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     "light":           {"AC": 0.16, "SW": 0.40, "PS": 0.26, "CA": 0.07, "CGA": 0.05, "MEL": 0.04},   # Nordic 真淺焙暫定
-    "medium_light":    {"AC": 0.14, "SW": 0.42, "PS": 0.27, "CA": 0.08, "CGA": 0.05, "MEL": 0.04},   # Hoffman 錨點搬遷自原 light（El Tambo Agtron 65-75）
+    # Phase 5 full 回推自 Hoffman 動力學乘子（AC 1.116, SW 0.736, PS 0.996, CA 0.911, CGA 1.194, MEL 1.185）
+    # 對齊新 IDEAL mid (AC 15/SW 40/PS 16/CA 7/CGA 12/MEL 10)；sum=1.000
+    "medium_light":    {"AC": 0.123, "SW": 0.494, "PS": 0.146, "CA": 0.070, "CGA": 0.091, "MEL": 0.076},   # El Tambo Agtron 65-75（Hoffman 錨點）
     "medium":          {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
     "moderately_dark": {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
     "dark":            {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},
@@ -426,7 +430,7 @@ COMPOUND_BASE = {
 
 
 KEYS = ["AC", "SW", "PS", "CA", "CGA", "MEL"]
-WEIGHTS = {"AC": 1.0, "SW": 1.8, "PS": 2.0, "CA": 1.3, "CGA": 1.3, "MEL": 1.3}
+WEIGHTS = {"AC": 1.0, "SW": 1.8, "PS": 1.3, "CA": 1.3, "CGA": 1.3, "MEL": 1.3}  # Phase 5 full：PS 2.0→1.3（與 CGA/MEL 同級，從主要 body indicator 變為中等）
 SIGMA_BLEND_K = 8.0            # 化合物不對稱 sigma sigmoid 混合斜率
 EY_BLEND_K = 8.0               # EY 不對稱 sigma sigmoid 混合斜率
 
@@ -438,9 +442,9 @@ TDS_FLOOR_K = 8.0              # Sigmoid 斜率
 IDEAL_INTERP_SIGMA = 0.15      # TDS 錨點間 Gaussian 基函數寬度
 
 # 化合物比值獎勵（純淨酸質 + 甜感主導 + 醇厚乾淨度）
-AC_CGA_RATIO_IDEAL = 2.0       # AC/CGA 理想比值（高 = 純淨酸質）
-SW_BITTER_RATIO_IDEAL = 3.0    # SW/(MEL+CGA) 理想比值（高 = 甜感主導）
-PS_CA_RATIO_IDEAL = 2.0        # PS/CA 理想比值（高 = 乾淨醇厚無苦）
+AC_CGA_RATIO_IDEAL = 1.25      # AC/CGA 理想比值（Phase 5 full：15/12=1.25）
+SW_BITTER_RATIO_IDEAL = 1.82   # SW/(MEL+CGA) 理想比值（Phase 5 full：40/(10+12)=1.82）
+PS_CA_RATIO_IDEAL = 2.29       # PS/CA 理想比值（Phase 5 full：16/7=2.29）
 RATIO_SIGMOID_K = 1.0          # 比值評分 sigmoid 斜率
 RATIO_WEIGHT = 0.15            # 比值獎勵權重（最多降 15% compound_loss）
 RATIO_W_AC_CGA = 1.0           # AC/CGA 比值權重
