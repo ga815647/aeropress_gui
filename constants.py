@@ -250,7 +250,7 @@ TDS_EY_MISMATCH_K = 10.0      # softplus 銳度（中等銳度，平滑 gradient
 
 CGA_ASTRINGENCY_THRESHOLD = 1.10  # diagnose_anchor.py 顯示用，不進評分公式；Phase 5 full：IDEAL_CGA 從 0.057→0.12，過萃 CGA 相對 ideal 的 ratio 從 1.287 降到 ~1.13，閾值同步降到 1.10
 
-SW_AROMA_SLOPE = 0.015      # [舊公式用] 保留供參考
+SW_AROMA_SLOPE = 0.025      # 從 0.015→0.025：強化 >97°C 的香氣熱失，搭配 light base_ey 降低後 light 仍需 99°C，但 medium_light 會明顯偏好 97-98°C（Hoffmann 97.8°C 對齊）
 SW_AROMA_THRESH = 97.0      # Sigmoid 中心溫度（低於此≈無損失，高於此平滑飽和）
 SW_AROMA_CAP = 0.25         # 最大香氣損失比例
 SW_AROMA_SIGMOID_K = 3.0    # SW 香氣損失 sigmoid 斜率（每°C）
@@ -311,7 +311,7 @@ ROAST_TABLE = {
         "agtron_min": 85,
         "agtron_max": 95,
         "base_temp": 97,
-        "base_ey": 17.0,
+        "base_ey": 10.0,   # 從 17→10：極硬豆細胞壁未軟化，max EY 在 100°C 才約 19%，迫使推薦 100°C（不加 temp_prefer 硬條件，走「杯中物」路徑）
         "dial_prefer": 4.2,  # 豆質最硬，細研磨穿透細胞壁
         "dose_per_100ml": (5.0, 7.0),  # 預設豆量範圍 g/100ml（XL: 20-28g, std: 10-14g）
         "note": "SCA: Light/Cinnamon (Agtron #85-95)。淺肉桂色，表面皺褶多、體積小。豆質極硬。100°C 封頂動能破壁。",
@@ -322,7 +322,7 @@ ROAST_TABLE = {
         "agtron_min": 75,
         "agtron_max": 85,
         "base_temp": 99,
-        "base_ey": 17.0,
+        "base_ey": 14.0,   # 從 17→14：Nordic 硬豆細胞壁緻密，max EY 在 99°C 才約 22%，低溫直接撞 EY 不足，自然強迫推薦 99°C（不加 temp_prefer 硬條件，走「杯中物」路徑）
         "dial_prefer": 4.0,  # Nordic 硬豆需更細研磨穿透密實細胞壁
         "dose_per_100ml": (5.5, 7.5),  # 推高豆量補低 TDS，避免酸刺澀無香的欠濃陷阱
         "note": "SCA: Light (Agtron #75-85)。Nordic 風格淺焙，豆質硬密。需 99°C 沸點水＋細研磨＋足夠豆量推完整萃取，否則低濃高萃象限（酸刺/澀/無香）。",
