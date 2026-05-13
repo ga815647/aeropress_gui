@@ -16,6 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **已完成（2026-05-13）：** Phase 5 lite — grind-dependent EY deficit penalty。原評分 `EY_GAUSS_WEIGHT=0.0` 完全不看 EY，導致細磨高豆量 + EY 偏低 1-2%（如 dial 4.6/23g/120s/95°C，EY 19.2% vs target 21%）的「mild under-extraction」被誤判為高分（96.9）。新增 `GRIND_EY_DEMAND_K=10.0` / `EY_DEMAND_WEIGHT=0.30`：以 sigmoid 在 `DIAL_BASE=4.5` 為中心，細磨（dial<4.5）線性轉成 EY 嚴格要求，粗磨（dial>4.5）線性豁免；EY deficit 用 softplus(k=5) 平滑單側懲罰。效果：dial 4.6/23g 從 96.9→86.3（拉開 10 分），Hoffman 4.4/22g 從 96.0→95.4（幾乎不變），April/Champion/Hedrick 因粗磨完全豁免。`flavor_score` 簽名新增 `dial` 參數，已串接 optimizer.py 與 diagnose_anchor.py。**注意 CLAUDE.md「EY 不得作為主要扣分依據」原則 — 此懲罰僅在細磨象限觸發、單側（只懲罰不足）、最大扣分 ~25%（不主導）。**
 
+**已完成（2026-05-13）：** Phase 5 lite+ — TDS-EY mismatch 懲罰（「低 TDS + 高 EY」象限）。Phase 5 lite 是單側懲罰，沒處理「dose 過瘦 → 必須過萃補 TDS」這個 TASKS.md 早記錄的「SCA under-concentrated 象限：酸感集中、澀鹹、無香」。用戶實測 dial 4.3 / 20g / 120s / 96°C / EY 22.0% / TDS 1.22% 模型給 95.1 分。新增 `TDS_EY_MISMATCH_WEIGHT=3.0` / `TDS_EY_MISMATCH_K=20.0`：`softplus(ey - ey_prefer) × softplus(tds_prefer - tds)` 雙條件 AND-gated（任一不滿足則 mismatch ≈ 0），高 k=20 確保達標時殘留近 0。效果：用戶 20g 案例 95.1→77.8（拉開 17 分），Hoffman 最佳完全不變，Hoffman 經典 95.8→94.0（小殘留可接受）。所有錨點與 Phase 5 lite 案例（4.6/23g）不受影響。
+
 **僅剩待辦（交接，詳見 [TASKS.md](TASKS.md)）：**
 - **Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準（❌ 大工程，未完成）**：subagent 研究發現 `IDEAL_FLAVOR["medium_light"]["mid"]` PS=29% 是 ~2× 文獻上限、CGA=5.7% 是 ~半數、MEL=5% 過低。Phase 5 lite 已用 grind-dep EY 懲罰 work around，但 IDEAL 本身仍未對齊文獻。完整重校涉及 IDEAL_FLAVOR / COMPOUND_BASE / ratio 閾值 / sigma 多輪 iteration，**完整步驟與目標值見 TASKS.md「Phase 5 full」**，記憶見 `project_ideal_flavor_unanchored.md`。
 - UI — Chip 標籤重寫（Phase 1-3 已完成可進行；若先做 Phase 5 full 描述語會更準）

@@ -126,6 +126,24 @@
 
 ---
 
+## Phase 5 lite+ — TDS-EY mismatch 懲罰 ✅（2026-05-13）
+
+**目標：** Phase 5 lite 單側懲罰沒擋住「低 TDS + 高 EY」象限（SCA under-concentrated quadrant：dose 過瘦 → 模型靠過萃補 TDS → 酸感集中、澀鹹、無香）。用戶實測 4.3/20g/120s/96°C / EY 22% / TDS 1.22% 模型給 95.1 分。
+
+**完成內容：**
+- [x] `constants.py`：新增 `TDS_EY_MISMATCH_WEIGHT=3.0` / `TDS_EY_MISMATCH_K=20.0`
+- [x] `models/scoring.py`：step 8 加 `mismatch_factor = exp(-w × softplus(ey - ey_prefer, k=20) × softplus(tds_prefer - tds, k=20))`
+- [x] AND-gated（兩條件同時滿足才扣分）+ 高 k 殘留近 0（達標不誤殺）
+
+**效果：**
+- 用戶 20g 案例：95.1 → 77.8（拉開 17 分）
+- Hoffman 最佳 (4.4/22g)：完全不變
+- Hoffman 經典 (4.3/22g)：95.8 → 94.0（小殘留，可接受）
+- Phase 5 lite 案例 (4.6/23g)：86.3 不變
+- 六錨點全 PASS、11 pytest PASS
+
+---
+
 ## Phase 5 lite — Grind-dependent EY deficit 懲罰 ✅（2026-05-13）
 
 **目標：** 細磨高豆量 + 輕度欠萃（EY 低 1-2%）的「mild under-extraction」被誤判為高分。用戶實測 dial 4.6/23g/120s/95°C（EY 19.2% vs target 21%）口感欠萃但模型給 96.9 分。

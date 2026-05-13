@@ -177,7 +177,16 @@ def flavor_score(
         -constants.EY_DEMAND_WEIGHT * grind_ey_demand * ey_z * ey_z
     )
 
-    return compound_reward * tds_factor * ey_factor * tds_floor_factor * grind_ey_factor
+    # ── 8. TDS-EY mismatch 懲罰（Phase 5 lite+，雙側 gating）────────
+    # 「低 TDS + 高 EY」= dose 過瘦 + 過萃補強度 = 酸感集中、澀鹹、無香
+    # 兩條件 AND gated：任一不滿足則 mismatch ≈ 0，正常配方不誤殺
+    # softplus k=10 確保負側 arg → 0（Hoffman 達標 ey_surplus≈0、tds_deficit≈0）
+    ey_surplus = _softplus(ey - ey_prefer, k=constants.TDS_EY_MISMATCH_K)
+    tds_deficit = _softplus(tds_prefer - tds, k=constants.TDS_EY_MISMATCH_K)
+    mismatch = ey_surplus * tds_deficit
+    mismatch_factor = math.exp(-constants.TDS_EY_MISMATCH_WEIGHT * mismatch)
+
+    return compound_reward * tds_factor * ey_factor * tds_floor_factor * grind_ey_factor * mismatch_factor
 
 
 def score_to_display(raw: float, roast_code: str) -> float:

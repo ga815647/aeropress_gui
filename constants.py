@@ -241,6 +241,12 @@ GRIND_KINETICS_COEFF = 0.40
 GRIND_EY_DEMAND_K = 10.0      # sigmoid 銳度（dial 4.5 為中心；±0.1 dial 差距即足以區分）
 EY_DEMAND_WEIGHT = 0.30       # 最大懲罰強度（細磨 + EY 差 1 個 sigma → ~25% 扣分）
 
+# TDS-EY mismatch 懲罰（Phase 5 lite+）：「低 TDS + 高 EY」=「under-concentrated 過萃」象限
+# 兩條件同時觸發才扣分（自我 gating）：dose 過瘦 → 必須過萃補 TDS → 酸感集中、澀鹹、無香
+# softplus(k=10) 確保負側 arg ≈ 0，正常配方不誤殺
+TDS_EY_MISMATCH_WEIGHT = 3.0  # 兩個 deficit/surplus 各為 1 單位時扣分強度
+TDS_EY_MISMATCH_K = 20.0      # softplus 銳度（高 k 讓「達標」殘留近 0，避免 Hoffman 誤扣）
+
 CGA_ASTRINGENCY_THRESHOLD = 1.15  # diagnose_anchor.py 顯示用，不進評分公式；Phase 3 調整：IDEAL_CGA 從 0.05→0.057，比值分母增大，對應閾值從 1.25→1.15
 
 SW_AROMA_SLOPE = 0.015      # [舊公式用] 保留供參考
