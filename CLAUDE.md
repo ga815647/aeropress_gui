@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **已完成（2026-05-13）：** Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準。`IDEAL_FLAVOR["medium_light"]` 三 bracket 改為文獻對齊值（mid: AC 15 / SW 40 / **PS 16** / CA 7 / **CGA 12** / **MEL 10**；low/high 對稱微調）；同步反推 `COMPOUND_BASE["medium_light"]` = (AC 0.123, SW 0.494, PS 0.146, CA 0.070, CGA 0.091, MEL 0.076)（從 Hoffman 實測動力學乘子 AC 1.116/SW 0.736/PS 0.996/CA 0.911/CGA 1.194/MEL 1.185 back-solve）；三個 ratio 閾值同步更新（`AC_CGA_RATIO_IDEAL`: 2.0→1.25、`SW_BITTER_RATIO_IDEAL`: 3.0→1.82、`PS_CA_RATIO_IDEAL`: 2.0→2.29）。PS 從主要 indicator 降為中等：`WEIGHTS["PS"]`: 2.0→1.3、`COMPOUND_SIGMA_LO["PS"]`: 0.15→0.25。診斷錨點重新校準：`CGA_ASTRINGENCY_THRESHOLD`: 1.15→1.10（IDEAL_CGA 升 2× 使比值天然下降），Championship `PS+SW` 閾值 0.40→0.35（PS base 砍半使絕對值下降）。**驗證：Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（15.16 / 39.82 / 16.05 / 7.04 / 11.99 / 9.93）**。六錨點分數：Hoffman 92.9 / April 80.1 / Championship 56.4 / Under 0 / Over 11.5 / Hedrick 95.7（全 PASS）；Phase 5 lite 機制（EY=19.2 deficit fine grind 84.2 / coarse 94.5）與 Phase 5 lite+ 機制（TDS=1.22+EY=22 mismatch 78.4）均保留；11 pytest PASS。
 
 **僅剩待辦（交接，詳見 [TASKS.md](TASKS.md)）：**
+- **Phase 6 — 化合物模型純物理化（❌ 大重構，未完成）** — 用戶實測 98°C/4.4/90s/22g「酸澀重」但 model 給 94.1 分；根因為 `compounds.py` 內部多個非物理 gate（`SW_TIME_FLOOR=0.30`、`CGA_TIME_ONSET=150`、`AC_DECAY_START=150`、`MEL_TIME_ONSET=80`、tent function、softplus 溫度閾值）讓化合物預測「過早平台」、喪失 90s vs 120s 鑑別力。Phase 6 拆掉所有非物理 gate，改純 Arrhenius × 一階反應；走 CLAUDE.md 新原則 #4「化合物層純連續、感官層留閾值」。預估 5-8 輪錨點迭代。完整清單見 TASKS.md「Phase 6」。
 - UI — Chip 標籤重寫（Phase 1-3 已完成、Phase 5 full IDEAL 對齊文獻後可進行）
 - `light` 槽真淺焙錨點待補（目前用 `very_light` IDEAL_FLAVOR 暫頂；找到 Nordic-style AeroPress 食譜後校準）
 
@@ -106,7 +107,7 @@ python diagnose_anchor.py
 - TDS 是杯中物品質的合法指標（太淡/太濃影響口感）
 - 化合物向量（AC/SW/PS/CA/CGA/MEL 比例）是最核心的口感品質指標
 
-**三條不可違反的架構原則：**
+**四條不可違反的架構原則：**
 
 1. **禁止 min/max/if-else 硬斷點** — 物理世界是連續的。所有閾值、天花板、地板必須用平滑連續函數：
    - `max(x - threshold, 0)` → softplus 或 sigmoid gate
@@ -118,6 +119,32 @@ python diagnose_anchor.py
 2. **所有錨點用同一個評分公式** — April 和 Championship 必須通過 `flavor_score()` 得到高分，不允許用獨立的 `_anchor_cosine_score()`。如果一個評分系統無法同時獎勵 Hoffman 的均衡、April 的酸質、Championship 的甜醇，那是評分系統的問題，不是用特例繞過的理由。
 
 3. **化合物模型必須自我鑑別** — 好喝的配方（Hoffman/April/Championship）的化合物 profile 進入評分公式後自然高分。難喝的配方（欠萃/過萃）的化合物 profile 自然低分。不需要靠 TDS floor 或 EY floor 來區分好壞 — 化合物信號本身就應該承載這個資訊。
+
+4. **化合物層純連續物理；感官層允許閾值（嚴格二層分工）** — 物理化學是連續的，人類感知有閾值。兩者必須分層、不互相污染：
+   - **化合物層 (`compounds.py`)**: **純連續物理動力學** — Arrhenius 速率 × 一階反應，從 t=0 連續到 t=∞、從 0K 到任何溫度全域可微。**禁止**：onset 時間（如 `CGA_TIME_ONSET=150`）、time floor（如 `SW_TIME_FLOOR=0.30`）、tent function（如 `1 - abs(temp - optimal)`）、softplus 溫度閾值（如 `softplus(temp - 92)`）— 即使數學上平滑，這些都是「閾值化偽裝」，不符合分子萃取物理（沒有臨界溫度才開始萃取的化合物）。
+   - **感官層 (`scoring.py`)**: **sigmoid / softplus / Gaussian 可用** — 人類感知本來就有閾值（Weber-Fechner law、剛察覺/辨識/不適 thresholds）。合法的閾值化感知層成員：`SW_AROMA_THRESH`（高溫香氣熱失感知）、`SCORCH_PARAMS`（焦苦感知）、`TDS_FLOOR_MID`（水感閾值）、`KH_FLOOR`（KH 壓制酸質感知）。
+   - **違反此原則的代價：** 化合物模型失去自我鑑別力（→ 違反原則 #3）→ 不同口感的配方產出相似化合物 profile → 評分只能靠 process-variable 後置 gate 補救（如 `acid_trap = sigmoid(temp - 96) × sigmoid(120 - steep)`）→ 這種補丁是症狀治療，根因仍在 compounds.py 內部的非物理 gate。
+
+**原則 #1 vs #4 的關係（不衝突，是層次補強）：**
+
+| 角度 | #1（全域）| #4（分層）|
+|------|---------|---------|
+| 規定 | **怎麼寫**閾值（要平滑）| **哪裡可以有**閾值（只感官層）|
+| 化合物層 | 不能用硬斷點 | 連平滑閾值都禁止，只能用 `exp()` 結構（Arrhenius / 一階）|
+| 感官層 | 用 sigmoid / softplus / Gaussian | 允許（人類感知本有閾值）|
+
+**關鍵：`exp()` vs `sigmoid/softplus` 結構不同：**
+- `exp(-Ea/RT)`、`1 - exp(-k·t)`：**全域 monotone、無拐點、無 threshold 參數** → 純物理曲線
+- `sigmoid(k·(x - threshold))`、`softplus(x - threshold)`：**顯式 threshold 參數、有 inflection 點** → 閾值化（即使平滑）
+
+化合物層 `softplus(temp - 92)` 滿足 #1（平滑）但違反 #4（藏 threshold）；改成 `exp(Ea/R × (1/T_ref - 1/T))` 才同時滿足兩者。
+
+**判斷流程：**
+```
+寫一行新公式時，問自己：
+├─ 這是化學物理？→ exp() / Arrhenius / 一階，禁所有閾值
+└─ 這是人類感知？→ sigmoid / softplus（必須平滑）
+```
 
 ### 三食譜各自「分數不低」的物理原因
 

@@ -225,6 +225,91 @@ Sum=1.000；驗證 Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（AC 15.16 
 
 ---
 
+## Phase 6 — 化合物模型純物理化（compounds.py 純連續、scoring.py 留閾值）❌ 未完成，大重構
+
+**起源（2026-05-14 對話）：**
+用戶實測 model Top 1 配方（98°C / dial 4.4 / 90s / 22g XL，score 94.1），實際口感「酸澀重」。物理上 98°C × 90s 是文獻記載的「酸澀」trap — CGA Arrhenius 加速 + SW/PS 受時間限制 = CGA 已大量出來、SW/PS 尚未追上。
+
+研究發現（subagent + 手動 trace）BAD vs Hoffmann-style XL（98°C/4.3/120s/22g, score 87.5）的化合物 fractions 幾乎相同，只是 SW/PS 絕對濃度低 6-14%。`compute_actual_abs` 正規化 + 跟 IDEAL × TDS 比 → 絕對量差距被吸收 → 模型無法分辨。
+
+實驗性 `acid_trap`（temp + steep 雙 sigmoid AND-gate）可暫時讓 BAD 從 94.1 → 81.8，但**走 process-variable 直接懲罰路徑、跳過化合物層** → 違反 CLAUDE.md 原則 #3 + 新原則 #4。已 revert。
+
+**根因：`compounds.py` 內部有多個非物理 gate** 讓化合物預測「過早平台」，模型認為 90s 接近完整萃取，喪失 90s vs 120s 鑑別力。
+
+**清單 — `compounds.py` 待移除的非物理 gate：**
+
+| Compound | 現況非物理項 | 物理問題 | Phase 6 動作 |
+|----------|------------|---------|-------------|
+| **AC** | `ac *= 1 + (temp - 90) * 0.02` | 線性溫度（應 Arrhenius） | 改 `ac *= exp(Ea_AC/R × (1/T_ref - 1/T))` |
+| **AC** | `AC_DECAY_START=150` + softplus gate | 起始延後（應 t=0 連續） | 刪除 onset，純 `exp(-K_AC × t)` |
+| **AC** | `AC_HIGH_TEMP_THRESH=95.0` + softplus | 高溫降解閾值（應 Arrhenius） | 改 Arrhenius 分解速率 |
+| **SW** | `1 - abs(temp - optimal) * 0.018` | Tent function（峰點不可微） | 改 Gaussian `exp(-(temp-optimal)²/2σ²)` |
+| **SW** | `SW_TIME_FLOOR=0.30` | t=0 還有 30% SW（非物理） | 刪除 floor，純 `(1 - exp(-K_SW × t))` |
+| **PS** | `1 + softplus(DIAL_BASE - dial, k=3) * 0.28` | 粗磨 softplus gate | 改線性或物理表面積模型 |
+| **PS** | `PS_TIME_FLOOR=0.30` | 同 SW | 刪除 floor |
+| **PS** | `softplus(1 + (temp - 90) * 0.028, k=10)` | 防負值 softplus 偽裝閾值 | 改 Arrhenius |
+| **CGA** | `1 + softplus(temp - 92, k=2) * 0.02` | 92°C 閾值（應 Arrhenius 全域） | 改 Arrhenius |
+| **CGA** | `CGA_TIME_ONSET=150` + softplus gate | 起始延後（首要禍源）| 刪除 onset，純 first-order |
+| **MEL** | `MEL_TIME_ONSET=80` + softplus gate | 起始延後 | 刪除 onset |
+| **CA** | `1 - exp(-K_CA × t)` | **純一階 ✓** | **保留（範本）** |
+
+**`constants.py` 要刪除的常數：**
+- `AC_DECAY_START`、`AC_HIGH_TEMP_THRESH`、`AC_HIGH_TEMP_DECAY`
+- `SW_TIME_FLOOR`、`PS_TIME_FLOOR`
+- `CGA_TIME_ONSET`
+- `MEL_TIME_ONSET`
+
+**`constants.py` 要新增的常數（Arrhenius 參數，per compound）：**
+- `AC_ARRHENIUS_EA` / `AC_T_REF`（活化能 kJ/mol、參考溫度 K）
+- `SW_ARRHENIUS_EA` / `SW_T_REF`
+- `PS_ARRHENIUS_EA` / `PS_T_REF`
+- `CGA_ARRHENIUS_EA` / `CGA_T_REF`
+- `MEL_ARRHENIUS_EA` / `MEL_T_REF`
+
+文獻參考（Ea 數量級）：Fuller & Rao 2017 CGA Ea ≈ 50-60 kJ/mol；糖類 30-40；酸類 40-50。
+
+**`scoring.py` 要清理：**
+- 拆掉實驗版 `acid_trap`（已 revert，但 Phase 6 完成後應確保不會 reintroduce）
+- 留 `SW_AROMA`、`SCORCH_PARAMS`、`KH_FLOOR`、`TDS_FLOOR_MID`、`GH_SOFT_*` — 這些都是合法感官閾值
+
+**校準方法（與 Phase 5 full 同步驟）：**
+
+1. **第一輪：純物理重寫 compounds.py（不調 base，只換公式）**
+   - 跑 Hoffman 錨點，記錄新 vs 舊化合物 ratio
+   - 用這 ratio 反推新 `COMPOUND_BASE["medium_light"]`（保 Hoffman profile 接近舊 IDEAL）
+2. **第二輪：跑六錨點，迭代調 `COMPOUND_BASE` per roast**
+3. **第三輪：可能需調 `WEIGHTS`、`COMPOUND_SIGMA_LO/HI`**（Arrhenius 純物理後，化合物隨溫度的響應曲線改變）
+4. **第四輪：驗證 BAD 配方分數**（用戶實測 98°C/4.4/90s/22g）應該 ≤ 85，Hoffmann-style XL ≥ 85
+5. **第五輪：跑 11 pytest，全 PASS**
+
+**預期結果：**
+- BAD 化合物 profile 自然顯示 SW/PS 嚴重不足 → compound_reward 自然扣分 → 不需要 acid_trap
+- April 化合物 profile 顯示低溫低萃取（Arrhenius 自然壓低）→ 正常評分
+- Champion 倒置低溫 → 短時但低溫，Arrhenius 自然低 CGA → 正常評分
+- Hedrick 240s 長浸 → 所有化合物達平台 → 高分
+
+**風險（為什麼是大工程）：**
+- 影響 4 個化合物 kinetic 區段 + 7 個常數刪除 + 5 對新常數
+- Arrhenius 參數沒精確文獻值（要從現有 base/K 校驗反推）
+- 六錨點全要重跑，預估 5-8 輪 iteration
+- 整體規模 ≈ Phase 5 full × 1.5
+
+**為什麼仍要做：**
+- 走杯中物路徑 → 用戶可信賴模型推薦
+- 不再需要 process-variable 補丁（acid_trap、SW_TIME_FLOOR fudge）
+- 任何未來「酸澀過萃欠萃」象限的問題都能透過化合物層自然反映
+- 完整實現 CLAUDE.md 四條核心原則
+
+**建議執行時機：** 用戶有時間做 5-8 輪錨點迭代 + 後續實測驗證；現階段所有六錨點 PASS、Phase 5 lite/lite+ 機制完整，模型可用但有 BAD 配方推薦 bug 未根治。
+
+**參考資料：**
+- Fuller & Rao 2017 (Sci. Reports) — CGA first-order kinetics + Arrhenius
+- Cordoba 2023 PMC10074501 — 化合物 saturation 曲線
+- Frost & Ristenpart 2020 — TDS-酸質連續關係
+- coffeeadastra.com — 萃取動力學實務觀察
+
+---
+
 ## UI — Chip 標籤重寫（Phase 1-3 已完成，現可進行）
 
 原註記「等 Phase 1-3 完成後才能做」— Phase 1-3 已於 2026-04-12 完成、Phase 4 進一步穩定模型。Chip 標籤現在可以基於最新模型（Phase 4 + Phase 5 lite 後）重新設計風味描述。但需注意 Phase 5 full 仍未做，所以 IDEAL_FLAVOR 對 PS/CGA 的描述語會跟 Phase 5 full 完成後不同（PS 描述若強調「醇厚」目前是基於 29% PS ideal，真實 15% 下「醇厚」感官門檻不同）。
