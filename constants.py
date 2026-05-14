@@ -7,6 +7,7 @@ BREWER_PRESETS = {
         "fixed_press_sec": 30,
         "swirl_wait_sec": 30,  # 旋轉後靜置等沉粉（容器固定，不依 dial）
         "area_cm2": 43.0,   # 內徑 ~74mm → π×37²≈43 cm²
+        "dial_offset": 0.0,
     },
     "xl": {
         "name": "AeroPress XL",
@@ -16,6 +17,14 @@ BREWER_PRESETS = {
         "fixed_press_sec": 40,
         "swirl_wait_sec": 40,  # XL 深床（22g/400ml）沉降較慢，比 standard 多 10s
         "area_cm2": 63.6,   # 內徑 ~90mm → π×45²≈63.6 cm²
+        # XL 床深 ~0.35 g/cm² vs std ~0.26 g/cm²（深 30%），實務 EK43 給 XL 多 ~0.25 格
+        # （4.0→4.25），對應 ZP6 dial +0.10 偏好。
+        # ⚠️ 經驗 patch：化合物模型目前不區分 brewer 幾何（XL/4.3 ≈ std/4.3 in cup），
+        # 此偏好只是 optimizer Gaussian 軟偏向（影響 ~0.2% 排名），未真正修化合物。
+        # 化合物層若要正確反映 XL 深床（channeling/bed compaction/thermal gradient）
+        # 屬未來 phase，會涉及 _predict_closed_compounds 加 brewer-aware 參數，
+        # 需重跑六錨點。本 patch 不違反「不為 anchor 反推化合物」原則。
+        "dial_offset": 0.10,
     },
 }
 
@@ -202,30 +211,42 @@ TDS_GAUSS_SIGMA_HIGH = 0.65  # 高 TDS 側 sigma 適度放寬（0.50→0.65）�
 TDS_SIGMA_BLEND_K = 5.0      # TDS sigma 平滑混合斜率
 TDS_SUPER_GAUSS_EXP = 4      # 超高斯（平頂 → dose 多元性需靠寬 sigma）
 
-# 甜感（SW）時間函數參數：從浸泡開始即隨時間增加，使用飽和曲線
-K_SW = 0.014  # 速率提高（0.010→0.014），讓 90-120s 接近平台、60s 明顯落後
-SW_TIME_FLOOR = 0.30  # t=0 時 SW 基底（從 0.50 收緊到 0.30，讓 60s 欠萃明顯低於 120s 完整發展）
-SW_DIAL_COEFF = 0.10  # SW 研磨敏感度：對數線性，每 dial 單位 10%（細研磨接觸面積大，香氣揮發物萃取多）
+# ──────────────────────────────────────────────────────────────────
+# Phase 6: 純物理 Arrhenius × 一階反應動力學參數（compounds.py 專用）
+# 物理原則：化合物層禁所有閾值（onset / floor / tent / softplus(temp - X)），
+#           溫度敏感性全走 Arrhenius；時間僅用 (1 − exp(−k·t)) 一階；
+#           grind 用連續 exp(coeff × (base − dial))。
+# 文獻基礎：Fuller & Rao 2017 (CGA Ea ≈ 50-60 kJ/mol)、有機酸 30-50、糖類 30-40、
+#           大分子聚合物 50（Maillard 產物熱力學）。
+# T_ref = 98°C：Hoffmann 錨點，arr(T_ref)=1.0 保證新舊 base 校準連續。
+# ──────────────────────────────────────────────────────────────────
+GAS_CONSTANT_R = 8.314          # J/(mol·K)
+ARRHENIUS_T_REF_C = 98.0        # °C，Hoffmann 錨點 → arr(98)=1.0
 
-# 醇厚度（PS）時間函數參數：降低啟動閾值，提高萃取速率
-K_PS = 0.012  # 速率提高（0.008→0.012），配合 floor 降低後仍保 100-120s 飽和度
-PS_TIME_FLOOR = 0.30  # t=0 時 PS 基底（從 0.50 收緊到 0.30，配合 SW 加強短浸泡欠發展懲罰）
+# 活化能（kJ/mol；compounds.py 透過 _arrhenius() 套用 Arrhenius 比值）
+AC_EXT_EA = 30.0                # 有機小酸萃取快（低 Ea，低溫仍能釋出）
+AC_DEG_EA = 70.0                # 揮發/熱分解高 Ea（取代原 AC_HIGH_TEMP_THRESH softplus）
+SW_EA = 35.0                    # 糖類 / 揮發香氣中等 Ea
+PS_EA = 45.0                    # 多醣高 Ea（低溫難萃，取代原 softplus(temp-90)×0.028）
+CA_EA = 40.0                    # caffeic acid 中等 Ea
+CGA_EA = 55.0                   # Fuller & Rao 2017：CGA Ea ≈ 50-60 kJ/mol
+MEL_EA = 50.0                   # melanoidin Maillard 中-高 Ea
 
-# CGA 時間函數參數
-K_CGA_TIME = 0.015
-CGA_TIME_MAX = 0.50
-CGA_TIME_ONSET = 150  # CGA 時間累積起始點（秒）；softplus 平滑過渡
+# 一階速率常數（在 T_ref=98°C 的基準值，1/s）
+# AC: 快萃取 × 慢衰減；K_AC_EXTRACT 大確保 ~10s 內接近 base × arr 飽和（避開人工 onset）
+K_AC_EXTRACT = 0.10             # 快萃取速率（5s 達 ~40%，30s 達 ~95%）
+K_AC_DEG = 0.0010               # 慢衰減速率（取代原 K_AC_DECAY + onset，純 Arrhenius 加速衰減）
+K_SW = 0.014                    # 沿用：90-120s 接近平台、60s 明顯落後
+K_PS = 0.012                    # 沿用
+K_CA = 0.030                    # 沿用（已是 first-order，Phase 6 加 Arrhenius 包裹）
+K_CGA_TIME = 0.008              # Phase 6 降速（0.015→0.008）：移除舊 (1 + CGA_TIME_MAX × ...) 結構後，
+                                # 需更慢的 K 才能保留「過萃時 CGA 顯著高於 Hoffmann」的鑑別力
+                                # Hoffman 120s 達 ~65% plateau，over-extract 240s+fine 達 ~95%（拉開 ratio ~1.5）
+K_MEL_TIME = 0.008              # 沿用（K_CGA 降速已足夠處理過萃判別；K_MEL 降會放大 Hedrick MEL 比例）
 
-# MEL 時間函數參數（大分子聚合物需時間溶出，比 CGA 慢）
-K_MEL_TIME = 0.008      # 溶解速率
-MEL_TIME_MAX = 0.35     # 最大時間增益
-MEL_TIME_ONSET = 80     # 起始時間（秒）；softplus 平滑過渡
-
-# 酸質（AC）衰減參數：調整開始衰減時間
-K_AC_DECAY = 0.004  # 酸質衰減速率常數（稍微降低）
-AC_DECAY_START = 150  # 酸質開始衰減的時間點（從 140 測試值進一步推到 150，確保長浸泡不失酸）
-AC_HIGH_TEMP_THRESH = 95.0  # 揮發性有機酸高溫降解閾值（°C）；softplus 平滑過渡
-AC_HIGH_TEMP_DECAY = 0.020  # 高溫降解斜率（每 softplus 單位損失 2%）
+# 研磨 dial 連續耦合（取代原 PS softplus 偽閾值）
+SW_DIAL_COEFF = 0.10            # SW 研磨敏感度（沿用，已是連續 exp）
+PS_DIAL_COEFF = 0.20            # PS 研磨敏感度（新增；取代 softplus(DIAL_BASE - dial)*0.28）
 
 # 研磨粗細對 AC 衰減 / CGA 累積動力學的耦合（Fuller & Rao 2017 Sci. Reports + coffeeadastra）
 # 粗磨內部擴散慢 → 起始延後 + 速率降低；細磨表面積大 → 起始提前 + 速率加快
@@ -419,9 +440,10 @@ IDEAL_FLAVOR = {
 COMPOUND_BASE = {
     "very_light":      {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     "light":           {"AC": 0.16, "SW": 0.40, "PS": 0.26, "CA": 0.07, "CGA": 0.05, "MEL": 0.04},   # Nordic 真淺焙暫定
-    # Phase 5 full 回推自 Hoffman 動力學乘子（AC 1.116, SW 0.736, PS 0.996, CA 0.911, CGA 1.194, MEL 1.185）
-    # 對齊新 IDEAL mid (AC 15/SW 40/PS 16/CA 7/CGA 12/MEL 10)；sum=1.000
-    "medium_light":    {"AC": 0.123, "SW": 0.494, "PS": 0.146, "CA": 0.070, "CGA": 0.091, "MEL": 0.076},   # El Tambo Agtron 65-75（Hoffman 錨點）
+    # Phase 6 回推自新 Arrhenius × 一階反應動力學（compounds.py 純物理重寫）
+    # 從 Hoffman (98°C / dial 4.3 / 120s / 11g) 動力學乘子反推；CGA/MEL K 降速後再次回推
+    # base sum > 1 是預期結果：新動力學移除舊 (1 + CGA_TIME_MAX × growth) 放大結構，base 上移補償
+    "medium_light":    {"AC": 0.1533, "SW": 0.5702, "PS": 0.2081, "CA": 0.0713, "CGA": 0.1824, "MEL": 0.1709},   # El Tambo Agtron 65-75（Hoffman 錨點）
     "medium":          {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
     "moderately_dark": {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
     "dark":            {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},

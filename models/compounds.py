@@ -33,6 +33,20 @@ def _soft_cap(x: float, cap: float, k: float = 10.0) -> float:
     return x - _softplus(x - cap, k)
 
 
+def _arrhenius(temp_c: float, ea_kj_per_mol: float) -> float:
+    """Arrhenius rate ratio k(T) / k(T_ref). Returns 1.0 at T=T_ref.
+
+    k(T) = k_ref · exp(Ea/R · (1/T_ref − 1/T))
+    Global monotone, no threshold, no inflection — pure physics structure.
+    """
+    T_K = temp_c + 273.15
+    T_ref_K = constants.ARRHENIUS_T_REF_C + 273.15
+    return math.exp(
+        ea_kj_per_mol * 1000.0 / constants.GAS_CONSTANT_R
+        * (1.0 / T_ref_K - 1.0 / T_K)
+    )
+
+
 def _predict_closed_compounds(
     roast_code: str,
     temp: float,
@@ -41,6 +55,14 @@ def _predict_closed_compounds(
     water_mg_frac: float,
     water_gh: float = 50.0,
 ) -> dict:
+    """Phase 6: pure Arrhenius × first-order kinetics.
+
+    Every compound follows `base × (1 − exp(−k·t))` with `k = K_ref · arr(T) · grind`.
+    AC adds a degradation term `× exp(−k_deg·t)`. No onset gates, no time floors,
+    no tent functions, no temperature-threshold softplus — all temperature
+    sensitivity flows through Arrhenius rate ratios. Perceptual thresholds
+    (SW_AROMA high-T loss, SCORCH) live in scoring.py per CLAUDE.md principle #4.
+    """
     mg_ppm = water_gh * water_mg_frac
     ca_ppm = water_gh * (1.0 - water_mg_frac)
     mg_delta = (mg_ppm - constants.MG_PPM_REF) / (constants.MG_PPM_REF * 2.0)
@@ -50,68 +72,49 @@ def _predict_closed_compounds(
 
     base_profile = constants.COMPOUND_BASE[roast_code]
 
-    # 研磨耦合動力學係數：粗磨內部擴散慢，AC 衰減 / CGA 累積都延後 + 變慢
-    # 參考：Fuller & Rao 2017（CGA first-order + plateau）、coffeeadastra（澀感受表面積限制）
+    # 研磨表面積耦合：粗磨擴散慢，rate ∝ exp(coeff × (base − dial))（連續、無閾值）
     grind_kinetics = math.exp(constants.GRIND_KINETICS_COEFF * (constants.DIAL_BASE - dial))
 
-    # ── AC (acidity) ──────────────────────────────────────────────
-    ac = base_profile["AC"]
-    ac *= 1 + (temp - 90) * 0.02
-    # 酸質衰減：(a) 起始時間隨研磨延後（coarse → 慢釋放，遲衰減）
-    #          (b) 衰減速率隨研磨減緩（coarse → 內擴散慢，AC 不會被快速沖刷掉）
-    ac_decay_start_eff = constants.AC_DECAY_START / grind_kinetics
-    ac *= math.exp(
-        -constants.K_AC_DECAY * grind_kinetics
-        * _softplus(effective_steep - ac_decay_start_eff, k=0.10)
-    )
-    # 高溫揮發性有機酸降解（>95°C 時揮發/熱分解加速）
-    ac *= 1.0 - _softplus(
-        temp - constants.AC_HIGH_TEMP_THRESH, k=0.5) * constants.AC_HIGH_TEMP_DECAY
+    t = effective_steep
+
+    # ── AC (acidity): fast extraction × slow degradation (both Arrhenius) ─
+    arr_ac_ext = _arrhenius(temp, constants.AC_EXT_EA)
+    arr_ac_deg = _arrhenius(temp, constants.AC_DEG_EA)
+    k_ac_ext = constants.K_AC_EXTRACT * arr_ac_ext * grind_kinetics
+    k_ac_deg = constants.K_AC_DEG * arr_ac_deg
+    ac = base_profile["AC"] * (1.0 - math.exp(-k_ac_ext * t)) * math.exp(-k_ac_deg * t)
     ac *= ac_sw_mult
 
-    # ── SW (sweetness / aroma) ───────────────────────────────────
-    sw = base_profile["SW"]
-    optimal_sw_temp = constants.ROAST_TABLE[roast_code]["base_temp"] - 2
-    sw *= 1 - abs(temp - optimal_sw_temp) * 0.018
-    # 乘法時間函數：短浸泡 = 糖類未充分發展（floor），長浸泡 → 1.0
-    sw *= constants.SW_TIME_FLOOR + (1.0 - constants.SW_TIME_FLOOR) * (
-        1.0 - math.exp(-constants.K_SW * effective_steep))
+    # ── SW (sweetness): pure first-order. SW_AROMA in scoring.py handles >97°C loss ─
+    arr_sw = _arrhenius(temp, constants.SW_EA)
+    k_sw_eff = constants.K_SW * arr_sw
+    sw = base_profile["SW"] * (1.0 - math.exp(-k_sw_eff * t))
     sw *= ac_sw_mult
-    # 研磨粗細對香氣揮發物的影響：細研磨增加接觸面積，提升揮發性香氣萃取
     sw *= math.exp(constants.SW_DIAL_COEFF * (constants.DIAL_BASE - dial))
 
-    # ── PS (polysaccharides / body) ──────────────────────────────
-    ps = base_profile["PS"] * (1.0 + _softplus(constants.DIAL_BASE - dial, k=3.0) * 0.28)
-    # 乘法時間函數：多醣體需更長時間溶出
-    ps *= constants.PS_TIME_FLOOR + (1.0 - constants.PS_TIME_FLOOR) * (
-        1.0 - math.exp(-constants.K_PS * effective_steep))
-    ps *= _softplus(1.0 + (temp - 90) * 0.028, k=10.0)
+    # ── PS (polysaccharides): pure first-order; exponential dial coupling ─
+    arr_ps = _arrhenius(temp, constants.PS_EA)
+    k_ps_eff = constants.K_PS * arr_ps
+    ps = base_profile["PS"] * (1.0 - math.exp(-k_ps_eff * t))
+    ps *= math.exp(constants.PS_DIAL_COEFF * (constants.DIAL_BASE - dial))
     ps *= ps_cga_mult
     ps = _soft_cap(ps, 1.0, k=10.0)
 
-    # ── CA (caffeic acid) ────────────────────────────────────────
-    ca = base_profile["CA"] * (1.0 - math.exp(-constants.K_CA * effective_steep))
+    # ── CA (caffeic acid): pure first-order with Arrhenius ─
+    arr_ca = _arrhenius(temp, constants.CA_EA)
+    k_ca_eff = constants.K_CA * arr_ca
+    ca = base_profile["CA"] * (1.0 - math.exp(-k_ca_eff * t))
 
-    # ── CGA (chlorogenic acid / astringency) ─────────────────────
-    cga = base_profile["CGA"]
-    cga *= 1 + _softplus(temp - 92, k=2.0) * 0.02
-    # CGA first-order + plateau，plateau 高度 grind-independent（Fuller & Rao 2017）
-    # 速率與起始時間隨研磨耦合：粗磨 → 慢累積、晚啟動
-    cga_time_onset_eff = constants.CGA_TIME_ONSET / grind_kinetics
-    cga *= 1.0 + constants.CGA_TIME_MAX * (
-        1.0 - math.exp(
-            -constants.K_CGA_TIME * grind_kinetics
-            * _softplus(effective_steep - cga_time_onset_eff, k=0.10)
-        )
-    )
+    # ── CGA (chlorogenic acid): pure first-order, Arrhenius + grind coupling ─
+    arr_cga = _arrhenius(temp, constants.CGA_EA)
+    k_cga_eff = constants.K_CGA_TIME * arr_cga * grind_kinetics
+    cga = base_profile["CGA"] * (1.0 - math.exp(-k_cga_eff * t))
     cga *= ps_cga_mult
 
-    # ── MEL (melanoidins / roasty bitterness) ────────────────────
-    mel = base_profile["MEL"] * (1 + (temp - 90) * 0.01)
-    mel *= 1.0 + constants.MEL_TIME_MAX * (
-        1.0 - math.exp(-constants.K_MEL_TIME * _softplus(
-            effective_steep - constants.MEL_TIME_ONSET, k=0.10))
-    )
+    # ── MEL (melanoidins): pure first-order with Arrhenius ─
+    arr_mel = _arrhenius(temp, constants.MEL_EA)
+    k_mel_eff = constants.K_MEL_TIME * arr_mel
+    mel = base_profile["MEL"] * (1.0 - math.exp(-k_mel_eff * t))
 
     return {
         "AC": ac,

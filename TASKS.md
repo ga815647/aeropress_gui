@@ -225,7 +225,59 @@ Sum=1.000；驗證 Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（AC 15.16 
 
 ---
 
-## Phase 6 — 化合物模型純物理化（compounds.py 純連續、scoring.py 留閾值）❌ 未完成，大重構
+## Phase 6 — 化合物模型純物理化（compounds.py 純連續、scoring.py 留閾值）✅（2026-05-14）
+
+**完成內容：**
+
+**1. `compounds.py` 重寫為純 Arrhenius × 一階反應動力學**
+- 新增 `_arrhenius(temp, Ea)` 輔助函數：`exp(Ea/R × (1/T_ref − 1/T))`，全域 monotone 無拐點。
+- 全部六種化合物統一架構：`base × (1 − exp(−k·t))`，`k = K_ref × arr(T) × grind_kinetics`。
+- AC 特例：`base × (1 − exp(−k_ext·t)) × exp(−k_deg·t)`（萃取 × 衰減雙 Arrhenius）。
+- **完全移除：** AC 線性溫度修正、SW tent function、PS softplus 偽閾值、CGA softplus(temp−92)、所有 onset gate、所有 time floor。
+
+**2. `constants.py` 變更**
+- **新增：** `GAS_CONSTANT_R=8.314`、`ARRHENIUS_T_REF_C=98.0`、Ea per compound（AC_EXT_EA 30 / AC_DEG_EA 70 / SW_EA 35 / PS_EA 45 / CA_EA 40 / CGA_EA 55 / MEL_EA 50 kJ/mol）、`K_AC_EXTRACT=0.10` / `K_AC_DEG=0.0010` / `PS_DIAL_COEFF=0.20`。
+- **刪除：** `SW_TIME_FLOOR`、`PS_TIME_FLOOR`、`CGA_TIME_ONSET`、`MEL_TIME_ONSET`、`MEL_TIME_MAX`、`CGA_TIME_MAX`、`AC_DECAY_START`、`AC_HIGH_TEMP_THRESH`、`AC_HIGH_TEMP_DECAY`、`K_AC_DECAY`。
+- **降速：** `K_CGA_TIME` 0.015→0.008（移除 `(1 + CGA_TIME_MAX × ...)` 放大結構後，需更慢的 K 才能保留過萃判別）。
+- **回推 base：** `COMPOUND_BASE["medium_light"]` 由舊乘子 / 新乘子比例反推 = `{AC: 0.1533, SW: 0.5702, PS: 0.2081, CA: 0.0713, CGA: 0.1824, MEL: 0.1709}`（sum=1.36；非物理約束，純內部校準）。
+
+**3. 六錨點結果（全 PASS）**
+| 錨點 | 分數 | 與 Phase 5 full 比較 |
+|------|------|---------------------|
+| Hoffman | 92.0 | -0.8 |
+| April | 74.1 | -6.0 |
+| Championship | 60.8 | +4.4 |
+| Under-extraction | 0.0 | 不變 |
+| Over-extraction | 36.3 | +24.8（過萃從 11.5 漲到 36.3，仍 PASS < 50）|
+| Hedrick/Gagne | 68.1 | -27.6（仍 PASS ≥ 55）|
+
+**4. BAD case 改善**
+- 用戶實測 98°C/4.4/90s/22g XL（Phase 5 full Top 1 = 94.4 分）：optimizer 現在不再推薦此配方為 Top 1
+- 新 Top 1：93°C/4.3/150s/24g（score 95.7）— 移除高溫短浸泡的過萃陷阱
+- 直接探測該配方仍給 92.5（壓低 1.9），但 optimizer 整體不再推薦
+
+**5. 行為變化（CLI 測試已放寬）**
+- Medium roast XL 從 92°C/120s 改為 87°C/390s（Hedrick/Gagne 風格從新動力學自然湧現）
+- Medium-light XL Top 1 從 98°C/4.4/90s 改為 93°C/4.3/150s（避免 SW_AROMA 高溫損失）
+- `tests/test_output_and_cli.py::test_cli_reference_command_ranges` temp/steep 範圍已放寬
+
+**6. 設計原則對齊（CLAUDE.md 原則 #4）**
+- compound layer 純 `exp()` 結構（Arrhenius / 一階），無任何 threshold 參數
+- perceptual layer（scoring.py）保留：SW_AROMA、SCORCH、TDS_FLOOR、KH_FLOOR、GH_SOFT 等合法感官閾值
+- 11 pytest PASS
+
+**7. 已知殘留 issue（未解決）**
+- 90s vs 120s 在標準 brewer 同 dose 下，90s 仍略高於 120s（89.6 vs 87.6，幾乎相同）— 這是 `build_ideal_abs` 用 actual TDS 內插 IDEAL bracket 的結構效應，欠萃時 IDEAL 也跟著下移，吸收了絕對差距。Phase 6 已讓 compound 絕對值正確反映欠萃（SW 0.344 vs 0.398 = 13.5% gap），但 scoring 用 fraction 比較最後抹平差距。Optimizer 仍會選 120s 而非 90s（因為其他 TDS/EY 軸協同篩選），但純化合物對 90s/120s 在 standard brewer 鑑別力有限。屬於 scoring layer 設計議題，非 Phase 6 範圍。
+
+**參考資料：**
+- Fuller & Rao 2017 (Sci. Reports) — CGA first-order kinetics + Arrhenius
+- Cordoba 2023 PMC10074501 — 化合物 saturation 曲線
+- Frost & Ristenpart 2020 — TDS-酸質連續關係
+- coffeeadastra.com — 萃取動力學實務觀察
+
+---
+
+## Phase 6 — 化合物模型純物理化（已完成歷史紀錄保留）❌ → ✅
 
 **起源（2026-05-14 對話）：**
 用戶實測 model Top 1 配方（98°C / dial 4.4 / 90s / 22g XL，score 94.1），實際口感「酸澀重」。物理上 98°C × 90s 是文獻記載的「酸澀」trap — CGA Arrhenius 加速 + SW/PS 受時間限制 = CGA 已大量出來、SW/PS 尚未追上。

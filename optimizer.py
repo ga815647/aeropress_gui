@@ -141,7 +141,9 @@ def optimize(
                     )
                     dial_prefer = cfg.get("dial_prefer")
                     if dial_prefer is not None:
-                        dial_dev = (dial - dial_prefer) / constants.DIAL_PREFER_SIGMA
+                        # XL 床深 ~30% 較標準版深，物理上偏好略粗（+0.10 dial）對抗深床流阻
+                        effective_dial_prefer = dial_prefer + brewer.get("dial_offset", 0.0)
+                        dial_dev = (dial - effective_dial_prefer) / constants.DIAL_PREFER_SIGMA
                         dial_factor = 1.0 - constants.DIAL_PREFER_WEIGHT * (1.0 - math.exp(-0.5 * dial_dev**2))
                         score_raw *= dial_factor
                     score = score_to_display(score_raw, roast_code)

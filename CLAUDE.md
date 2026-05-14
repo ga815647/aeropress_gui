@@ -20,10 +20,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **已完成（2026-05-13）：** Phase 5 full — IDEAL_FLAVOR + COMPOUND_BASE 文獻校準。`IDEAL_FLAVOR["medium_light"]` 三 bracket 改為文獻對齊值（mid: AC 15 / SW 40 / **PS 16** / CA 7 / **CGA 12** / **MEL 10**；low/high 對稱微調）；同步反推 `COMPOUND_BASE["medium_light"]` = (AC 0.123, SW 0.494, PS 0.146, CA 0.070, CGA 0.091, MEL 0.076)（從 Hoffman 實測動力學乘子 AC 1.116/SW 0.736/PS 0.996/CA 0.911/CGA 1.194/MEL 1.185 back-solve）；三個 ratio 閾值同步更新（`AC_CGA_RATIO_IDEAL`: 2.0→1.25、`SW_BITTER_RATIO_IDEAL`: 3.0→1.82、`PS_CA_RATIO_IDEAL`: 2.0→2.29）。PS 從主要 indicator 降為中等：`WEIGHTS["PS"]`: 2.0→1.3、`COMPOUND_SIGMA_LO["PS"]`: 0.15→0.25。診斷錨點重新校準：`CGA_ASTRINGENCY_THRESHOLD`: 1.15→1.10（IDEAL_CGA 升 2× 使比值天然下降），Championship `PS+SW` 閾值 0.40→0.35（PS base 砍半使絕對值下降）。**驗證：Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（15.16 / 39.82 / 16.05 / 7.04 / 11.99 / 9.93）**。六錨點分數：Hoffman 92.9 / April 80.1 / Championship 56.4 / Under 0 / Over 11.5 / Hedrick 95.7（全 PASS）；Phase 5 lite 機制（EY=19.2 deficit fine grind 84.2 / coarse 94.5）與 Phase 5 lite+ 機制（TDS=1.22+EY=22 mismatch 78.4）均保留；11 pytest PASS。
 
-**僅剩待辦（交接，詳見 [TASKS.md](TASKS.md)）：**
-- **Phase 6 — 化合物模型純物理化（❌ 大重構，未完成）** — 用戶實測 98°C/4.4/90s/22g「酸澀重」但 model 給 94.1 分；根因為 `compounds.py` 內部多個非物理 gate（`SW_TIME_FLOOR=0.30`、`CGA_TIME_ONSET=150`、`AC_DECAY_START=150`、`MEL_TIME_ONSET=80`、tent function、softplus 溫度閾值）讓化合物預測「過早平台」、喪失 90s vs 120s 鑑別力。Phase 6 拆掉所有非物理 gate，改純 Arrhenius × 一階反應；走 CLAUDE.md 新原則 #4「化合物層純連續、感官層留閾值」。預估 5-8 輪錨點迭代。完整清單見 TASKS.md「Phase 6」。
+**已完成（2026-05-14）：** Phase 6 — 化合物模型純物理化。`compounds.py` 全部重寫為純 Arrhenius × 一階反應動力學，刪除所有非物理 gate（`SW_TIME_FLOOR`、`PS_TIME_FLOOR`、`CGA_TIME_ONSET`、`MEL_TIME_ONSET`、`AC_DECAY_START`、`AC_HIGH_TEMP_THRESH`、tent function、softplus 溫度閾值），統一架構 `base × (1 − exp(−k·t))` 配 `k = K_ref × arr(T) × grind`，AC 加衰減 `× exp(−k_deg·t)`。新增 `_arrhenius()` 函數 + per-compound Ea（30-70 kJ/mol per Fuller & Rao 2017 等文獻）。`K_CGA_TIME` 降速 0.015→0.008（補償移除舊 `(1 + CGA_TIME_MAX × growth)` 放大結構）；`COMPOUND_BASE["medium_light"]` 從新 Hoffmann 動力學乘子反推 = `{AC 0.153, SW 0.570, PS 0.208, CA 0.071, CGA 0.182, MEL 0.171}`。六錨點全 PASS（Hoffman 92.0 / April 74.1 / Champion 60.8 / Under 0 / Over 36.3 / Hedrick 68.1）；BAD 配方 98°C/4.4/90s/22g XL 不再為 optimizer Top 1（新 Top 1 = 93°C/4.3/150s/24g, score 95.7）；11 pytest PASS。**Medium roast XL 推薦從 92°C/120s 變為 87°C/390s（Hedrick/Gagne 長浸泡風格從純物理自然湧現）**，相關 CLI 測試已放寬範圍。完整實作見 TASKS.md「Phase 6」。
+
+**已完成（2026-05-14）：** XL `dial_offset = 0.10` — `BREWER_PRESETS["xl"]` 新增 Gaussian 軟偏好，optimizer 對 XL 推薦略偏粗（dial_prefer + 0.10）。**經驗 patch，不修改化合物層**：化合物模型目前不區分 brewer 幾何（XL/4.3 ≈ std/4.3 in cup），但實務上 XL 床深 ~30% 較標準版深，多數 EK43 食譜 XL 比 std 多 ~0.25 格（對應 ZP6 +0.10）。offset 影響 ~0.2% 排名，未必翻轉 Top 1。化合物層完整 brewer geometry 建模屬未來 phase。
+
+**僅剩待辦：**
 - UI — Chip 標籤重寫（Phase 1-3 已完成、Phase 5 full IDEAL 對齊文獻後可進行）
 - `light` 槽真淺焙錨點待補（目前用 `very_light` IDEAL_FLAVOR 暫頂；找到 Nordic-style AeroPress 食譜後校準）
+- **scoring 殘留 issue：** 90s vs 120s 在 standard brewer 同 dose 鑑別力不足（`build_ideal_abs` 隨 actual TDS 內插 bracket，欠萃時 IDEAL 也下移、吸收絕對差距）。Phase 6 已讓 compound 絕對值正確反映欠萃，但 scoring 用 fraction 比較最後抹平。屬於 scoring layer 設計議題、非化合物層問題。如需修正可考慮 `build_ideal_abs` 固定 TDS_PREFER 或新增 absolute SW/PS floor。
+- **化合物層 brewer geometry 建模（未來 phase）：** XL 深床效應（channeling/bed compaction/thermal gradient）目前未進入 `_predict_closed_compounds`。若要做，需加 brewer-aware 參數並重跑六錨點。現用 `dial_offset` 經驗 patch 兜底。
 
 ## Commands
 

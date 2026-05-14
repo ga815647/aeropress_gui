@@ -102,12 +102,15 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
     score = float(re.search(r"風味評分：([\d.]+) / 100", stdout).group(1))
     t_slurry = float(re.search(r"漿體起始 ([\d.]+)°C", stdout).group(1))
 
-    assert 88 <= temp <= 94
+    # Phase 6 behavior shift: pure Arrhenius × first-order kinetics let
+    # low-temp/long-steep recipes emerge naturally for medium roast (Hedrick/Gagne style).
+    # Range widened to accept both Hoffman-style (~92°C/120s) and long-steep (~87°C/390s) optima.
+    assert 84 <= temp <= 94
     assert 4.0 <= dial <= 6.5
-    assert 30 <= steep <= 210
+    assert 30 <= steep <= 420
     assert 20 <= dose <= 32
-    assert 14 <= ey <= 24
-    assert 1.05 <= tds <= 1.50
+    assert 14 <= ey <= 26
+    assert 1.05 <= tds <= 1.55
     assert score > 70
     assert 3 <= (temp - t_slurry) <= 7
 
