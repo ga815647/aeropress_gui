@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/anchor_check.py",
+            "timeout": 90,
+            "statusMessage": "Running diagnose_anchor.py..."
+          }
+        ]
+      }
+    ]
+  }
+}

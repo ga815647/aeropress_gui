@@ -1,5 +1,39 @@
 # 待辦任務路線圖
 
+> 紅線原則、錨點基準、commands 等永遠生效的內容請見 [`CLAUDE.md`](CLAUDE.md)。
+> 本檔記錄路線圖、phase 歷史、評分鑑別度改革等可查的詳細資料。
+
+## 評分鑑別度改革紀錄（累積，從 Phase 1 開始）
+
+1. **score_to_display** = raw × 100（線性映射，無 CDF）
+2. **log-ratio Gaussian compound_reward**（取代舊 cosine_sim + conc_score）
+3. **TDS Super-Gaussian 不對稱**：`TDS_GAUSS_SIGMA_LOW=0.15`、`TDS_GAUSS_SIGMA_HIGH=0.65`、`TDS_SUPER_GAUSS_EXP=4`（平頂寬容區，平滑混合斜率 `TDS_SIGMA_BLEND_K=5.0`）
+4. **EY 完全退出評分**：`EY_GAUSS_WEIGHT=0.0`（EY 是過程變數；化合物模型已通過時間/溫度/研磨敏感度間接反映萃取程度）
+5. **化合物比值獎勵**（`scoring.py`）：AC/CGA、SW/(MEL+CGA)、PS/CA — sigmoid 加分曲線，最多降 15% compound_loss（`RATIO_WEIGHT=0.15`）
+6. **苦澀超標加速懲罰**：`ACCEL_W_PER_COMPOUND` 對 CGA(0.20)/MEL(0.15) 啟動，超過 `PENALTY_ACCEL_THRESHOLD=2.5` 後 softplus 加速
+7. **TDS floor 改 sigmoid**：`1 / (1 + exp(-K(tds - MID)))`，`TDS_FLOOR_MID=0.50, K=8.0`（取代舊 `min(tds/0.80, 1)²`，全域連續可導）
+8. **Phase 1 SW 研磨敏感度**：`SW_DIAL_COEFF=0.10`（log-線性，每 dial 單位 10%；細研磨 → 接觸面積大 → 香氣揮發物多）— 不用 EY-gate，避免因果倒置
+9. **Phase 3 IDEAL_CGA 校準**：0.05→0.057 對齊 Hoffman 實測 CGA_frac≈0.064；AC 同步下調維持 sum=1.0
+10. **禁止**為了讓某錨點通過而削弱某項懲罰 → 必須找出物理根本原因
+
+## Phase 歷史摘要
+
+| 日期 | Phase | 摘要 |
+|------|-------|------|
+| 2026-04-12 | 1, 2, 3 | 化合物模型修正 (`SW_DIAL_COEFF`)、評分邊際曲線 + 比值評分 + 加速懲罰、錨點重校 (IDEAL_CGA 0.05→0.057) |
+| 2026-04-25 | 錨點重貼標 | Hoffmann/El Tambo (Agtron 65-75) 從 `light` 搬到 `medium_light`；`light` 留給 Nordic 真淺焙 |
+| 2026-05-13 | 4 | 粗磨+長浸泡象限校準：`GRIND_KINETICS_COEFF=0.40`、新增 Hedrick/Gagne 第六錨點、Top N 多樣化 |
+| 2026-05-13 | 4b | SW/PS 時間發展鑑別：`SW_TIME_FLOOR / PS_TIME_FLOOR: 0.50→0.30`、`K_SW: 0.010→0.014`、`K_PS: 0.008→0.012` |
+| 2026-05-13 | 5 lite | Grind-dependent EY deficit penalty：`GRIND_EY_DEMAND_K=10.0` / `EY_DEMAND_WEIGHT=0.30`（細磨單側懲罰） |
+| 2026-05-13 | 5 lite+ | TDS-EY mismatch 懲罰：`TDS_EY_MISMATCH_WEIGHT=2.0`、雙條件 AND-gated（SCA under-concentrated 象限） |
+| 2026-05-13 | 5 full | IDEAL_FLAVOR + COMPOUND_BASE 文獻校準（Cordoba 2023 / Vignoli 2016 / Nunes 2002）；PS 從主要 indicator 降為中等 |
+| 2026-05-14 | 6 | 化合物模型純物理化：`compounds.py` 全部改寫為 Arrhenius × first-order，刪除所有非物理 gate；六錨點全 PASS |
+| 2026-05-14 | XL dial_offset | `BREWER_PRESETS["xl"]["dial_offset"] = 0.10` 經驗 patch（不修改化合物層）|
+
+詳細實作見下方各 Phase section。
+
+---
+
 ## UI — Chip 標籤重寫（⚠️ 等 Phase 1-3 完成後才能做）
 
 **目標：** Dose chip 的 7 段風味描述以 TDS 偏差為主軸，貼合人類感官現實。

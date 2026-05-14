@@ -21,7 +21,11 @@ verify_corrections.py
 
 # 工具/IDE 目錄
 .agent/
-.claude/
+.claude/*
+# 例外：團隊共用 hook 設定與腳本要進版控（settings.local.json 仍 ignored）
+!.claude/settings.json
+!.claude/hooks/
+!.claude/hooks/**
 .roo/
 .vscode/
 .roomodes
