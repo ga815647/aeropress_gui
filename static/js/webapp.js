@@ -527,44 +527,15 @@
   }
 
   function mountHistoryTrigger() {
-    const topbar = document.querySelector("[data-controls-toggle]");
-    if (!topbar || document.getElementById("history-trigger")) return;
-    const btn = document.createElement("button");
-    btn.id = "history-trigger";
-    btn.type = "button";
-    btn.innerHTML = `<span style="margin-right:6px;">📜</span>歷史評論 <span class="history-count" style="color:#bb5f2a;font-weight:600;margin-left:2px;">(0)</span>`;
-    Object.assign(btn.style, {
-      background: "#fffaf3",
-      border: "1px solid #d8c7b7",
-      borderRadius: "999px",
-      padding: "6px 14px",
-      fontSize: "0.85em",
-      color: "#6d6358",
-      cursor: "pointer",
-      marginLeft: "auto",
-      marginRight: "12px",
-      transition: "background 0.15s, border-color 0.15s, color 0.15s",
-      whiteSpace: "nowrap",
-      fontWeight: "400",
-      letterSpacing: "0.015em",
-    });
-    btn.addEventListener("mouseenter", () => {
-      btn.style.background = "#fdf3ed";
-      btn.style.borderColor = "#bb5f2a";
-      btn.style.color = "#bb5f2a";
-    });
-    btn.addEventListener("mouseleave", () => {
-      btn.style.background = "#fffaf3";
-      btn.style.borderColor = "#d8c7b7";
-      btn.style.color = "#6d6358";
-    });
+    // Phase-10 redesign: the button now lives in the masthead HTML —
+    // we just attach the click handler to whatever's there.
+    const btn = document.getElementById("history-trigger");
+    if (!btn || btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       openHistoryModal();
     });
-    const chevron = topbar.querySelector(".toggle-icon");
-    if (chevron) topbar.insertBefore(btn, chevron);
-    else topbar.appendChild(btn);
   }
 
   document.addEventListener("keydown", (e) => {
