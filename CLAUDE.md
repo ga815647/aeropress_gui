@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - scoring 殘留 issue：90s vs 120s 在 standard brewer 同 dose 鑑別力不足（`build_ideal_abs` 隨 actual TDS 內插 bracket 吸收絕對差距）— 詳見 TASKS.md
 - 化合物層 brewer geometry 建模（未來 phase）— XL 深床效應未進化合物層，現用 `dial_offset` 兜底
 
-**目前狀態（Phase 6 完成）：** 6 錨點全 PASS（Hoffman 92.0 / April 74.1 / Champion 60.8 / Under 0 / Over 36.3 / Hedrick 68.1），11 pytest PASS。`compounds.py` 已純 Arrhenius × first-order；BAD 配方 98°C/4.4/90s/22g XL 不再為 optimizer Top 1。
+**目前狀態（Phase 7 完成）：** 6 錨點全 PASS（Hoffman 89.6 / April 75.0 / Champion 61.6 / Under 0 / Over 34.1 / Hedrick **85.7**，從 68.1 大幅修正），11 pytest PASS。`compounds.py` 已純 Arrhenius × first-order；Phase 7 把 `grind_kinetics` 也套到 `k_mel_eff` 上（與 CGA 同結構），讓粗磨真實壓低 MEL 累積 — 文獻機制 Gagné「fines × time = astringency」的最小連續代理。**化合物層在 dial/steep/temp 全域掃描下處處連續單調或單峰，無島（驗證原則 #4）**。Hoffman vs Hedrick 的雙峰地形完全來自 scoring 層 IDEAL 校準，合法。
 
 ## Commands
 

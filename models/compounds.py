@@ -111,9 +111,11 @@ def _predict_closed_compounds(
     cga = base_profile["CGA"] * (1.0 - math.exp(-k_cga_eff * t))
     cga *= ps_cga_mult
 
-    # ── MEL (melanoidins): pure first-order with Arrhenius ─
+    # ── MEL (melanoidins): pure first-order, Arrhenius + grind coupling ─
+    # 與 CGA 同型：粗磨內部擴散慢 → k 降低；細磨表面積大 → k 加快
+    # Gagné「fines × time」機制的最小代理（fines ↔ dial 已是連續耦合）
     arr_mel = _arrhenius(temp, constants.MEL_EA)
-    k_mel_eff = constants.K_MEL_TIME * arr_mel
+    k_mel_eff = constants.K_MEL_TIME * arr_mel * grind_kinetics
     mel = base_profile["MEL"] * (1.0 - math.exp(-k_mel_eff * t))
 
     return {

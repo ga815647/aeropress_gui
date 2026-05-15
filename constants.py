@@ -242,7 +242,9 @@ K_CA = 0.030                    # 沿用（已是 first-order，Phase 6 加 Arrh
 K_CGA_TIME = 0.008              # Phase 6 降速（0.015→0.008）：移除舊 (1 + CGA_TIME_MAX × ...) 結構後，
                                 # 需更慢的 K 才能保留「過萃時 CGA 顯著高於 Hoffmann」的鑑別力
                                 # Hoffman 120s 達 ~65% plateau，over-extract 240s+fine 達 ~95%（拉開 ratio ~1.5）
-K_MEL_TIME = 0.008              # 沿用（K_CGA 降速已足夠處理過萃判別；K_MEL 降會放大 Hedrick MEL 比例）
+K_MEL_TIME = 0.008              # K_MEL 同 K_CGA：粗磨 grind_kinetics 降速→MEL 累積慢
+                                # 取代「分 fast/slow pool」(該結構在 t>30s 必飽和，無鑑別力)
+                                # 直接乘 grind_kinetics 是 Gagné「fines×time」機制的最小連續代理
 
 # 研磨 dial 連續耦合（取代原 PS softplus 偽閾值）
 SW_DIAL_COEFF = 0.10            # SW 研磨敏感度（沿用，已是連續 exp）
