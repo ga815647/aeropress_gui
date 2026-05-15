@@ -177,6 +177,7 @@
       window.APP_ROAST_OPTIONS = {{ roast_options|tojson }};
       window.APP_BREWER_PRESETS = {{ brewer_presets|tojson }};
       window.APP_LABELS = {{ labels|tojson }};
+      window.APP_FEEDBACK_TAGS = ["acidic", "thin", "great-body", "bitter", "muted", "floral", "sweet", "harsh", "clean", "balanced", "fruity", "roasty"];
     </script>
     <script src="{{ url_for('static', filename='js/webapp.js') }}" defer></script>
   </body>

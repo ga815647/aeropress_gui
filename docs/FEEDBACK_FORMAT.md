@@ -1,6 +1,6 @@
 # Feedback format — `data/feedback.jsonl`
 
-Phase 8 freezes the schema. Phase 9 wires the webapp UI write path.
+Phase 8 freezes the schema. Phase 9 wires the webapp UI write path. Phase 10 (2026-05-15) extends `recipe` snapshot so the history view can render brew parameters without re-deriving them from `recipe_id` (which is a hash, not invertible).
 
 ## Why JSONL (append-only)
 
@@ -24,7 +24,16 @@ One JSON object per line. UTF-8. Newline-terminated.
   "tags": ["acidic", "thin"],
   "roast": "medium_light",
   "brewer": "xl",
-  "water": {"gh": 50, "kh": 30, "mg_frac": 0.40}
+  "water": {"gh": 50, "kh": 30, "mg_frac": 0.40},
+  "recipe": {
+    "temp": 94,
+    "dial": 4.3,
+    "dose": 11.5,
+    "steep_sec": 120,
+    "tds": 1.358,
+    "ey": 20.95,
+    "score": 97.9
+  }
 }
 ```
 
@@ -40,6 +49,7 @@ One JSON object per line. UTF-8. Newline-terminated.
 | `roast` | string | yes | matches a key in `constants.ROAST_TABLE` |
 | `brewer` | string | yes | `standard` / `xl` |
 | `water` | `{gh: number, kh: number, mg_frac: number}` | yes | water profile snapshot |
+| `recipe` | `{temp, dial, dose, steep_sec, tds?, ey?, score?}` or `null` | optional (added Phase 10) | snapshot of brew parameters at submission time; lets history view display the actual recipe without inverting `recipe_id`. `null` for legacy entries written before Phase 10. |
 
 ## Write rules (Phase 9 must enforce)
 

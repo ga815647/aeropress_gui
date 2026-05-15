@@ -11,6 +11,9 @@ output.json
 output.csv
 radar_top3.png
 
+# 使用者 feedback（個人資料，schema 在 docs/FEEDBACK_FORMAT.md）
+data/feedback.jsonl
+
 # 臨時測試腳本
 compare_models.py
 test_exp.py

@@ -203,6 +203,554 @@
     return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
 
+  // ── 回饋區塊（Phase 10 — webapp 是唯一寫入 channel） ────────────────
+  function escapeHtml(text) {
+    return String(text || "").replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[ch]);
+  }
+
+  // ── 沖煮歷史 / Brewing Journal modal ─────────────────────────────
+  // Design notes (5 lines):
+  //   1) Editorial layout — comment is the visual hero (1.08em), metadata is engraved-small.
+  //   2) Each entry sits on a 4px terracotta stripe; no card-on-card nesting.
+  //   3) Label = colored dot (per-label), not a pill. Filters are text + active underline.
+  //   4) Recent timestamps soften to "N 天前"; older entries show ISO date.
+  //   5) Best 5-star entry by score earns a quiet "✦ 目前最佳沖煮" annotation.
+
+  const HISTORY_LABEL_COLORS = {
+    "balanced":      "#bb5f2a",
+    "acid-forward":  "#d4a017",
+    "sweet-body":    "#8f6a3d",
+    "coarse-modern": "#6b4c32",
+    "tim":           "#7d9173",
+  };
+
+  let historyCache = { entries: [], fetchedAt: 0 };
+  let historyFilters = { label: "__all__", minStars: 0 };
+
+  function formatHistoryTime(iso) {
+    if (!iso) return "—";
+    const then = new Date(iso);
+    if (isNaN(then.getTime())) return iso.slice(0, 10);
+    const ymd = iso.slice(0, 10);
+    const diffDays = Math.floor((new Date() - then) / 86400000);
+    if (diffDays < 0) return ymd;
+    if (diffDays === 0) return `今天 · ${ymd}`;
+    if (diffDays === 1) return `昨天 · ${ymd}`;
+    if (diffDays < 7)   return `${diffDays} 天前 · ${ymd}`;
+    return ymd;
+  }
+
+  function formatSteepShort(sec) {
+    if (sec == null) return "—";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+
+  function applyHistoryFilters(entries) {
+    return entries.filter((e) => {
+      if (historyFilters.label !== "__all__" && e.label !== historyFilters.label) return false;
+      if (historyFilters.minStars > 0 && (!e.stars || e.stars < historyFilters.minStars)) return false;
+      return true;
+    });
+  }
+
+  function findBestBrewTimestamp(entries) {
+    let best = null;
+    for (const e of entries) {
+      if (e.stars !== 5) continue;
+      const s = e.recipe && typeof e.recipe.score === "number" ? e.recipe.score : -Infinity;
+      if (!best || s > (best.recipe?.score ?? -Infinity)) best = e;
+    }
+    return best ? best.timestamp : null;
+  }
+
+  function renderHistoryEntry(entry, isBest) {
+    const accent = HISTORY_LABEL_COLORS[entry.label] || "#bb5f2a";
+    const time = formatHistoryTime(entry.timestamp);
+
+    const starsHtml = entry.stars
+      ? `<span style="letter-spacing:2px;font-size:0.95em;">` +
+        `<span style="color:#bb5f2a;">${"★".repeat(entry.stars)}</span>` +
+        `<span style="color:#e4d7cb;">${"★".repeat(5 - entry.stars)}</span></span>`
+      : `<span style="color:#c5b49e;font-size:0.85em;letter-spacing:0.05em;">— 未評星 —</span>`;
+
+    const r = entry.recipe;
+    const recipeLine = r
+      ? `${r.temp}°C · dial ${r.dial} · ${r.dose}g · steep ${formatSteepShort(r.steep_sec)}`
+      : `<span style="color:#a89c8a;font-style:italic;">舊紀錄無 brew 快照</span>`;
+    const metricsLine = r && r.tds != null && r.ey != null && r.score != null
+      ? `TDS ${r.tds.toFixed(2)}% · EY ${r.ey.toFixed(1)}% · score ${r.score.toFixed(1)}`
+      : "";
+
+    const tagsHtml = (entry.tags || []).length
+      ? `<div style="margin-top:10px;font-size:0.82em;color:#7a6e5f;letter-spacing:0.02em;">
+           ${entry.tags.map(t => `<span style="color:#6d6358;">${escapeHtml(t)}</span>`).join(
+             '<span style="color:#d8c7b7;margin:0 6px;">·</span>'
+           )}
+         </div>`
+      : "";
+
+    const commentHtml = entry.comment
+      ? `<div style="margin-top:14px;font-size:1.08em;line-height:1.7;color:#3a3a36;
+                     font-weight:450;letter-spacing:0.005em;">
+           <span style="color:#bb5f2a;margin-right:2px;">「</span>${escapeHtml(entry.comment)}<span style="color:#bb5f2a;margin-left:2px;">」</span>
+         </div>`
+      : `<div style="margin-top:14px;font-size:0.92em;color:#a89c8a;font-style:italic;">
+           （無感想文字 — 只有快速評分）
+         </div>`;
+
+    const bestRibbon = isBest
+      ? `<div style="margin-top:12px;font-size:0.72em;color:#bb5f2a;letter-spacing:0.18em;
+                     text-transform:uppercase;font-weight:600;">✦ 目前最佳沖煮</div>`
+      : "";
+
+    return `
+      <article class="history-entry" data-label="${entry.label}" data-stars="${entry.stars || 0}"
+        style="display:flex;gap:18px;padding:24px 4px;border-bottom:1px solid #ece2d2;">
+        <div aria-hidden="true" style="width:4px;background:${accent};border-radius:2px;
+                                        flex-shrink:0;align-self:stretch;"></div>
+        <div style="flex:1;min-width:0;">
+          <header style="display:flex;justify-content:space-between;align-items:baseline;
+                         flex-wrap:wrap;gap:8px 16px;font-size:0.85em;color:#6d6358;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span style="font-variant-numeric:tabular-nums;">${time}</span>
+              <span style="color:#d8c7b7;">·</span>
+              ${starsHtml}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:0.85em;
+                        color:#7a6e5f;letter-spacing:0.015em;">
+              <span aria-hidden="true" style="display:inline-block;width:7px;height:7px;
+                                              border-radius:50%;background:${accent};"></span>
+              <span style="font-weight:600;color:#4e6b5b;">${escapeHtml(entry.label)}</span>
+              <span style="color:#d8c7b7;">·</span>
+              <span>${escapeHtml(entry.roast || "")}</span>
+              <span style="color:#d8c7b7;">·</span>
+              <span>${escapeHtml(entry.brewer || "")}</span>
+            </div>
+          </header>
+          ${commentHtml}
+          <div style="margin-top:14px;font-size:0.85em;color:#6d6358;
+                      font-variant-numeric:tabular-nums;letter-spacing:0.01em;line-height:1.55;">
+            ${recipeLine}${metricsLine ? `<br><span style="color:#9b9080;">${metricsLine}</span>` : ""}
+          </div>
+          ${tagsHtml}
+          ${bestRibbon}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderHistoryModal(entries) {
+    const filtered = applyHistoryFilters(entries);
+    const bestTs = findBestBrewTimestamp(entries);
+
+    const labelBtn = (name, accent) => {
+      const active = historyFilters.label === name;
+      return `<button type="button" data-history-label="${name}"
+        style="background:none;border:none;cursor:pointer;padding:5px 2px;
+               font-size:0.92em;color:${active ? '#bb5f2a' : '#6d6358'};
+               font-weight:${active ? '600' : '400'};
+               border-bottom:1px solid ${active ? '#bb5f2a' : 'transparent'};
+               display:inline-flex;align-items:center;gap:6px;
+               transition:color 0.12s, border-color 0.12s;">
+        ${accent ? `<span aria-hidden="true" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${accent};"></span>` : ""}
+        ${name === "__all__" ? "全部" : escapeHtml(name)}
+      </button>`;
+    };
+
+    const starBtn = (n) => {
+      const active = historyFilters.minStars === n;
+      return `<button type="button" data-history-stars="${n}"
+        style="background:none;border:none;cursor:pointer;padding:5px 2px;
+               font-size:0.9em;color:${active ? '#bb5f2a' : '#6d6358'};
+               font-weight:${active ? '600' : '400'};
+               border-bottom:1px solid ${active ? '#bb5f2a' : 'transparent'};
+               transition:color 0.12s, border-color 0.12s;">
+        ${n === 0 ? "全部" : `⭐ ${n}+`}
+      </button>`;
+    };
+
+    const dot = `<span style="color:#d8c7b7;margin:0 4px;">·</span>`;
+    const labels = Object.keys(HISTORY_LABEL_COLORS);
+    const labelFilter = [labelBtn("__all__", null)]
+      .concat(labels.map(l => labelBtn(l, HISTORY_LABEL_COLORS[l])))
+      .join(dot);
+    const starFilter = [0, 1, 2, 3, 4, 5].map(starBtn).join(dot);
+
+    const body = filtered.length
+      ? filtered
+          .slice()
+          .sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""))
+          .map(e => renderHistoryEntry(e, bestTs && e.timestamp === bestTs))
+          .join("")
+      : `<div style="padding:80px 24px;text-align:center;color:#a89c8a;">
+           <div style="font-size:2.4em;margin-bottom:14px;opacity:0.35;letter-spacing:0.1em;">⌬</div>
+           <div style="font-size:1.05em;letter-spacing:0.02em;">
+             ${entries.length ? "此條件下無紀錄。" : "尚無紀錄。下一杯就是第一筆。"}
+           </div>
+         </div>`;
+
+    const filterStrip = `
+      <div style="position:sticky;top:0;background:#fdf7ef;padding:14px 28px 16px;
+                  border-bottom:1px solid #ece2d2;z-index:1;">
+        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
+          <span style="font-size:0.72em;color:#a89c8a;letter-spacing:0.18em;
+                       text-transform:uppercase;min-width:42px;font-weight:600;">標籤</span>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0;">${labelFilter}</div>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:8px;">
+          <span style="font-size:0.72em;color:#a89c8a;letter-spacing:0.18em;
+                       text-transform:uppercase;min-width:42px;font-weight:600;">星等</span>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0;">${starFilter}</div>
+        </div>
+      </div>
+    `;
+
+    return `
+      <div id="history-modal" class="modal" style="display:flex;align-items:center;
+           justify-content:center;position:fixed;inset:0;background:rgba(58,52,46,0.42);
+           z-index:1000;backdrop-filter:blur(2px);">
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="history-modal-title"
+          style="max-width:760px;width:calc(100% - 32px);background:#fdf7ef;
+                 border-radius:14px;display:flex;flex-direction:column;max-height:90vh;
+                 box-shadow:0 24px 60px -20px rgba(58,52,46,0.25),
+                            0 4px 12px -4px rgba(58,52,46,0.12);
+                 overflow:hidden;">
+          <div class="modal-head" style="display:flex;justify-content:space-between;
+               align-items:flex-start;padding:24px 28px 18px;gap:16px;">
+            <div>
+              <span class="eyebrow" style="font-size:0.7em;color:#a89c8a;
+                    letter-spacing:0.2em;text-transform:uppercase;font-weight:600;">Brewing Journal</span>
+              <h2 id="history-modal-title" style="margin:6px 0 4px;color:#4e6b5b;
+                  font-size:1.5em;font-weight:500;letter-spacing:-0.005em;">我的沖煮歷史</h2>
+              <p style="margin:0;font-size:0.88em;color:#7a6e5f;">
+                共 ${entries.length} 筆紀錄${filtered.length !== entries.length ? `（過濾後 ${filtered.length} 筆）` : ""}
+              </p>
+            </div>
+            <button id="history-modal-close" class="modal-close" type="button" aria-label="關閉"
+              style="background:none;border:none;font-size:1.6em;cursor:pointer;color:#a89c8a;
+                     line-height:1;padding:4px 10px;border-radius:6px;
+                     transition:background 0.15s, color 0.15s;">×</button>
+          </div>
+          ${filterStrip}
+          <div id="history-modal-body"
+               style="overflow-y:auto;padding:0 28px;flex:1;min-height:0;">
+            ${body}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function attachHistoryHandlers() {
+    const modal = document.getElementById("history-modal");
+    if (!modal) return;
+
+    modal.querySelector("#history-modal-close")
+      ?.addEventListener("click", closeHistoryModal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeHistoryModal();
+    });
+
+    const close = modal.querySelector("#history-modal-close");
+    if (close) {
+      close.addEventListener("mouseenter", () => {
+        close.style.background = "#fdf3ed";
+        close.style.color = "#bb5f2a";
+      });
+      close.addEventListener("mouseleave", () => {
+        close.style.background = "none";
+        close.style.color = "#a89c8a";
+      });
+    }
+
+    modal.querySelectorAll("[data-history-label]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        historyFilters.label = btn.dataset.historyLabel;
+        rerenderHistoryModal();
+      });
+    });
+    modal.querySelectorAll("[data-history-stars]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        historyFilters.minStars = Number(btn.dataset.historyStars);
+        rerenderHistoryModal();
+      });
+    });
+  }
+
+  function rerenderHistoryModal() {
+    const existing = document.getElementById("history-modal");
+    if (!existing) return;
+    const scrollTop = existing.querySelector("#history-modal-body")?.scrollTop || 0;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = renderHistoryModal(historyCache.entries);
+    existing.replaceWith(wrap.firstElementChild);
+    attachHistoryHandlers();
+    const body = document.querySelector("#history-modal-body");
+    if (body) body.scrollTop = scrollTop;
+  }
+
+  async function fetchHistory() {
+    try {
+      const r = await fetch("/api/feedback");
+      const d = await r.json();
+      historyCache = { entries: d.entries || [], fetchedAt: Date.now() };
+    } catch (e) {
+      historyCache = { entries: historyCache.entries, fetchedAt: Date.now() };
+    }
+    updateHistoryButtonCount();
+    return historyCache.entries;
+  }
+
+  function updateHistoryButtonCount() {
+    const counter = document.querySelector("#history-trigger .history-count");
+    if (counter) counter.textContent = `(${historyCache.entries.length})`;
+  }
+
+  async function openHistoryModal() {
+    await fetchHistory();
+    document.getElementById("history-modal")?.remove();
+    const wrap = document.createElement("div");
+    wrap.innerHTML = renderHistoryModal(historyCache.entries);
+    document.body.appendChild(wrap.firstElementChild);
+    document.body.style.overflow = "hidden";
+    attachHistoryHandlers();
+    document.getElementById("history-modal-close")?.focus();
+  }
+
+  function closeHistoryModal() {
+    document.getElementById("history-modal")?.remove();
+    document.body.style.overflow = "";
+  }
+
+  function mountHistoryTrigger() {
+    const topbar = document.querySelector("[data-controls-toggle]");
+    if (!topbar || document.getElementById("history-trigger")) return;
+    const btn = document.createElement("button");
+    btn.id = "history-trigger";
+    btn.type = "button";
+    btn.innerHTML = `<span style="margin-right:6px;">📜</span>歷史評論 <span class="history-count" style="color:#bb5f2a;font-weight:600;margin-left:2px;">(0)</span>`;
+    Object.assign(btn.style, {
+      background: "#fffaf3",
+      border: "1px solid #d8c7b7",
+      borderRadius: "999px",
+      padding: "6px 14px",
+      fontSize: "0.85em",
+      color: "#6d6358",
+      cursor: "pointer",
+      marginLeft: "auto",
+      marginRight: "12px",
+      transition: "background 0.15s, border-color 0.15s, color 0.15s",
+      whiteSpace: "nowrap",
+      fontWeight: "400",
+      letterSpacing: "0.015em",
+    });
+    btn.addEventListener("mouseenter", () => {
+      btn.style.background = "#fdf3ed";
+      btn.style.borderColor = "#bb5f2a";
+      btn.style.color = "#bb5f2a";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.background = "#fffaf3";
+      btn.style.borderColor = "#d8c7b7";
+      btn.style.color = "#6d6358";
+    });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openHistoryModal();
+    });
+    const chevron = topbar.querySelector(".toggle-icon");
+    if (chevron) topbar.insertBefore(btn, chevron);
+    else topbar.appendChild(btn);
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.getElementById("history-modal")) {
+      closeHistoryModal();
+    }
+  });
+  // ──────────────────────────────────────────────────────────────────
+
+
+  function renderFeedbackList(feedback) {
+    if (!feedback || !feedback.length) return "";
+    const items = feedback.map((f) => {
+      const stars = f.stars ? "⭐".repeat(f.stars) : "";
+      const tags = (f.tags || []).map((t) => `<span class="fb-tag">${escapeHtml(t)}</span>`).join(" ");
+      const date = (f.timestamp || "").slice(0, 10);
+      const comment = f.comment ? `<div class="fb-comment">「${escapeHtml(f.comment)}」</div>` : "";
+      return `
+        <div class="fb-entry" style="border-left: 3px solid #bb5f2a; padding: 8px 12px; margin: 6px 0; background: #fdf3ed; border-radius: 4px;">
+          <div style="font-size: 0.82em; color: #6d6358;">${date} ${stars}</div>
+          ${comment}
+          ${tags ? `<div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">${tags}</div>` : ""}
+        </div>
+      `;
+    }).join("");
+    return `<div class="fb-history" style="margin-top: 8px;">${items}</div>`;
+  }
+
+  function renderFeedbackForm(result, slot) {
+    const rid = result.recipe_id;
+    if (!rid) return "";
+    const tags = (window.APP_FEEDBACK_TAGS || []).map((t) => `
+      <button type="button" class="fb-tag-btn" data-fb-tag="${t}" data-fb-slot="${slot}"
+        style="padding: 3px 10px; border-radius: 999px; border: 1px solid #c5b49e;
+               background: #fff; color: #6b4c32; font-size: 0.82em; cursor: pointer;">${t}</button>
+    `).join("");
+    const stars = [1, 2, 3, 4, 5].map((n) => `
+      <button type="button" class="fb-star-btn" data-fb-star="${n}" data-fb-slot="${slot}"
+        style="background: none; border: none; font-size: 1.4em; cursor: pointer; padding: 0 2px; opacity: 0.3;">★</button>
+    `).join("");
+    return `
+      <details class="fb-section" data-fb-slot="${slot}" data-fb-recipe="${rid}" data-fb-label="${result.label}"
+               style="margin-top: 1rem; border-top: 1px dashed #c5b49e; padding-top: 1rem;">
+        <summary style="cursor: pointer; font-weight: bold; color: #4e6b5b; user-select: none;">
+          📝 我泡過了 — 留個感想（Phase 9 feedback）
+        </summary>
+        <div style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 8px;">
+          <div>
+            <div style="font-size: 0.85em; color: #6d6358; margin-bottom: 2px;">星等（選填）</div>
+            <div class="fb-stars" data-fb-slot="${slot}">${stars}</div>
+            <input type="hidden" class="fb-stars-input" data-fb-slot="${slot}" value="">
+          </div>
+          <div>
+            <div style="font-size: 0.85em; color: #6d6358; margin-bottom: 4px;">快速標籤（多選）</div>
+            <div class="fb-tags" data-fb-slot="${slot}" style="display: flex; flex-wrap: wrap; gap: 4px;">${tags}</div>
+          </div>
+          <div>
+            <div style="font-size: 0.85em; color: #6d6358; margin-bottom: 4px;">感想（自由文字，這是主要 input）</div>
+            <textarea class="fb-comment-input" data-fb-slot="${slot}" rows="3"
+              placeholder="比如「偏酸但喝得到甜尾」、「body 不夠」、「下次想試 dial 5.5」..."
+              style="width: 100%; padding: 8px; border: 1px solid #c5b49e; border-radius: 6px;
+                     font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="fb-save-btn primary-button" data-fb-slot="${slot}"
+              style="padding: 8px 16px;">儲存感想</button>
+            <span class="fb-save-msg" data-fb-slot="${slot}" style="font-size: 0.85em;"></span>
+          </div>
+          <div class="fb-history-mount" data-fb-slot="${slot}">${renderFeedbackList(result.feedback)}</div>
+        </div>
+      </details>
+    `;
+  }
+
+  function attachFeedbackHandlers() {
+    document.querySelectorAll(".fb-star-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const slot = btn.dataset.fbSlot;
+        const n = Number(btn.dataset.fbStar);
+        const input = document.querySelector(`.fb-stars-input[data-fb-slot="${slot}"]`);
+        if (input) input.value = String(n);
+        document.querySelectorAll(`.fb-stars[data-fb-slot="${slot}"] .fb-star-btn`).forEach((b) => {
+          b.style.opacity = Number(b.dataset.fbStar) <= n ? "1" : "0.3";
+        });
+      });
+    });
+    document.querySelectorAll(".fb-tag-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const on = btn.dataset.fbActive === "1";
+        btn.dataset.fbActive = on ? "0" : "1";
+        btn.style.background = on ? "#fff" : "#bb5f2a";
+        btn.style.color = on ? "#6b4c32" : "#fff";
+        btn.style.borderColor = on ? "#c5b49e" : "#bb5f2a";
+      });
+    });
+    document.querySelectorAll(".fb-save-btn").forEach((btn) => {
+      btn.addEventListener("click", () => submitFeedback(btn.dataset.fbSlot, btn));
+    });
+  }
+
+  async function submitFeedback(slot, btn) {
+    const section = document.querySelector(`.fb-section[data-fb-slot="${slot}"]`);
+    if (!section) return;
+    const msg = document.querySelector(`.fb-save-msg[data-fb-slot="${slot}"]`);
+    const starsInput = document.querySelector(`.fb-stars-input[data-fb-slot="${slot}"]`);
+    const commentInput = document.querySelector(`.fb-comment-input[data-fb-slot="${slot}"]`);
+    const tags = Array.from(document.querySelectorAll(`.fb-tags[data-fb-slot="${slot}"] [data-fb-active="1"]`))
+      .map((b) => b.dataset.fbTag);
+    const stars = starsInput.value ? Number(starsInput.value) : null;
+    const comment = (commentInput.value || "").trim();
+    if (!comment && !stars && !tags.length) {
+      msg.textContent = "請至少填一項";
+      msg.style.color = "#bb5f2a";
+      return;
+    }
+    btn.disabled = true;
+    msg.textContent = "儲存中...";
+    msg.style.color = "#6d6358";
+
+    const meta = latestPayload?.meta || {};
+    const result = findResultByRecipeId(section.dataset.fbRecipe);
+    const body = {
+      recipe_id: section.dataset.fbRecipe,
+      label: section.dataset.fbLabel,
+      stars,
+      comment,
+      tags,
+      roast: meta.roast_code,
+      brewer: getRecipeBrewer(section.dataset.fbRecipe),
+      water: { gh: meta.water_gh, kh: meta.water_kh, mg_frac: meta.water_mg_frac },
+      recipe: result ? {
+        temp: result.temp,
+        dial: result.dial,
+        dose: result.dose,
+        steep_sec: result.steep_sec,
+        tds: result.tds,
+        ey: result.ey,
+        score: result.score,
+      } : null,
+    };
+    try {
+      const resp = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) {
+        throw new Error(data.error || "save failed");
+      }
+      // Prepend the new entry locally so the user sees it without refetching.
+      const mount = document.querySelector(`.fb-history-mount[data-fb-slot="${slot}"]`);
+      mount.insertAdjacentHTML("afterbegin", renderFeedbackList([data.entry]));
+      commentInput.value = "";
+      starsInput.value = "";
+      document.querySelectorAll(`.fb-stars[data-fb-slot="${slot}"] .fb-star-btn`).forEach((b) => { b.style.opacity = "0.3"; });
+      document.querySelectorAll(`.fb-tags[data-fb-slot="${slot}"] .fb-tag-btn`).forEach((b) => {
+        b.dataset.fbActive = "0";
+        b.style.background = "#fff"; b.style.color = "#6b4c32"; b.style.borderColor = "#c5b49e";
+      });
+      msg.textContent = "✓ 已儲存";
+      msg.style.color = "#4e6b5b";
+      fetchHistory();  // refresh history count + cache
+    } catch (err) {
+      msg.textContent = `失敗：${err}`;
+      msg.style.color = "#bb5f2a";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function findResultByRecipeId(recipeId) {
+    if (!latestPayload?.results) return null;
+    const seq = Array.isArray(latestPayload.results)
+      ? latestPayload.results
+      : Object.values(latestPayload.results).flat();
+    return seq.find((r) => r.recipe_id === recipeId) || null;
+  }
+
+  function getRecipeBrewer(recipeId) {
+    const hit = findResultByRecipeId(recipeId);
+    if (!hit) return "standard";
+    return hit.brewer && hit.brewer.includes("XL") ? "xl" : "standard";
+  }
+  // ─────────────────────────────────────────────────────────────
+
   function renderInlineTimer(result, index) {
     return `
       <div class="inline-timer-wrap" style="margin-top: 1.5rem; border-top: 1px solid #e4d7cb; padding-top: 1.5rem; text-align: center;">
@@ -652,6 +1200,8 @@
         <div class="compound-grid" style="margin-top: 1.5rem; min-width: 0;">
           ${keys.map((key) => compoundCard(key, result.compounds_abs[key], meta.flavor_max ? meta.flavor_max[key] : 0.6)).join("")}
         </div>
+
+        ${renderFeedbackForm(result, `detail-${index}`)}
       </article>
       `;
   }
@@ -667,6 +1217,7 @@
     `;
 
     syncInlineTimerUI(currentDetailIndex);
+    attachFeedbackHandlers();
   }
 
   function renderChannelB(meta, byLabel) {
@@ -676,11 +1227,11 @@
       resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
       return;
     }
-    const cards = labels.map((lbl) => {
+    const cards = labels.map((lbl, idx) => {
       const items = byLabel[lbl] || [];
       if (!items.length) {
         return `
-          <div class="recipe-card" style="min-width: 280px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
+          <div class="recipe-card" style="min-width: 320px; max-width: 360px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
             <div class="muted" style="font-size: 0.85em; font-weight: bold;">${lbl}</div>
             <div class="muted" style="margin-top: 8px;">(無候選配方)</div>
           </div>
@@ -688,7 +1239,7 @@
       }
       const r = items[0];
       return `
-        <div class="recipe-card" style="min-width: 280px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
+        <div class="recipe-card" style="min-width: 320px; max-width: 360px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
             <div>
               <div class="muted" style="font-size: 0.85em; font-weight: bold; color: #bb5f2a;">${lbl}</div>
@@ -701,6 +1252,7 @@
             TDS ${r.tds.toFixed(2)}% | EY ${r.ey.toFixed(1)}%
           </div>
           <div class="muted" style="margin-top: 8px; font-size: 0.78em; word-break: break-all;">recipe_id: ${r.recipe_id || "—"}</div>
+          ${renderFeedbackForm(r, `channelb-${idx}`)}
         </div>
       `;
     }).join("");
@@ -716,6 +1268,7 @@
     `;
     // No radar in Channel B (results aren't comparable across labels).
     updateRadarTrigger([]);
+    attachFeedbackHandlers();
   }
 
   function renderResults(payload) {
@@ -898,4 +1451,6 @@
 
   showHelp("brewer");
   syncControlsPanelState();
+  mountHistoryTrigger();
+  fetchHistory();
 })();

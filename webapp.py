@@ -6,13 +6,20 @@ from flask import Flask, jsonify, render_template, request
 
 import constants
 from data.water_presets import WATER_PRESETS
+from models.feedback import (
+    ALLOWED_RATINGS,
+    ALLOWED_TAGS,
+    append_feedback,
+    read_all as read_all_feedback,
+    read_for_recipe,
+)
 from models.labels import get_label, ideal_abs as label_ideal_abs, label_names
 from models.scoring import compute_actual_abs
 from optimizer import optimize, optimize_parallel
 from runtime import apply_environment_settings, resolve_water_profile
 
 
-def _serialize_result(result: dict, roast_code: str) -> dict:
+def _serialize_result(result: dict, roast_code: str, feedback_index: dict[str, list[dict]] | None = None) -> dict:
     label = result.get("label", "balanced")
     actual_abs = compute_actual_abs(result["compounds"], result["tds"])
     ideal_abs = label_ideal_abs(label, result["tds"])
@@ -27,6 +34,8 @@ def _serialize_result(result: dict, roast_code: str) -> dict:
         ideal_abs["CA"] + ideal_abs["CGA"] + ideal_abs["MEL"] * mel_coeff,
         1e-8,
     )
+    rid = result.get("recipe_id")
+    feedback = feedback_index.get(rid, []) if (feedback_index and rid) else []
     return {
         **result,
         "label": label,
@@ -37,7 +46,18 @@ def _serialize_result(result: dict, roast_code: str) -> dict:
             "ps_bitter_actual": round(actual_ps_bitter, 3),
             "ps_bitter_ideal": round(ideal_ps_bitter, 3),
         },
+        "feedback": feedback,
     }
+
+
+def _build_feedback_index() -> dict[str, list[dict]]:
+    """One JSONL scan per /api/optimize call → dict[recipe_id] → entries."""
+    index: dict[str, list[dict]] = {}
+    for entry in read_all_feedback():
+        rid = entry.get("recipe_id")
+        if rid:
+            index.setdefault(rid, []).append(entry)
+    return index
 
 
 def create_app() -> Flask:
@@ -120,13 +140,15 @@ def create_app() -> Flask:
             dose_max_override=dose_max,
         )
 
+        fb_index = _build_feedback_index()
+
         if requested_label and requested_label != "__all__":
             results = optimize(
                 top_n=int(payload.get("top", 3)),
                 label=requested_label,
                 **common,
             )
-            results_serialized = [_serialize_result(item, roast_code) for item in results]
+            results_serialized = [_serialize_result(item, roast_code, fb_index) for item in results]
             label_used = requested_label
             top_tds = results[0]["tds"] if results else 1.25
         else:
@@ -135,7 +157,7 @@ def create_app() -> Flask:
                 **common,
             )
             results_serialized = {
-                lbl: [_serialize_result(item, roast_code) for item in items]
+                lbl: [_serialize_result(item, roast_code, fb_index) for item in items]
                 for lbl, items in parallel.items()
             }
             label_used = "__all__"
@@ -166,6 +188,23 @@ def create_app() -> Flask:
                 "results": results_serialized,
             }
         )
+
+    @app.post("/api/feedback")
+    def feedback_route():
+        payload = request.get_json(silent=True) or {}
+        try:
+            entry = append_feedback(payload)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "entry": entry})
+
+    @app.get("/api/feedback/<recipe_id>")
+    def feedback_for_recipe(recipe_id: str):
+        return jsonify({"recipe_id": recipe_id, "entries": read_for_recipe(recipe_id)})
+
+    @app.get("/api/feedback")
+    def feedback_list():
+        return jsonify({"entries": read_all_feedback()})
 
     return app
 
