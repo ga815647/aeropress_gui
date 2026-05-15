@@ -83,6 +83,11 @@
       body: "海拔會影響沸點與實際水溫上限，因此會改變可行的沖煮溫度範圍。",
       meta: "平地可維持 0，高海拔地區再補入實際數值。",
     },
+    label: {
+      title: "口感方向",
+      body: "Phase 8 感官 label 島：每個 label 是一份「想喝什麼」的目標（compound profile + TDS_PREFER），optimizer 會找出最接近該目標的配方。選擇「全部並列」會同時跑 4 個 label，每個 label 各印 Top 1，方便 cupping 對照。",
+      meta: "balanced=Hoffman / acid-forward=April / sweet-body=Championship / coarse-modern=Hedrick。",
+    },
   };
 
   const compoundHelp = {
@@ -130,6 +135,23 @@
         tooltipTitle.textContent = "焙度";
         tooltipBody.textContent = roastOption.note;
         tooltipMeta.textContent = "可依豆袋上的 Agtron 或 SCA 等級選擇；無測量時可從 Medium (M) 開始。";
+        return;
+      }
+    }
+    if (key === "label") {
+      const selected = document.getElementById("label").value;
+      if (selected === "") {
+        tooltipTitle.textContent = "口感方向：全部並列 (cupping)";
+        tooltipBody.textContent = "同時跑 4 個 label，每個 label 各回 Top 1 配方並列展示，方便 cupping 對照。";
+        tooltipMeta.textContent = "選定單一 label 後切回單目標 Top N 模式。";
+        return;
+      }
+      const labelOption = (window.APP_LABELS || []).find(l => l.name === selected);
+      if (labelOption) {
+        tooltipTitle.textContent = `口感方向：${labelOption.name}`;
+        tooltipBody.textContent = labelOption.description;
+        const anchor = labelOption.bullseye_anchor ? `源自 ${labelOption.bullseye_anchor} 食譜。` : "假想 label（無對應實測食譜）。";
+        tooltipMeta.textContent = `${anchor} TDS 目標 ${labelOption.tds_prefer}%。`;
         return;
       }
     }
@@ -647,10 +669,59 @@
     syncInlineTimerUI(currentDetailIndex);
   }
 
+  function renderChannelB(meta, byLabel) {
+    // Flatten label → result list into one row per label (Top 1 each), side-by-side.
+    const labels = Object.keys(byLabel);
+    if (!labels.length) {
+      resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
+      return;
+    }
+    const cards = labels.map((lbl) => {
+      const items = byLabel[lbl] || [];
+      if (!items.length) {
+        return `
+          <div class="recipe-card" style="min-width: 280px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
+            <div class="muted" style="font-size: 0.85em; font-weight: bold;">${lbl}</div>
+            <div class="muted" style="margin-top: 8px;">(無候選配方)</div>
+          </div>
+        `;
+      }
+      const r = items[0];
+      return `
+        <div class="recipe-card" style="min-width: 280px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+            <div>
+              <div class="muted" style="font-size: 0.85em; font-weight: bold; color: #bb5f2a;">${lbl}</div>
+              <h3 style="margin: 4px 0 0; font-size: 1.1em; color: #4e6b5b;">Score ${r.score.toFixed(1)}</h3>
+            </div>
+          </div>
+          <div style="font-size: 0.9em; color: #6d6358; line-height: 1.5;">
+            <strong>Temp ${r.temp}°C / Dial ${r.dial} / Dose ${r.dose}g</strong><br>
+            Steep: ${formatTime(r.steep_sec)} / Contact: ${formatTime(r.total_contact_sec)}<br>
+            TDS ${r.tds.toFixed(2)}% | EY ${r.ey.toFixed(1)}%
+          </div>
+          <div class="muted" style="margin-top: 8px; font-size: 0.78em; word-break: break-all;">recipe_id: ${r.recipe_id || "—"}</div>
+        </div>
+      `;
+    }).join("");
+
+    resultsNode.innerHTML = `
+      <div class="muted" style="margin-bottom: 0.5rem;">Channel B — 各 label 各自最佳化 Top 1（並列 cupping 比對）</div>
+      <div class="scroll-container" style="display: flex; overflow-x: auto; gap: 16px; padding: 0 0 16px 0;">
+        ${cards}
+      </div>
+      <div class="muted" style="font-size: 0.85em; margin-top: 0.5rem;">
+        要看單一 label 的詳細時間軸 / timer，請在上方下拉切換到該 label 後重跑。
+      </div>
+    `;
+    // No radar in Channel B (results aren't comparable across labels).
+    updateRadarTrigger([]);
+  }
+
   function renderResults(payload) {
     const { meta, results } = payload;
     latestPayload = payload;
-    
+
     // reset all timers
     if (brewTimerInterval) {
       clearInterval(brewTimerInterval);
@@ -658,7 +729,14 @@
     }
     activeTimers = {};
 
-    if (!results.length) {
+    // Channel B: results is dict[label] → list. Render parallel cards.
+    if (results && !Array.isArray(results) && typeof results === "object") {
+      setMobileControlsHidden(true, { scrollToResults: true });
+      renderChannelB(meta, results);
+      return;
+    }
+
+    if (!results || !results.length) {
       setMobileControlsHidden(false);
       resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
       updateRadarTrigger([]);
@@ -670,142 +748,10 @@
     updateRadarTrigger(results);
   }
 
-  // ── 豆量風味走向提示 ──────────────────────────────────────────
+  // ── 豆量步進依器材切換 ────────────────────────────────────────
   const doseMinInput = document.getElementById("dose_min");
   const doseMaxInput = document.getElementById("dose_max");
   const brewerSelect = document.getElementById("brewer");
-  const doseFlavorHint = document.getElementById("dose-flavor-hint");
-  const dosePresetChipsEl = document.getElementById("dose-preset-chips");
-
-  // 7 段標籤：基於模型實測資料設計
-  // 規律：豆量↑ → EY↓（粗研磨補償）→ 甜感先升後降，峰值在中高段；苦澀全段緩降
-  // 27-28g (XL light) 浸泡自動縮至 90s → 甜感斷崖式下降，即標籤 7 的現象
-  const CHIP_LABELS = [
-    { icon: "🌤", label: "輕萃芬芳",  desc: "萃取最完整，甜香飄逸，TDS 偏低、口感較輕薄" },
-    { icon: "🌿", label: "甜香漸顯",  desc: "甜感開始明顯，TDS 漸升，酸質清晰" },
-    { icon: "🍋", label: "甜酸均衡",  desc: "甜酸比例接近平衡，風味輪廓清晰立體" },
-    { icon: "⚖️", label: "均衡標準",  desc: "甜酸醇厚三者均衡，TDS 中段" },
-    { icon: "🍯", label: "甜感集中",  desc: "TDS 接近理想值，甜感量大，酸質飽滿" },
-    { icon: "✨", label: "甜感最豐",  desc: "甜感絕對量最高（TDS × 甜感比例雙峰）、苦澀低" },
-    { icon: "🎯", label: "低澀乾淨",  desc: "苦澀最低，甜感略薄，浸泡較短，風格乾淨俐落" },
-  ];
-
-  // 根據焙度 × 器材動態計算 chip 豆量範圍
-  function computeDosePresets(brewerId, roastCode) {
-    const brewer = window.APP_BREWER_PRESETS && window.APP_BREWER_PRESETS[brewerId];
-    const roast  = window.APP_ROAST_OPTIONS  && window.APP_ROAST_OPTIONS.find(r => r.code === roastCode);
-    if (!brewer || !roast || !roast.dose_per_100ml) return [];
-
-    const waterMl = brewer.water_ml;
-    // XL 以 1g 為步進，standard 以 0.5g
-    const stepG = brewerId === "xl" ? 1 : 0.5;
-    const snap = v => Math.round(v / stepG) * stepG;
-
-    const totalMin = snap(roast.dose_per_100ml[0] * waterMl / 100);
-    const totalMax = snap(roast.dose_per_100ml[1] * waterMl / 100);
-    const step = (totalMax - totalMin) / CHIP_LABELS.length;
-
-    return CHIP_LABELS.map((l, i) => ({
-      ...l,
-      min: snap(totalMin + i * step),
-      max: snap(totalMin + (i + 1) * step),
-    }));
-  }
-
-  let activeChipIndex = -1;
-  let currentChipPresets = [];
-
-  function renderDosePresetChips() {
-    if (!dosePresetChipsEl || !brewerSelect) return;
-    const roastCode = document.getElementById("roast")?.value || "medium";
-    currentChipPresets = computeDosePresets(brewerSelect.value, roastCode);
-    dosePresetChipsEl.innerHTML = currentChipPresets.map((p, i) => `
-      <button type="button"
-        data-dose-chip="${i}"
-        title="${p.min}–${p.max} g"
-        style="
-          padding: 3px 8px; border-radius: 999px; border: 1px solid #c5b49e;
-          background: #fdf3ed; color: #6b4c32; font-size: 0.78em; cursor: pointer;
-          transition: background 0.15s, border-color 0.15s; white-space: nowrap;
-        "
-      >${p.icon} ${p.label}</button>
-    `).join("");
-    syncChipActive();
-  }
-
-  function syncChipActive() {
-    if (!dosePresetChipsEl) return;
-    dosePresetChipsEl.querySelectorAll("[data-dose-chip]").forEach((btn) => {
-      const i = Number(btn.dataset.doseChip);
-      const on = i === activeChipIndex;
-      btn.style.background = on ? "#bb5f2a" : "#fdf3ed";
-      btn.style.color = on ? "#fff" : "#6b4c32";
-      btn.style.borderColor = on ? "#bb5f2a" : "#c5b49e";
-    });
-  }
-
-  function getDoseFlavorHint(brewerId, roastCode, rawMin, rawMax) {
-    const brewer = window.APP_BREWER_PRESETS && window.APP_BREWER_PRESETS[brewerId];
-    const roast  = window.APP_ROAST_OPTIONS  && window.APP_ROAST_OPTIONS.find(r => r.code === roastCode);
-    if (!brewer) return null;
-    const waterMl = brewer.water_ml;
-
-    const dMin = rawMin !== "" ? parseFloat(rawMin) : NaN;
-    const dMax = rawMax !== "" ? parseFloat(rawMax) : NaN;
-    const hasBoth = !isNaN(dMin) && !isNaN(dMax);
-    const hasMin  = !isNaN(dMin);
-    const hasMax  = !isNaN(dMax);
-    if (!hasMin && !hasMax) return null;
-
-    const doseMid = hasBoth ? (dMin + dMax) / 2 : (hasMin ? dMin : dMax);
-    if (doseMid <= 0) return null;
-
-    const ratio = waterMl / doseMid;
-
-    // 用焙度的有效豆量範圍，把 doseMid 映射到 0~1（0=最清爽端，1=最濃縮端）
-    let direction, icon;
-    if (roast && roast.dose_per_100ml) {
-      const lo = roast.dose_per_100ml[0] * waterMl / 100;
-      const hi = roast.dose_per_100ml[1] * waterMl / 100;
-      const t = Math.max(0, Math.min(1, (doseMid - lo) / (hi - lo)));
-      // 7 段對應 CHIP_LABELS：峰值甜感在 t≈0.71（位置6/7）
-      if      (t < 1/7)  { icon = "🌤"; direction = "輕萃芬芳 — EY最高，甜香活潑，TDS偏低"; }
-      else if (t < 2/7)  { icon = "🌿"; direction = "甜香漸顯 — TDS漸升，甜感開始豐厚"; }
-      else if (t < 3/7)  { icon = "🍋"; direction = "甜酸均衡 — 輪廓清晰，酸甜並重"; }
-      else if (t < 4/7)  { icon = "⚖️"; direction = "均衡標準 — 甜酸醇厚均衡"; }
-      else if (t < 5/7)  { icon = "🍯"; direction = "甜感集中 — TDS接近理想，甜感量大"; }
-      else if (t < 6/7)  { icon = "✨"; direction = "甜感最豐 — 甜感絕對量雙峰，苦澀最低"; }
-      else               { icon = "🎯"; direction = "低澀乾淨 — 浸泡可能較短，甜感略薄但最乾淨"; }
-    } else {
-      // fallback（無焙度資料時保留舊邏輯）
-      if      (ratio > 22) { icon = "☁️"; direction = "口感偏淡，酸質明亮"; }
-      else if (ratio > 18) { icon = "🍋"; direction = "酸甜均衡、層次活潑"; }
-      else if (ratio > 15) { icon = "⚖️"; direction = "風味均衡，甜感適中"; }
-      else if (ratio > 12) { icon = "🍫"; direction = "醇厚偏強，甜感突出"; }
-      else                 { icon = "💧"; direction = "高濃縮，甜醇厚重"; }
-    }
-
-    const ratioStr = ratio.toFixed(1);
-    const rangeNote = hasBoth ? `${dMin}–${dMax}g` : (hasMin ? `≥ ${dMin}g` : `≤ ${dMax}g`);
-    return `${icon} ${rangeNote}　水粉比 1:${ratioStr}　→　${direction}`;
-  }
-
-  function updateDoseFlavorHint() {
-    if (!doseFlavorHint) return;
-    const roastCode = document.getElementById("roast")?.value || "medium";
-    const hint = getDoseFlavorHint(
-      brewerSelect ? brewerSelect.value : "xl",
-      roastCode,
-      doseMinInput ? doseMinInput.value : "",
-      doseMaxInput ? doseMaxInput.value : ""
-    );
-    if (hint) {
-      doseFlavorHint.textContent = hint;
-      doseFlavorHint.hidden = false;
-    } else {
-      doseFlavorHint.hidden = true;
-    }
-  }
 
   function syncDoseInputStep() {
     if (!brewerSelect) return;
@@ -814,31 +760,7 @@
     if (doseMaxInput) doseMaxInput.step = stepG;
   }
   syncDoseInputStep();
-
-  if (doseMinInput) doseMinInput.addEventListener("input", () => { activeChipIndex = -1; syncChipActive(); updateDoseFlavorHint(); });
-  if (doseMaxInput) doseMaxInput.addEventListener("input", () => { activeChipIndex = -1; syncChipActive(); updateDoseFlavorHint(); });
-  if (brewerSelect) brewerSelect.addEventListener("change", () => { activeChipIndex = -1; syncDoseInputStep(); renderDosePresetChips(); updateDoseFlavorHint(); });
-
-  // roast 改變時重算 chip 範圍（焙度 × 器材矩陣）
-  const roastSelectEl = document.getElementById("roast");
-  if (roastSelectEl) roastSelectEl.addEventListener("change", () => { activeChipIndex = -1; renderDosePresetChips(); updateDoseFlavorHint(); });
-
-  if (dosePresetChipsEl) {
-    dosePresetChipsEl.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-dose-chip]");
-      if (!btn) return;
-      const i = Number(btn.dataset.doseChip);
-      const p = currentChipPresets[i];
-      if (!p) return;
-      if (doseMinInput) doseMinInput.value = p.min;
-      if (doseMaxInput) doseMaxInput.value = p.max;
-      activeChipIndex = i;
-      syncChipActive();
-      updateDoseFlavorHint();
-    });
-  }
-
-  renderDosePresetChips();
+  if (brewerSelect) brewerSelect.addEventListener("change", syncDoseInputStep);
   // ─────────────────────────────────────────────────────────────
 
   presetSelect.addEventListener("change", () => {

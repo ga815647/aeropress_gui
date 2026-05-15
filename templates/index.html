@@ -46,8 +46,20 @@
               </div>
               <select id="roast" name="roast">
                 {% for opt in roast_options %}
-                <option value="{{ opt.code }}" {% if opt.code == 'medium' %}selected{% endif %}>{{ opt.name }}</option>
+                <option value="{{ opt.code }}" {% if opt.code == 'medium_light' %}selected{% endif %}>{{ opt.name }}</option>
                 {% endfor %}
+              </select>
+            </div>
+            <div class="field full" data-help-key="label">
+              <div class="label-row">
+                <label for="label">口感方向</label>
+                <button class="hint-button" type="button" data-help-target="label">?</button>
+              </div>
+              <select id="label" name="label">
+                {% for lbl in labels %}
+                <option value="{{ lbl.name }}" {% if lbl.name == 'balanced' %}selected{% endif %}>{{ lbl.name }} — {{ lbl.description }}</option>
+                {% endfor %}
+                <option value="">全部並列 (cupping 比對)</option>
               </select>
             </div>
             <div class="field full" data-help-key="preset">
@@ -100,8 +112,6 @@
                 <span>–</span>
                 <input id="dose_max" name="dose_max" type="number" step="0.5" min="0" placeholder="max" style="width:50%">
               </div>
-              <div id="dose-preset-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;"></div>
-              <div id="dose-flavor-hint" hidden style="margin-top:6px;font-size:0.82em;color:#6b7f72;line-height:1.4;"></div>
             </div>
             <div class="field" data-help-key="t_env">
               <div class="label-row">
@@ -166,6 +176,7 @@
       window.APP_PRESETS = {{ presets|tojson }};
       window.APP_ROAST_OPTIONS = {{ roast_options|tojson }};
       window.APP_BREWER_PRESETS = {{ brewer_presets|tojson }};
+      window.APP_LABELS = {{ labels|tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/webapp.js') }}" defer></script>
   </body>

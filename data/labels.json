@@ -1,10 +1,11 @@
 {
   "_schema": {
-    "version": 1,
-    "note": "Phase 8 Layer 2 sensory label islands. Each label = independent flavor target (IDEAL compound fractions + TDS_PREFER). Labels are zero-coupled — editing one cannot affect another's scores. New labels are append-only (Channel A discovery).",
+    "version": 2,
+    "note": "Phase 8 Layer 2 sensory label islands. Each label = independent flavor target (IDEAL compound fractions + TDS_PREFER). Labels are zero-coupled — editing one cannot affect another's scores. New labels are append-only (Channel A discovery). v2: IDEALs re-derived after Phase 9 grind ceiling (compounds.py CGA/MEL plateau now depends on dial).",
     "fields": {
       "ideal": "compound mass-fractions (AC/SW/PS/CA/CGA/MEL), nominally summing to 1.0; used as bullseye in scoring.flavor_score log-ratio Gaussian",
       "tds_prefer": "target TDS percentage for this label; scoring's TDS Super-Gaussian centers here",
+      "dial_prefer": "optional — overrides ROAST_TABLE[roast].dial_prefer when scoring this label. Lets each label encode its archetypal grind style (Hedrick 6.0 coarse vs Hoffman 4.3 fine)",
       "description": "human-readable summary",
       "bullseye_anchor": "name of the calibration recipe this label was seeded from (Layer 1 link); null for hypothetical labels"
     }
@@ -12,25 +13,36 @@
   "balanced": {
     "ideal": {"AC": 0.13, "SW": 0.42, "PS": 0.15, "CA": 0.07, "CGA": 0.12, "MEL": 0.11},
     "tds_prefer": 1.27,
+    "dial_prefer": 4.3,
     "description": "Hoffman-style 平衡（Heath bar + 檸檬點心）。中等酸、突出甜感、適度醇厚與烘焙感。",
     "bullseye_anchor": "Hoffman"
   },
   "acid-forward": {
-    "ideal": {"AC": 0.22, "SW": 0.44, "PS": 0.13, "CA": 0.09, "CGA": 0.06, "MEL": 0.06},
+    "ideal": {"AC": 0.22, "SW": 0.45, "PS": 0.13, "CA": 0.09, "CGA": 0.05, "MEL": 0.06},
     "tds_prefer": 1.17,
+    "dial_prefer": 5.0,
     "description": "April Coffee 酸質為主（清爽、多汁）。AC 主導、低 CGA / MEL、TDS 偏低。",
     "bullseye_anchor": "April"
   },
   "sweet-body": {
-    "ideal": {"AC": 0.22, "SW": 0.45, "PS": 0.13, "CA": 0.09, "CGA": 0.06, "MEL": 0.05},
+    "ideal": {"AC": 0.23, "SW": 0.45, "PS": 0.13, "CA": 0.09, "CGA": 0.05, "MEL": 0.05},
     "tds_prefer": 1.56,
+    "dial_prefer": 5.0,
     "description": "2021 世界冠軍甜感醇厚（奶油、牛軋糖、濃稠）。低溫倒置、高 TDS、低 CGA / MEL。",
     "bullseye_anchor": "Championship"
   },
   "coarse-modern": {
-    "ideal": {"AC": 0.13, "SW": 0.46, "PS": 0.14, "CA": 0.07, "CGA": 0.10, "MEL": 0.10},
+    "ideal": {"AC": 0.14, "SW": 0.48, "PS": 0.15, "CA": 0.08, "CGA": 0.08, "MEL": 0.07},
     "tds_prefer": 1.40,
-    "description": "Hedrick / Gagne 粗磨長浸泡（甜+平衡、不澀）。粗磨壓低 CGA 累積速率、長時間擴展 SW / PS。",
+    "dial_prefer": 6.0,
+    "description": "Hedrick / Gagne 粗磨長浸泡（甜+平衡、不澀）。粗磨表面積有限 → CGA/MEL plateau 低；長時間飽和 SW/PS。",
     "bullseye_anchor": "Hedrick"
+  },
+  "tim": {
+    "ideal": {"AC": 0.24, "SW": 0.37, "PS": 0.23, "CA": 0.09, "CGA": 0.04, "MEL": 0.03},
+    "tds_prefer": 1.50,
+    "dial_prefer": 4.0,
+    "description": "Tim Wendelboe Nordic 真淺焙風（多汁活潑酸質、茶感 body、極乾淨無焙烤雜味）。源自 14g / 200ml / 98°C / 細濾紙磨 / 60s 浸泡 / 正置插活塞封壓。",
+    "bullseye_anchor": "Tim Wendelboe Filter"
   }
 }

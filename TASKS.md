@@ -31,6 +31,8 @@
 | 2026-05-14 | XL dial_offset | `BREWER_PRESETS["xl"]["dial_offset"] = 0.10` 經驗 patch（不修改化合物層）|
 | 2026-05-15 | 7 | MEL grind coupling：`k_mel_eff *= grind_kinetics`（同 CGA 結構）。Hedrick 68.1→85.7；化合物層連續性全域驗證；CLAUDE.md 新增原則 #5（錨點分 Layer 1 校準 / Layer 2 感官 label 雙層）|
 | 2026-05-15 | 8 | 感官 label 島分裂（Layer 2 落地）：`data/labels.json` 4 個 label（balanced/acid-forward/sweet-body/coarse-modern），廢 build_ideal_abs TDS bracket 內插 + 廢 ratio_bonus 全套 + 廢 diversify_top；新增 `optimize_parallel()`（Channel B 多 label 並列 Top）、`recipe_id`（Phase 9 feedback 鉤子）、`models/labels.py` loader；tests 拆 `test_compound_calibration.py`（Layer 1）+ `test_label_scoring.py`（Layer 2）；6 錨點 + 28 pytest 全 PASS |
+| 2026-05-15 | 8.1 | Webapp label UI + Tim label：templates/index.html 加 `<select id="label">`、JS Channel B 並列 cards、移除 pre-Phase-8 dose-chip 7-段系統；append-only 加 `tim` label（Tim Wendelboe Filter Recipe 反推） |
+| 2026-05-15 | 9 | Layer 1 grind ceiling 修 coarse↔fine degeneracy：CGA / MEL 加 `ceiling(dial) = exp(coeff × (DIAL_BASE − dial))`（純 exp，符合原則 #4），表面積限制 plateau；coarse-modern Top 1 從 dial 4.3 / 94°C / 120s 修正為 dial 5.9-6.0 / 97-98°C / 180-210s（真粗 + 長）。額外加 label-level `dial_prefer` override（每個 label 自帶 archetypal 研磨偏好），覆寫 ROAST_TABLE roast-level prefer |
 
 詳細實作見下方各 Phase section。
 

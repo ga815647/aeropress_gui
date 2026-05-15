@@ -248,6 +248,19 @@ PS_DIAL_COEFF = 0.20            # PS 研磨敏感度（新增；取代 softplus(
 # >1 for fine（dial < DIAL_BASE）, <1 for coarse（dial > DIAL_BASE）
 GRIND_KINETICS_COEFF = 0.40
 
+# Phase 9 grind ceiling — 表面積限制 saturation 上限（不只是速率）
+# 物理：粗磨 = 表面積有限 → 即使 t→∞ 也萃不到 fine 那麼多 CGA/MEL；
+#       fine = 表面積大 → ceiling 高。
+# 修正 Phase 7 grind_kinetics 的 degeneracy：coarse+long 過去能透過拉時間追平 fine 的 CGA
+# 飽和；加 ceiling 後 coarse plateaus at lower asymptote。
+# 公式：ceiling(dial) = exp(coeff × (DIAL_BASE - dial))，純 exp 結構，無 threshold 參數
+# >1 for fine（升 ceiling）、<1 for coarse（降 ceiling）。配 Fuller & Rao 2017 first-order
+# + plateau：plateau 取決於 accessible surface area。
+# 只對 CGA / MEL 套用：這兩個化合物萃取顯著受研磨粒徑限制（細胞壁結合型 + 大分子聚合物）。
+# SW / PS / AC 走 _DIAL_COEFF exp 連續耦合，不在此處改。
+CGA_CEILING_COEFF = 0.25      # 強：CGA Hedrick (dial 6.0) ceiling = exp(-0.375) = 0.687
+MEL_CEILING_COEFF = 0.25      # 強：同 CGA — 粗磨明顯壓低 MEL plateau
+
 # Grind-dependent EY 欠萃懲罰（Phase 5 lite）
 # 細磨（dial < DIAL_BASE）目標 Hoffman 風格，EY 不足要扣分；
 # 粗磨（dial > DIAL_BASE）刻意低 EY 是 April/Hedrick 風格，EY 不足不扣分。

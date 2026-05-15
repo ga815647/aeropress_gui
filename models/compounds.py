@@ -105,18 +105,20 @@ def _predict_closed_compounds(
     k_ca_eff = constants.K_CA * arr_ca
     ca = base_profile["CA"] * (1.0 - math.exp(-k_ca_eff * t))
 
-    # ── CGA (chlorogenic acid): pure first-order, Arrhenius + grind coupling ─
+    # ── CGA (chlorogenic acid): first-order × Arrhenius × grind rate × grind ceiling ─
+    # Phase 9: ceiling 取代「grind_kinetics 一打到底」造成的 coarse↔fine 飽和 degeneracy
     arr_cga = _arrhenius(temp, constants.CGA_EA)
     k_cga_eff = constants.K_CGA_TIME * arr_cga * grind_kinetics
-    cga = base_profile["CGA"] * (1.0 - math.exp(-k_cga_eff * t))
+    cga_ceiling = math.exp(constants.CGA_CEILING_COEFF * (constants.DIAL_BASE - dial))
+    cga = base_profile["CGA"] * cga_ceiling * (1.0 - math.exp(-k_cga_eff * t))
     cga *= ps_cga_mult
 
-    # ── MEL (melanoidins): pure first-order, Arrhenius + grind coupling ─
-    # 與 CGA 同型：粗磨內部擴散慢 → k 降低；細磨表面積大 → k 加快
-    # Gagné「fines × time」機制的最小代理（fines ↔ dial 已是連續耦合）
+    # ── MEL (melanoidins): first-order × Arrhenius × grind rate × grind ceiling ─
+    # 粗磨 = 表面積有限 plateau 低；細磨 = 表面積大 plateau 高（Fuller & Rao 2017）
     arr_mel = _arrhenius(temp, constants.MEL_EA)
     k_mel_eff = constants.K_MEL_TIME * arr_mel * grind_kinetics
-    mel = base_profile["MEL"] * (1.0 - math.exp(-k_mel_eff * t))
+    mel_ceiling = math.exp(constants.MEL_CEILING_COEFF * (constants.DIAL_BASE - dial))
+    mel = base_profile["MEL"] * mel_ceiling * (1.0 - math.exp(-k_mel_eff * t))
 
     return {
         "AC": ac,

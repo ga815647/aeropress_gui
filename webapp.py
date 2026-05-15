@@ -49,6 +49,9 @@ def create_app() -> Flask:
             {"code": k, "name": v["name"], "note": v["note"], "dose_per_100ml": list(v["dose_per_100ml"])}
             for k, v in constants.ROAST_TABLE.items()
         ]
+        labels = [
+            {"name": name, **get_label(name)} for name in label_names()
+        ]
         return render_template(
             "index.html",
             roast_codes=list(constants.ROAST_TABLE.keys()),
@@ -56,6 +59,7 @@ def create_app() -> Flask:
             brewer_options=list(constants.BREWER_PRESETS.keys()),
             brewer_presets=constants.BREWER_PRESETS,
             presets=WATER_PRESETS,
+            labels=labels,
         )
 
     @app.get("/api/config")

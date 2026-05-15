@@ -183,7 +183,13 @@ def _score_against_label(
     water_kh: float,
     water_gh: float,
 ) -> dict:
-    """Score a single physical candidate against one sensory label."""
+    """Score a single physical candidate against one sensory label.
+
+    dial_prefer fallback: label override (data/labels.json) → roast default
+    (constants.ROAST_TABLE[roast].dial_prefer). The label-level prefer encodes
+    each label's archetypal grind style (Hedrick 6.0 coarse vs Hoffman 4.3 fine).
+    """
+    from models.labels import get_label
     cfg = constants.ROAST_TABLE[roast_code]
     brewer = constants.BREWER_PRESETS.get(_brewer_key_from_name(candidate["brewer"]), {})
     raw = flavor_score(
@@ -199,7 +205,8 @@ def _score_against_label(
         steep_sec=candidate["steep_sec"],
         dial=candidate["dial"],
     )
-    dial_prefer = cfg.get("dial_prefer")
+    label_spec = get_label(label)
+    dial_prefer = label_spec.get("dial_prefer", cfg.get("dial_prefer"))
     if dial_prefer is not None:
         effective_dial_prefer = dial_prefer + brewer.get("dial_offset", 0.0)
         dial_dev = (candidate["dial"] - effective_dial_prefer) / constants.DIAL_PREFER_SIGMA
