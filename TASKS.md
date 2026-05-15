@@ -29,6 +29,7 @@
 | 2026-05-13 | 5 full | IDEAL_FLAVOR + COMPOUND_BASE 文獻校準（Cordoba 2023 / Vignoli 2016 / Nunes 2002）；PS 從主要 indicator 降為中等 |
 | 2026-05-14 | 6 | 化合物模型純物理化：`compounds.py` 全部改寫為 Arrhenius × first-order，刪除所有非物理 gate；六錨點全 PASS |
 | 2026-05-14 | XL dial_offset | `BREWER_PRESETS["xl"]["dial_offset"] = 0.10` 經驗 patch（不修改化合物層）|
+| 2026-05-15 | 7 | MEL grind coupling：`k_mel_eff *= grind_kinetics`（同 CGA 結構）。Hedrick 68.1→85.7；化合物層連續性全域驗證；CLAUDE.md 新增原則 #5（錨點分 Layer 1 校準 / Layer 2 感官 label 雙層）|
 
 詳細實作見下方各 Phase section。
 
@@ -401,3 +402,106 @@ Sum=1.000；驗證 Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（AC 15.16 
 原註記「等 Phase 1-3 完成後才能做」— Phase 1-3 已於 2026-04-12 完成、Phase 4 進一步穩定模型。Chip 標籤現在可以基於最新模型（Phase 4 + Phase 5 lite 後）重新設計風味描述。但需注意 Phase 5 full 仍未做，所以 IDEAL_FLAVOR 對 PS/CGA 的描述語會跟 Phase 5 full 完成後不同（PS 描述若強調「醇厚」目前是基於 29% PS ideal，真實 15% 下「醇厚」感官門檻不同）。
 
 **建議順序：** Phase 5 full → Chip 標籤；或接受暫時描述語落差先做 Chip。
+
+---
+
+## Phase 8 — 感官 label 島分裂（Layer 2 分層）
+
+**起源（2026-05-15 對話）：** Phase 7 後使用者觀察到 Top N 仍只給 Hoffman 群集，重新審視後共識為 **CLAUDE.md 原則 #5 — 錨點 2-layer**（Layer 1 化合物校準 / Layer 2 感官 label 島）。Layer 1 已成型；Phase 8 = 完成 Layer 2 分裂。
+
+### 設計目標
+
+把現在的「單一 `IDEAL_FLAVOR` 隨 actual TDS bracket 內插」改成「每個 label 各自的 IDEAL，獨立評分」。
+
+### Phase 8 必須滿足的 6 條設計需求
+
+1. **每個 label 自帶獨立 IDEAL + TDS_PREFER**
+   - `IDEAL_FLAVOR[label]` 取代 `IDEAL_FLAVOR[(roast, bracket)]`
+   - `TDS_PREFER[label]` 取代 `TDS_PREFER[roast]`
+   - label 之間零耦合 — 新增 label 不影響既有 label 分數
+
+2. **同一 `flavor_score()` 結構，IDEAL 參數化**
+   - 仍是 log-ratio Gaussian compound_reward × tds_factor × ...
+   - 只是 IDEAL/TDS_PREFER 參數從 `(roast, bracket)` 改成 `label`
+   - 符合 CLAUDE.md 原則 #2（修訂版）：所有 label 共用同一個 scoring 結構
+
+3. **Layer 1 / Layer 2 角色拆乾淨**
+   - `tests/test_compound_calibration.py`（新建）：每個錨點檢查 predicted TDS/EY/compound profile 接近 measured；**不檢查分數**
+   - `tests/test_label_scoring.py`（新建）：每個 label 檢查 bullseye 高分 + Under/Over 在所有 label 都低分；**不檢查 compound profile**
+   - 舊 `diagnose_anchor.py` 拆成這兩個檔，混合斷言消失
+
+4. **Discovery 通道必須是一級設計需求**（使用者明確要求 2026-05-15）
+   - **通道 A — 假想 label：** 使用者要能 5 行寫一個新 label（IDEAL + TDS_PREFER），無需動主表、無需擔心副作用
+     - `constants.py` 或獨立 `labels.py` 用 dict 結構，加新 label 是 append-only
+     - `optimize(label='my-experiment')` 立即可用
+   - **通道 B — 多 label 並列 Top：** `optimize()` 不指定 label 時，回傳每個 label 的 Top 1（並列展示，不混排）
+     - UI 要能同時看 4-6 個 label 的 Top recipe，cupping 時對照
+   - **通道 C — Compound-direct exploration mode（可選但建議）：** 完全脫離 label，問「在 grid 上哪一點 SW/MEL 比值最高」這類純化合物層問題
+     - 不經 scoring，直接對 compound vector 投影查詢
+
+5. **廢除 / 瘦身 single-IDEAL 補丁**
+   - 廢除 TDS bracket（low/mid/high）內插 — label 自帶單一 TDS_PREFER
+   - 廢除或大幅瘦身 `ratio_bonus`（AC/CGA、SW/(MEL+CGA)、PS/CA）— 既然 label IDEAL 已包含這些 ratio 偏好，不再需要全域 ratio 加分
+   - 廢除 `build_ideal_abs()` 跟著 actual TDS 滑動的內插邏輯
+   - 廢除 `feedback_top_n_diversity` 機制（diversify_top）— 通道 B 取代
+
+6. **Feedback 機制鉤子（為 Phase 9 預留，本期只做資料結構，不做 UI/CLI）**
+   - **6.1 IDEAL/TDS_PREFER 搬離 Python 常數，落到 `data/labels.json`**（或 YAML）
+     - Phase 9 的 `refine_label.py` 才能寫入；Phase 8 後 hand-editing 已比現在容易
+     - 載入器：`load_labels() -> dict[label, {ideal, tds_prefer}]`，啟動時讀一次
+   - **6.2 每個 recipe 輸出帶 `recipe_id`**
+     - Deterministic hash（例如 `sha1(f"{roast}|{brewer}|{dial:.2f}|{steep_sec}|{temp:.1f}|{dose:.1f}|{water_gh}|{water_kh}|{water_mg_frac}")[:12]`）
+     - feedback 才有東西可 reference
+   - **6.3 Output 顯式帶 `label` 欄位**
+     - JSON/CSV 輸出多一欄；CLI terminal 顯示時加「[label=balanced]」標記
+   - **6.4 `feedback.jsonl` schema 規格寫死（即使 Phase 8 不寫入）**
+     - 一行一筆 JSON：`{"timestamp": ISO8601, "recipe_id": str, "label": str, "rating": "good"|"ok"|"bad", "tags": [str], "roast": str, "brewer": str, "water": {gh, kh, mg_frac}}`
+     - 規格寫進 `docs/FEEDBACK_FORMAT.md` 或 TASKS.md
+     - Phase 9 的 CLI/UI 只是按這 schema append-only 寫入
+   - **本期不做**：CLI `--rate` flag、webapp thumb up/down 按鈕、`refine_label.py` — 全部 Phase 9
+
+### Phase 9 — Feedback 實作（後續 phase，依賴 Phase 8 鉤子）
+
+- CLI `python main.py --rate good --tag bitter,thin --recipe-id abc123`
+- webapp 跑完顯示推薦時加 thumb up/down + tag chip
+- `refine_label.py`：讀 `feedback.jsonl` + 統計每個 (label, rating) 對應的 compound profile → 建議 `labels.json` 微調
+- **永遠人類 approve**：refine_label 只 print suggested diff，使用者手動套用
+- 個人 label fork 工作流：N 筆同 label 的 good rating 後，suggest「你的 balanced 跟 Hoffman 差 X%，要不要 fork 成 `balanced-mine`」
+
+### 初步 label 清單（暫定）
+
+| Label | Bullseye 錨點 | IDEAL 來源 |
+|-------|-------------|-----------|
+| `balanced` | Hoffman | 直接用 Hoffman compound profile |
+| `acid-forward` | April | 直接用 April compound profile |
+| `sweet-body` | Championship | 直接用 Championship compound profile |
+| `coarse-modern` | Hedrick | 直接用 Hedrick compound profile |
+| `nordic-floral`（可選） | 暫無錨點 | 純文獻假想（高 SW、低 MEL、低 CGA） |
+| `dark-syrup`（可選） | 暫無錨點 | 中深焙 PS+MEL 主導 |
+
+### Layer 1 校準錨點清單（不變動）
+
+- Hoffman, April, Championship, Hedrick（4 個物理校準）
+- Under-extract, Over-extract（2 個邊界校準）
+- 未來可任意擴充而不影響 Layer 2
+
+### 風險評估
+
+- 影響檔案：`constants.py`、`models/scoring.py`、`optimizer.py`、`main.py`、`webapp.py`、`diagnose_anchor.py`、`tests/*`
+- 預估規模：Phase 5 full × 1.5 ~ Phase 6 量級
+- 行為變化大：使用者習慣的「medium_light 跑出來就是這個 Top」會變成「medium_light + balanced label 跑出來是這個 Top」— UI 必須先想清楚
+
+### 執行前要回答的問題
+
+1. Label 是否與 roast 正交（`balanced` × `medium_light` 是一組）？預設答案：**是**。Hoffman 對應 `medium_light + balanced`，並非 `medium_light` 內建 balanced。
+2. 預設 label 是什麼？預設答案：**`balanced`**（向後相容）。
+3. CLI flag 設計？建議 `--label balanced|acid|sweet|coarse-modern`，未指定時跑通道 B（全 label Top 1 並列）。
+4. webapp UI 改 chip 還是下拉？這跟 UI Chip 重寫互相影響，需要一起考慮。
+
+### 預期收益
+
+- Top N diversity 問題從根源消失
+- Hoffman 不再被「過度保護」 — 各 label 各自最佳化
+- 「為何 medium_light XL 沒有粗+長」這類問題自動解：跑 `coarse-modern` label 即得
+- 使用者可以低成本實驗自訂 label，建立個人風味資料庫
+- 加新文獻 / 新冠軍配方 → 進 Layer 1 是純物理擴充，無感官副作用

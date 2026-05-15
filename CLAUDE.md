@@ -11,9 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Data flow / Grid search / 化合物模型 / 評分公式細節 / 感知前處理 / Key files / Water 參數 / 修改方向表 | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 
 **僅剩待辦：**
-- UI — Chip 標籤重寫（Phase 5 full IDEAL 對齊文獻後可進行）
+- **Phase 8 — 感官 label 島分裂（Layer 2 分層，原則 #5 後半實作）**：每個 label 自帶 IDEAL + TDS_PREFER，廢除 single-IDEAL + TDS bracket 內插，多 label 並列 Top + 假想 label discovery 通道。設計需求詳見 [`TASKS.md`](TASKS.md) §Phase 8
+- UI — Chip 標籤重寫（與 Phase 8 共同設計）
 - `light` 槽真淺焙錨點待補（找到 Nordic-style AeroPress 食譜後校準）
-- scoring 殘留 issue：90s vs 120s 在 standard brewer 同 dose 鑑別力不足（`build_ideal_abs` 隨 actual TDS 內插 bracket 吸收絕對差距）— 詳見 TASKS.md
+- scoring 殘留 issue：90s vs 120s 在 standard brewer 同 dose 鑑別力不足（`build_ideal_abs` 隨 actual TDS 內插 bracket 吸收絕對差距）— **Phase 8 完成後自動消失**
 - 化合物層 brewer geometry 建模（未來 phase）— XL 深床效應未進化合物層，現用 `dial_offset` 兜底
 
 **目前狀態（Phase 7 完成）：** 6 錨點全 PASS（Hoffman 89.6 / April 75.0 / Champion 61.6 / Under 0 / Over 34.1 / Hedrick **85.7**，從 68.1 大幅修正），11 pytest PASS。`compounds.py` 已純 Arrhenius × first-order；Phase 7 把 `grind_kinetics` 也套到 `k_mel_eff` 上（與 CGA 同結構），讓粗磨真實壓低 MEL 累積 — 文獻機制 Gagné「fines × time = astringency」的最小連續代理。**化合物層在 dial/steep/temp 全域掃描下處處連續單調或單峰，無島（驗證原則 #4）**。Hoffman vs Hedrick 的雙峰地形完全來自 scoring 層 IDEAL 校準，合法。
@@ -89,7 +90,7 @@ python diagnose_anchor.py
 - TDS 是杯中物品質的合法指標（太淡/太濃影響口感）
 - 化合物向量（AC/SW/PS/CA/CGA/MEL 比例）是最核心的口感品質指標
 
-### 四條不可違反的架構原則
+### 五條不可違反的架構原則
 
 1. **禁止 min/max/if-else 硬斷點** — 物理世界是連續的。所有閾值、天花板、地板必須用平滑連續函數：
    - `max(x - threshold, 0)` → softplus 或 sigmoid gate
@@ -97,7 +98,7 @@ python diagnose_anchor.py
    - `if x > threshold` → sigmoid transition
    - 例外：純離散邏輯（`inverted=True/False`）不在此限
 
-2. **所有錨點用同一個評分公式** — April 和 Championship 必須通過 `flavor_score()` 得到高分，不允許用獨立的 `_anchor_cosine_score()`。如果一個評分系統無法同時獎勵 Hoffman 的均衡、April 的酸質、Championship 的甜醇，那是評分系統的問題，不是用特例繞過的理由。
+2. **所有錨點在同一 label 內用同一個評分公式** — April 和 Championship 必須通過 `flavor_score()` 得到高分，不允許用獨立的 `_anchor_cosine_score()`。**Phase 8 後修訂**：每個 label 有自己的 IDEAL，但所有 label 共用同一個 `flavor_score()` 結構，只是 IDEAL 參數不同（見原則 #5）。禁止任何錨點走特例 scoring path。
 
 3. **化合物模型必須自我鑑別** — 好喝的配方（Hoffman/April/Championship）的化合物 profile 進入評分公式後自然高分。難喝的配方（欠萃/過萃）的化合物 profile 自然低分。不需要靠 TDS floor 或 EY floor 來區分好壞 — 化合物信號本身就應該承載這個資訊。
 
@@ -105,6 +106,41 @@ python diagnose_anchor.py
    - **化合物層 (`compounds.py`)**: **純連續物理動力學** — Arrhenius 速率 × 一階反應，從 t=0 連續到 t=∞、從 0K 到任何溫度全域可微。**禁止**：onset 時間（如 `CGA_TIME_ONSET=150`）、time floor（如 `SW_TIME_FLOOR=0.30`）、tent function（如 `1 - abs(temp - optimal)`）、softplus 溫度閾值（如 `softplus(temp - 92)`）— 即使數學上平滑，這些都是「閾值化偽裝」，不符合分子萃取物理。
    - **感官層 (`scoring.py`)**: **sigmoid / softplus / Gaussian 可用** — 人類感知本來就有閾值（Weber-Fechner law）。合法的閾值化感知層成員：`SW_AROMA_THRESH`、`SCORCH_PARAMS`、`TDS_FLOOR_MID`、`KH_FLOOR`。
    - **違反此原則的代價：** 化合物模型失去自我鑑別力（→ 違反原則 #3）→ 評分只能靠 process-variable 後置 gate 補救（如 `acid_trap = sigmoid(temp - 96) × sigmoid(120 - steep)`）→ 補丁是症狀治療，根因仍在 compounds.py 內部的非物理 gate。
+
+5. **錨點分兩層：化合物校準錨點 vs 感官 label 島（嚴格角色分工）** — 每個「錨點」原本被綁定兩個彼此無關的角色，必須拆開。違反此原則導致新增錨點時必然動到另一個錨點的分數（Phase 4 加 Hedrick 時打亂 Hoffman/April 即此症狀）。
+
+   - **Layer 1：化合物校準錨點**（屬於物理層）
+     - 用途：擬合 `compounds.py` / `ey_model.py` / `tds_model.py` 的 Ea、K、base profile 參數
+     - 輸入：實測 brewing 配方（dial/steep/temp/dose/water）
+     - 驗證：predicted TDS / EY / compound profile 接近 measured 值（容忍內）
+     - **與「好不好喝」完全無關** — 它只回答「物理模型對不對」
+     - 可以無限多（多了只是更多 fit 點，不會互相打架）
+     - 包含 Under/Over-extract 邊界錨點（驗證低萃 / 過萃預測對）
+     - 測試位置（規劃）：`tests/test_compound_calibration.py`
+
+   - **Layer 2：感官 label 島**（屬於感官層）
+     - 用途：定義「這個 label 喝起來該怎樣」
+     - 每個 label 自帶 `IDEAL_FLAVOR[label]` + `TDS_PREFER[label]`
+     - 評分：給定一個 compound profile，問「這個 profile 在 X label 下幾分」
+     - 跨 label 比分數無意義（apples and oranges）
+     - 可以無限多（balanced / acid-forward / sweet-body / coarse-modern / Nordic-floral / ...）
+     - label 之間互不影響 — 新增 label 不會動到既有 label 的分數
+     - **可以有「沒對應錨點的純假想 label」**（從文獻/SCA 風味輪推 IDEAL）
+     - **可以有「沒對應 label 的純物理錨點」**（只進 Layer 1，不指派 sensory bullseye）
+     - 測試位置（規劃）：`tests/test_label_scoring.py`
+
+   - **典型映射（共用數字、不同角色）：**
+     | 錨點 | Layer 1（物理目標）| Layer 2（感官 bullseye）|
+     |------|-----------------|--------------------|
+     | Hoffman | TDS 1.23% / EY 21% | `balanced` label IDEAL |
+     | April | TDS 1.17% / EY ~18% | `acid-forward` label IDEAL |
+     | Championship | TDS 1.56% / EY ~18% | `sweet-body` label IDEAL |
+     | Hedrick | TDS 1.52% / EY ~19% | `coarse-modern` label IDEAL |
+     | Under-extract | EY < 15% 邊界 | （無 — 應在所有 label 下打低分）|
+     | Over-extract | EY > 22% / 高 CGA 邊界 | （無 — 應在所有 label 下打低分）|
+
+   - **目前狀態（Phase 7）：** Layer 1 已成型（`compounds.py` 純 Arrhenius × first-order）；Layer 2 尚未分裂（仍是單一 IDEAL_FLAVOR 隨 TDS bracket 內插，三錨點被迫共用）。Phase 8 = 完成 Layer 2 分裂。
+   - **違反此原則的症狀：** `diagnose_anchor.py` 對每個錨點寫「物理檢查（AC>CGA）+ 分數檢查（>=60）」混合斷言；`ratio_bonus` 為了讓 April / Championship 在 Hoffman-IDEAL 下也高分而存在 — 都是「單層假裝多層」的代償補丁。
 
 ### 原則 #1 vs #4 的關係（層次補強）
 
