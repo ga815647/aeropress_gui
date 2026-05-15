@@ -578,60 +578,53 @@
   function renderFeedbackList(feedback) {
     if (!feedback || !feedback.length) return "";
     const items = feedback.map((f) => {
-      const stars = f.stars ? "⭐".repeat(f.stars) : "";
-      const tags = (f.tags || []).map((t) => `<span class="fb-tag">${escapeHtml(t)}</span>`).join(" ");
+      const stars = f.stars
+        ? `<span style="letter-spacing:1px;color:var(--cinnabar);">${"★".repeat(f.stars)}<span style="color:var(--rule);">${"★".repeat(5 - f.stars)}</span></span>`
+        : "—";
+      const tags = (f.tags || []).map((t) => `<span class="fb-tag">${escapeHtml(t)}</span>`).join("");
       const date = (f.timestamp || "").slice(0, 10);
       const comment = f.comment ? `<div class="fb-comment">「${escapeHtml(f.comment)}」</div>` : "";
       return `
-        <div class="fb-entry" style="border-left: 3px solid #bb5f2a; padding: 8px 12px; margin: 6px 0; background: #fdf3ed; border-radius: 4px;">
-          <div style="font-size: 0.82em; color: #6d6358;">${date} ${stars}</div>
+        <div class="fb-entry">
+          <div class="fb-meta">${date} · ${stars}</div>
           ${comment}
-          ${tags ? `<div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">${tags}</div>` : ""}
+          ${tags ? `<div style="margin-top: 6px;">${tags}</div>` : ""}
         </div>
       `;
     }).join("");
-    return `<div class="fb-history" style="margin-top: 8px;">${items}</div>`;
+    return items;
   }
 
   function renderFeedbackForm(result, slot) {
     const rid = result.recipe_id;
     if (!rid) return "";
-    const tags = (window.APP_FEEDBACK_TAGS || []).map((t) => `
-      <button type="button" class="fb-tag-btn" data-fb-tag="${t}" data-fb-slot="${slot}"
-        style="padding: 3px 10px; border-radius: 999px; border: 1px solid #c5b49e;
-               background: #fff; color: #6b4c32; font-size: 0.82em; cursor: pointer;">${t}</button>
-    `).join("");
-    const stars = [1, 2, 3, 4, 5].map((n) => `
-      <button type="button" class="fb-star-btn" data-fb-star="${n}" data-fb-slot="${slot}"
-        style="background: none; border: none; font-size: 1.4em; cursor: pointer; padding: 0 2px; opacity: 0.3;">★</button>
-    `).join("");
+    const tagButtons = (window.APP_FEEDBACK_TAGS || []).map((t) =>
+      `<button type="button" class="feedback-tag" data-fb-tag="${t}" data-fb-slot="${slot}">${t}</button>`
+    ).join("");
+    const starButtons = [1, 2, 3, 4, 5].map((n) =>
+      `<button type="button" class="feedback-star" data-fb-star="${n}" data-fb-slot="${slot}">★</button>`
+    ).join("");
     return `
-      <details class="fb-section" data-fb-slot="${slot}" data-fb-recipe="${rid}" data-fb-label="${result.label}"
-               style="margin-top: 1rem; border-top: 1px dashed #c5b49e; padding-top: 1rem;">
-        <summary style="cursor: pointer; font-weight: bold; color: #4e6b5b; user-select: none;">
-          📝 我泡過了 — 留個感想（Phase 9 feedback）
-        </summary>
-        <div style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 8px;">
-          <div>
-            <div style="font-size: 0.85em; color: #6d6358; margin-bottom: 2px;">星等（選填）</div>
-            <div class="fb-stars" data-fb-slot="${slot}">${stars}</div>
+      <details class="feedback fb-section" data-fb-slot="${slot}" data-fb-recipe="${rid}" data-fb-label="${result.label}">
+        <summary class="feedback-summary">TASTING NOTES · 我泡過了</summary>
+        <div class="feedback-form">
+          <div class="feedback-row">
+            <span class="feedback-row-label">STARS · 星等（選填）</span>
+            <div class="feedback-stars" data-fb-slot="${slot}">${starButtons}</div>
             <input type="hidden" class="fb-stars-input" data-fb-slot="${slot}" value="">
           </div>
-          <div>
-            <div style="font-size: 0.85em; color: #6d6358; margin-bottom: 4px;">快速標籤（多選）</div>
-            <div class="fb-tags" data-fb-slot="${slot}" style="display: flex; flex-wrap: wrap; gap: 4px;">${tags}</div>
+          <div class="feedback-row">
+            <span class="feedback-row-label">TAGS · 標籤（多選）</span>
+            <div class="feedback-tags" data-fb-slot="${slot}">${tagButtons}</div>
+          </div>
+          <div class="feedback-row">
+            <span class="feedback-row-label">COMMENT · 感想（主要 input）</span>
+            <textarea class="feedback-comment fb-comment-input" data-fb-slot="${slot}" rows="3"
+              placeholder="例：「偏酸但喝得到甜尾」、「body 不夠」、「下次想試 dial 5.5」..."></textarea>
           </div>
           <div>
-            <div style="font-size: 0.85em; color: #6d6358; margin-bottom: 4px;">感想（自由文字，這是主要 input）</div>
-            <textarea class="fb-comment-input" data-fb-slot="${slot}" rows="3"
-              placeholder="比如「偏酸但喝得到甜尾」、「body 不夠」、「下次想試 dial 5.5」..."
-              style="width: 100%; padding: 8px; border: 1px solid #c5b49e; border-radius: 6px;
-                     font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" class="fb-save-btn primary-button" data-fb-slot="${slot}"
-              style="padding: 8px 16px;">儲存感想</button>
-            <span class="fb-save-msg" data-fb-slot="${slot}" style="font-size: 0.85em;"></span>
+            <button type="button" class="feedback-save fb-save-btn" data-fb-slot="${slot}">儲存 · SAVE</button>
+            <span class="feedback-msg fb-save-msg" data-fb-slot="${slot}"></span>
           </div>
           <div class="fb-history-mount" data-fb-slot="${slot}">${renderFeedbackList(result.feedback)}</div>
         </div>
@@ -640,27 +633,31 @@
   }
 
   function attachFeedbackHandlers() {
-    document.querySelectorAll(".fb-star-btn").forEach((btn) => {
+    document.querySelectorAll(".feedback-star").forEach((btn) => {
+      if (btn.dataset.fbBound === "1") return;
+      btn.dataset.fbBound = "1";
       btn.addEventListener("click", () => {
         const slot = btn.dataset.fbSlot;
         const n = Number(btn.dataset.fbStar);
         const input = document.querySelector(`.fb-stars-input[data-fb-slot="${slot}"]`);
         if (input) input.value = String(n);
-        document.querySelectorAll(`.fb-stars[data-fb-slot="${slot}"] .fb-star-btn`).forEach((b) => {
-          b.style.opacity = Number(b.dataset.fbStar) <= n ? "1" : "0.3";
+        document.querySelectorAll(`.feedback-stars[data-fb-slot="${slot}"] .feedback-star`).forEach((b) => {
+          b.classList.toggle("is-on", Number(b.dataset.fbStar) <= n);
         });
       });
     });
-    document.querySelectorAll(".fb-tag-btn").forEach((btn) => {
+    document.querySelectorAll(".feedback-tag").forEach((btn) => {
+      if (btn.dataset.fbBound === "1") return;
+      btn.dataset.fbBound = "1";
       btn.addEventListener("click", () => {
         const on = btn.dataset.fbActive === "1";
         btn.dataset.fbActive = on ? "0" : "1";
-        btn.style.background = on ? "#fff" : "#bb5f2a";
-        btn.style.color = on ? "#6b4c32" : "#fff";
-        btn.style.borderColor = on ? "#c5b49e" : "#bb5f2a";
+        btn.classList.toggle("is-on", !on);
       });
     });
     document.querySelectorAll(".fb-save-btn").forEach((btn) => {
+      if (btn.dataset.fbBound === "1") return;
+      btn.dataset.fbBound = "1";
       btn.addEventListener("click", () => submitFeedback(btn.dataset.fbSlot, btn));
     });
   }
@@ -677,12 +674,12 @@
     const comment = (commentInput.value || "").trim();
     if (!comment && !stars && !tags.length) {
       msg.textContent = "請至少填一項";
-      msg.style.color = "#bb5f2a";
+      msg.style.color = "var(--cinnabar)";
       return;
     }
     btn.disabled = true;
-    msg.textContent = "儲存中...";
-    msg.style.color = "#6d6358";
+    msg.textContent = "儲存中…";
+    msg.style.color = "var(--ink-mute)";
 
     const meta = latestPayload?.meta || {};
     const result = findResultByRecipeId(section.dataset.fbRecipe);
@@ -720,17 +717,19 @@
       mount.insertAdjacentHTML("afterbegin", renderFeedbackList([data.entry]));
       commentInput.value = "";
       starsInput.value = "";
-      document.querySelectorAll(`.fb-stars[data-fb-slot="${slot}"] .fb-star-btn`).forEach((b) => { b.style.opacity = "0.3"; });
-      document.querySelectorAll(`.fb-tags[data-fb-slot="${slot}"] .fb-tag-btn`).forEach((b) => {
+      document.querySelectorAll(`.feedback-stars[data-fb-slot="${slot}"] .feedback-star`).forEach((b) => {
+        b.classList.remove("is-on");
+      });
+      document.querySelectorAll(`.feedback-tags[data-fb-slot="${slot}"] .feedback-tag`).forEach((b) => {
         b.dataset.fbActive = "0";
-        b.style.background = "#fff"; b.style.color = "#6b4c32"; b.style.borderColor = "#c5b49e";
+        b.classList.remove("is-on");
       });
       msg.textContent = "✓ 已儲存";
-      msg.style.color = "#4e6b5b";
+      msg.style.color = "var(--lichen)";
       fetchHistory();  // refresh history count + cache
     } catch (err) {
       msg.textContent = `失敗：${err}`;
-      msg.style.color = "#bb5f2a";
+      msg.style.color = "var(--cinnabar)";
     } finally {
       btn.disabled = false;
     }
@@ -753,12 +752,16 @@
 
   function renderInlineTimer(result, index) {
     return `
-      <div class="inline-timer-wrap" style="margin-top: 1.5rem; border-top: 1px solid #e4d7cb; padding-top: 1.5rem; text-align: center;">
-        <div id="timer-display-${index}" style="font-size: 3.5rem; font-weight: bold; font-variant-numeric: tabular-nums; color: #bb5f2a; line-height: 1;">00:00</div>
-        <div id="timer-current-action-${index}" style="font-size: 1.2rem; color: #4e6b5b; margin-top: 0.5rem; margin-bottom: 1.5rem; min-height: 1.8rem;">準備注水</div>
-        <div style="display: flex; gap: 12px; justify-content: center;">
-          <button class="btn btn-primary primary-button" type="button" data-inline-timer-toggle="${index}" style="min-width: 120px;">▶️ 開始</button>
-          <button class="btn btn-outline-secondary default-button" type="button" data-inline-timer-reset="${index}" style="min-width: 100px;">🔄 重置</button>
+      <div class="specimen-section">
+        <span class="specimen-section-title">BREW TIMER · 沖煮計時</span>
+        <span class="specimen-section-aside">總長 ${formatTime(result.total_contact_sec)}</span>
+      </div>
+      <div class="timer">
+        <div class="timer-display" id="timer-display-${index}">0:00</div>
+        <div class="timer-status" id="timer-current-action-${index}">準備注水</div>
+        <div class="timer-controls">
+          <button class="timer-btn timer-btn-primary" type="button" data-inline-timer-toggle="${index}">▶ 開始</button>
+          <button class="timer-btn" type="button" data-inline-timer-reset="${index}">↻ 重置</button>
         </div>
       </div>
     `;
@@ -807,15 +810,15 @@
 
     if (timer.isRunning) {
       timer.isRunning = false;
-      toggleBtn.textContent = "▶️ 繼續";
+      toggleBtn.textContent = "▶ 繼續";
     } else {
       if (timer.elapsedMs >= timer.totalTimeSec * 1000) {
         timer.elapsedMs = 0;
       }
       timer.isRunning = true;
       timer.lastTickMs = Date.now();
-      toggleBtn.textContent = "⏸️ 暫停";
-      
+      toggleBtn.textContent = "‖ 暫停";
+
       if (!brewTimerInterval) {
         brewTimerInterval = setInterval(tickAllTimers, 100);
       }
@@ -829,7 +832,7 @@
       activeTimers[index].elapsedMs = 0;
     }
     const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${index}"]`);
-    if (toggleBtn) toggleBtn.textContent = "▶️ 開始";
+    if (toggleBtn) toggleBtn.textContent = "▶ 開始";
     syncInlineTimerUI(index);
   }
 
@@ -848,7 +851,7 @@
           timer.elapsedMs = timer.totalTimeSec * 1000;
           timer.isRunning = false;
           const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${indexStr}"]`);
-          if (toggleBtn) toggleBtn.textContent = "🔄 重新開始";
+          if (toggleBtn) toggleBtn.textContent = "↻ 重新開始";
         }
         
         syncInlineTimerUI(Number(indexStr));
@@ -870,7 +873,13 @@
     if (!display || !actionText) return;
 
     display.textContent = formatInlineClock(timer.elapsedMs);
-    
+
+    // Signature detail — Fraunces weight axis interpolates with progress.
+    const progress = timer.totalTimeSec > 0
+      ? Math.min(1, timer.elapsedMs / 1000 / timer.totalTimeSec)
+      : 0;
+    display.style.setProperty("--t-progress", progress.toFixed(3));
+
     const elapsedSec = timer.elapsedMs / 1000;
     let currentMilestone = timer.milestones[0];
     let nextMilestone = null;
@@ -883,26 +892,29 @@
       }
     }
 
+    actionText.classList.remove("is-running", "is-done");
     if (elapsedSec >= timer.totalTimeSec) {
-      actionText.textContent = "萃取完成！請享用咖啡。";
+      actionText.textContent = "EXTRACTION COMPLETE · 萃取完成";
+      actionText.classList.add("is-done");
     } else if (nextMilestone && nextMilestone.time > elapsedSec) {
       const timeLeft = Math.ceil(nextMilestone.time - elapsedSec);
-      actionText.textContent = `${currentMilestone.action} (剩餘 ${timeLeft} 秒)`;
+      actionText.textContent = `${currentMilestone.action} · 剩餘 ${timeLeft}s`;
+      if (timer.isRunning) actionText.classList.add("is-running");
     } else {
       actionText.textContent = currentMilestone.action;
+      if (timer.isRunning) actionText.classList.add("is-running");
     }
 
-    // Highlight row
+    // Highlight active timeline row
     for (let i = 1; i < timer.milestones.length; i++) {
-        const rowId = timer.milestones[i].rowId;
-        const row = document.getElementById(rowId);
-        if (row) {
-             if (timer.milestones[i] === currentMilestone && elapsedSec < timer.totalTimeSec) {
-                 row.style.backgroundColor = "#fff9e6";
-             } else {
-                 row.style.backgroundColor = "";
-             }
-        }
+      const rowId = timer.milestones[i].rowId;
+      const row = document.getElementById(rowId);
+      if (row) {
+        row.classList.toggle(
+          "is-active",
+          timer.milestones[i] === currentMilestone && elapsedSec < timer.totalTimeSec
+        );
+      }
     }
   }
 
@@ -910,30 +922,21 @@
     return `<div class="chip"><strong>${label}</strong><div>${value}</div></div>`;
   }
 
-  function compoundCard(key, value, maxValue) {
+  function compoundCard(key, value, maxValue, idealAbs) {
     const help = compoundHelp[key];
-    const maxVal = maxValue || 0.6; // fallback
-    const percent = Math.min(100, (value / maxVal) * 100);
-    const colors = {
-      AC: "#e07a5f",  // 亮橘酸質
-      SW: "#f2cc8f",  // 黃甜
-      PS: "#81b29a",  // 綠醇厚
-      CA: "#4a4036",  // 木質苦
-      CGA: "#d2a8b3", // 淺紫綠感
-      MEL: "#3d405b"  // 灰黑深焙
-    };
-    const fillBarColor = colors[key] || "#bb5f2a";
+    const maxVal = maxValue || 0.6;
+    const fillPct = Math.min(100, (value / maxVal) * 100);
+    const idealPct = idealAbs != null ? Math.min(100, (idealAbs / maxVal) * 100) : null;
 
     return `
-      <div class="compound" title="${help.label}" style="display: flex; flex-direction: column; gap: 4px;">
-        <div style="display: flex; justify-content: space-between; align-items: baseline;">
-          <strong>${key}</strong>
-          <div style="font-family: monospace;">${value.toFixed(4)}</div>
+      <div class="compound-col" title="${help.label}: ${help.body}">
+        <div class="compound-code">${key}</div>
+        <div class="compound-bar-track">
+          <div class="compound-bar-fill" style="height: ${fillPct}%;"></div>
+          ${idealPct != null ? `<div class="compound-bar-ideal" style="bottom: ${idealPct}%;"></div>` : ""}
         </div>
-        <div style="background: #e4d7cb; height: 6px; border-radius: 3px; overflow: hidden; width: 100%;">
-          <div style="background: ${fillBarColor}; height: 100%; width: ${percent}%; transition: width 0.3s; border-radius: 3px;"></div>
-        </div>
-        <div class="compound-note" style="margin-top: 4px;">${help.label}: ${help.body}</div>
+        <div class="compound-value">${value.toFixed(3)}</div>
+        <div class="compound-name">${help.label}</div>
       </div>
     `;
   }
@@ -1073,137 +1076,154 @@
   }
 
   function renderMasterCards(results) {
+    if (!results || results.length <= 1) return "";
     const cards = results.map((r, index) => {
-      const isSelected = index === currentDetailIndex;
-      const borderStyle = isSelected ? "border: 2px solid #bb5f2a;" : "border: 1px solid #e4d7cb;";
-      const cursorStyle = isSelected ? "cursor: default;" : "cursor: pointer;";
-      const currentIndicator = isSelected ? `<span style="font-size: 0.8em; color: #bb5f2a; font-weight: bold; background: #fdf3ed; padding: 2px 6px; border-radius: 4px; border: 1px solid #bb5f2a;">📍 目前顯示</span>` : ``;
-
+      const sel = index === currentDetailIndex ? " is-selected" : "";
+      const indicator = index === currentDetailIndex ? " · 顯示中" : "";
       return `
-      <div class="recipe-card" data-select-recipe="${index}" style="min-width: 280px; scroll-snap-align: start; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; ${borderStyle} ${cursorStyle} transition: border-color 0.2s, background-color 0.2s;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-          <div>
-            <div class="muted" style="font-size: 0.85em; font-weight: bold;">Rank ${index + 1}</div>
-            <h3 style="margin: 0; font-size: 1.1em; color: #4e6b5b;">Score ${r.score.toFixed(1)}</h3>
+        <div class="master-card${sel}" data-select-recipe="${index}">
+          <div class="master-card-rank">Rank ${index + 1}${indicator}</div>
+          <div class="master-card-score">${r.score.toFixed(1)}</div>
+          <div class="master-card-meta">
+            ${r.temp}°C · dial ${r.dial} · ${r.dose}g<br>
+            steep ${formatTime(r.steep_sec)} · TDS ${r.tds.toFixed(2)}%
           </div>
-          ${currentIndicator}
         </div>
-        <div style="font-size: 0.9em; color: #6d6358; line-height: 1.4;">
-          <strong>Temp ${r.temp}C / Dial ${r.dial} / Dose ${r.dose}g</strong><br>
-          Contact: ${formatTime(r.total_contact_sec)}<br>
-          TDS ${r.tds.toFixed(2)}% | EY ${r.ey.toFixed(1)}%
-        </div>
-      </div>
       `;
     }).join("");
-
-    return `
-      <div class="scroll-container" style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 16px; padding: 0 24px 16px 24px; margin-top: 1rem;">
-        ${cards}
-      </div>
-    `;
+    return `<div class="master-strip">${cards}</div>`;
   }
 
   function renderSingleDetail(result, meta, index) {
     if (!result) return "";
-    let currentSec = 0;
-      const v_drip = result.v_drip || result.pre_seal_drip_ml || 0;
-      
-      const timelineHtml = `
-        <div class="timeline-wrap" style="margin-top: 1.5rem; border-top: 1px solid #e4d7cb; padding-top: 1rem;">
-          <h4 style="margin: 0 0 0.75rem 0; font-size: 1.05rem; color: #4e6b5b;">實戰沖煮指南 (Timeline)</h4>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem;">
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🔥 焙度: ${meta.roast_name}</span>
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🌡️ 水溫: ${result.temp}°C</span>
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">⚙️ 刻度: Dial ${result.dial}</span>
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">⚖️ 粉量: ${result.dose}g</span>
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">💧 水量: ${result.water_ml}ml</span>
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">💧 水質: GH ${meta.water_gh} / KH ${meta.water_kh}</span>
-            <span class="badge" style="background-color: #6d6358; font-size: 0.85em; padding: 0.4em 0.6em; font-weight: normal;">🧪 Mg 比例: ${meta.water_mg_frac}</span>
-          </div>
-          <div style="margin: 0.5rem 0 1rem 0; padding: 0.75rem; background-color: #fdf3ed; border: 1px solid #e4d7cb; border-radius: 8px; font-size: 0.9em; color: #bb5f2a;">
-            <strong>⏱️ 計時建議：</strong> 建議先 <strong>「按馬錶」</strong>，隨即 <strong>「注水」</strong>，完成後 <strong>「塞塞子」</strong>。這能確保從水接觸咖啡的第一秒起就開始計算萃取時間。下壓階段的秒數為<strong>水流通過</strong>時間，聽到嗤聲後壓到底可能再多幾秒（空氣階段，不計入萃取）。
-          </div>
-          <table class="table table-sm table-hover timeline-table" style="width: 100%; text-align: left; font-size: 0.95em; border-collapse: collapse; table-layout: fixed; word-wrap: break-word;">
-            <tbody>
-              <tr id="timeline-row-${index}-1" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
-                <td style="padding: 0.5rem 0.25rem; font-weight: bold; width: 60px; vertical-align: top;">${formatTime(currentSec)}</td>
-                <td style="padding: 0.5rem 0.25rem;">
-                  <strong>注水與封閉</strong><br>
-                  <span style="color: #6d6358;">注水至 ${result.water_ml} ml (水溫 ${result.temp}°C)，隨後塞入活塞建立負壓 (預估初期漏水約 ${v_drip.toFixed(1)} ml)。</span>
-                </td>
-              </tr>
-              ${(() => {
-                currentSec = result.steep_sec;
-                return `
-              <tr id="timeline-row-${index}-2" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
-                <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
-                <td style="padding: 0.5rem 0.25rem;">
-                  <strong>旋轉與靜置</strong><br>
-                  <span style="color: #6d6358;">帶著活塞輕柔搖晃杯身 ${result.swirl_sec} 秒，隨後放著靜置 ${result.swirl_wait_sec} 秒以建立粉床。</span>
-                </td>
-              </tr>
-                `;
-              })()}
-              ${(() => {
-                currentSec += (result.swirl_sec + result.swirl_wait_sec);
-                const pressWarning = (result.press_sec_internal && result.press_sec_internal > 60) || result.press_sec > 60 
-                  ? ' <span class="badge bg-danger" style="background-color: #bb5f2a; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; margin-left: 4px;">阻力崩潰折算</span>' 
-                  : '';
-                return `
-              <tr id="timeline-row-${index}-3" style="border-bottom: 1px solid #f1ece6; transition: background-color 0.3s;">
-                <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
-                <td style="padding: 0.5rem 0.25rem;">
-                  <strong>開始下壓</strong><br>
-                  <span style="color: #6d6358;">穩定下壓，預計耗時 ${result.press_sec} 秒（水流通過時間，不含壓到底嗤聲）。${pressWarning}</span>
-                </td>
-              </tr>
-                `;
-              })()}
-              ${(() => {
-                currentSec += result.press_sec;
-                return `
-              <tr id="timeline-row-${index}-4" style="transition: background-color 0.3s;">
-                <td style="padding: 0.5rem 0.25rem; font-weight: bold; vertical-align: top;">${formatTime(currentSec)}</td>
-                <td style="padding: 0.5rem 0.25rem;">
-                  <strong>萃取完成</strong><br>
-                  <span style="color: #6d6358;">總接觸時間完成！享受咖啡。</span>
-                </td>
-              </tr>
-                `;
-              })()}
-            </tbody>
-          </table>
-          ${renderInlineTimer(result, index)}
-        </div>
-      `;
+    const labelName = result.label || "balanced";
+    const labelClass = `label-${labelName}`;
+    const lbl = (window.APP_LABELS || []).find(l => l.name === labelName);
+    const idealFor = (key) => (lbl && lbl.ideal && lbl.ideal[key] != null) ? lbl.ideal[key] * result.tds : null;
+    const v_drip = result.v_drip || result.pre_seal_drip_ml || 0;
 
-      return `
-      <article class="result-card" id="recipe-card-${index}" style="min-width: 0; overflow-x: hidden;">
-        <div class="result-head">
-          <div>
-            <div class="muted">Rank ${index + 1}</div>
-            <h2 style="margin:4px 0 0">Temp ${result.temp}C / Dial ${result.dial} / Dose ${result.dose}g</h2>
+    // Timeline milestones — accumulating clock
+    let t = 0;
+    const rows = [];
+    rows.push({
+      n: 1, time: t,
+      title: "注水與封閉 · POUR & SEAL",
+      detail: `注水至 ${result.water_ml} ml（水溫 ${result.temp}°C），隨後塞入活塞建立負壓（預估初期漏水約 ${v_drip.toFixed(1)} ml）。`,
+    });
+    t = result.steep_sec;
+    rows.push({
+      n: 2, time: t,
+      title: "旋轉與靜置 · SWIRL & SETTLE",
+      detail: `輕柔搖晃杯身 ${result.swirl_sec} 秒，靜置 ${result.swirl_wait_sec} 秒建立粉床。`,
+    });
+    t += result.swirl_sec + result.swirl_wait_sec;
+    const collapsed = (result.press_sec_internal && result.press_sec_internal > 60) || result.press_sec > 60;
+    rows.push({
+      n: 3, time: t,
+      title: "開始下壓 · PRESS",
+      detail: `穩定下壓，預計耗時 ${result.press_sec} 秒（水流通過時間，不含壓到底嗤聲）。${collapsed ? " 阻力崩潰折算。" : ""}`,
+    });
+    t += result.press_sec;
+    rows.push({
+      n: 4, time: t,
+      title: "萃取完成 · COMPLETE",
+      detail: "總接觸時間完成 — 享受咖啡。",
+    });
+
+    return `
+      <article class="sample ${labelClass}" id="recipe-card-${index}">
+        <header class="sample-head">
+          <div class="sample-no">
+            <span>SAMPLE</span>
+            <span class="sample-no-num">№ ${String(index + 1).padStart(2, "0")}</span>
           </div>
-          <div class="score">${result.score.toFixed(1)}</div>
-        </div>
-        
-        <div class="metrics" style="margin-top: 1rem;">
-          <div class="metric"><strong>TDS</strong><div>${result.tds.toFixed(4)}%</div></div>
-          <div class="metric"><strong>EY</strong><div>${result.ey.toFixed(3)}%</div></div>
-          <div class="ratio"><strong>SW / AC</strong><div>${result.ratios.ac_sw_actual} (Ideal ${result.ratios.ac_sw_ideal})</div></div>
-          <div class="ratio"><strong>PS / Bitter</strong><div>${result.ratios.ps_bitter_actual} (Ideal ${result.ratios.ps_bitter_ideal})</div></div>
+          <div class="sample-label">${escapeHtml(labelName)} · ${escapeHtml(meta.roast_name || "")}</div>
+        </header>
+
+        <div class="score-block">
+          <div class="score-display">${result.score.toFixed(1)}</div>
+          <div class="score-meta">
+            <div class="score-label">FLAVOR SCORE</div>
+            <div class="score-scale">
+              <span>0</span>
+              <div class="score-scale-track">
+                <div class="score-scale-tick" style="left: ${Math.max(0, Math.min(100, result.score))}%;"></div>
+              </div>
+              <span>100</span>
+            </div>
+          </div>
         </div>
 
-        ${timelineHtml}
+        <div class="vector-grid">
+          <div class="vector-cell">
+            <span class="vector-label">TEMP · 水溫</span>
+            <span class="vector-value">${result.temp}<span class="vector-unit">°C</span></span>
+          </div>
+          <div class="vector-cell">
+            <span class="vector-label">DIAL · 研磨</span>
+            <span class="vector-value">${result.dial}</span>
+          </div>
+          <div class="vector-cell">
+            <span class="vector-label">DOSE · 粉量</span>
+            <span class="vector-value">${result.dose}<span class="vector-unit">g</span></span>
+          </div>
+          <div class="vector-cell">
+            <span class="vector-label">STEEP · 浸泡</span>
+            <span class="vector-value">${formatTime(result.steep_sec)}</span>
+          </div>
+        </div>
 
-        <div class="compound-grid" style="margin-top: 1.5rem; min-width: 0;">
-          ${keys.map((key) => compoundCard(key, result.compounds_abs[key], meta.flavor_max ? meta.flavor_max[key] : 0.6)).join("")}
+        <div class="specimen-section">
+          <span class="specimen-section-title">TIMELINE · Hoffman 沖煮指南</span>
+          <span class="specimen-section-aside">總接觸 ${formatTime(result.total_contact_sec)} · TDS ${result.tds.toFixed(2)}% · EY ${result.ey.toFixed(1)}%</span>
+        </div>
+        <div class="timeline-callout">
+          建議先「按馬錶」、隨即「注水」、完成後「塞塞子」 — 從水接觸咖啡的第一秒起計時。下壓秒數為水流通過時間；嗤聲後壓到底為空氣階段，不計入萃取。
+        </div>
+        <div class="timeline">
+          ${rows.map(r => `
+            <div class="timeline-row" id="timeline-row-${index}-${r.n}">
+              <span class="timeline-time">${formatTime(r.time)}</span>
+              <span class="timeline-action"><strong>${r.title}</strong><br>${r.detail}</span>
+            </div>
+          `).join("")}
+        </div>
+
+        ${renderInlineTimer(result, index)}
+
+        <div class="specimen-section">
+          <span class="specimen-section-title">COMPOUND VECTOR · 六向量化合物</span>
+          <a href="#radar" class="specimen-section-link" data-open-radar>查看風味雷達圖 →</a>
+        </div>
+        <div class="compounds">
+          ${keys.map(key => compoundCard(
+            key,
+            result.compounds_abs[key],
+            meta.flavor_max ? meta.flavor_max[key] : 0.6,
+            idealFor(key),
+          )).join("")}
+        </div>
+
+        <div class="ratios">
+          <div class="ratio-cell">
+            <span class="ratio-label">AC / SW</span>
+            <span>
+              <span class="ratio-actual">${result.ratios.ac_sw_actual}</span>
+              <span class="ratio-ideal"> · ideal ${result.ratios.ac_sw_ideal}</span>
+            </span>
+          </div>
+          <div class="ratio-cell">
+            <span class="ratio-label">PS / BITTER</span>
+            <span>
+              <span class="ratio-actual">${result.ratios.ps_bitter_actual}</span>
+              <span class="ratio-ideal"> · ideal ${result.ratios.ps_bitter_ideal}</span>
+            </span>
+          </div>
         </div>
 
         ${renderFeedbackForm(result, `detail-${index}`)}
       </article>
-      `;
+    `;
   }
 
   function renderResultContent(results, meta) {
@@ -1229,44 +1249,39 @@
     }
     const cards = labels.map((lbl, idx) => {
       const items = byLabel[lbl] || [];
+      const labelClass = `label-${lbl}`;
       if (!items.length) {
         return `
-          <div class="recipe-card" style="min-width: 320px; max-width: 360px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
-            <div class="muted" style="font-size: 0.85em; font-weight: bold;">${lbl}</div>
-            <div class="muted" style="margin-top: 8px;">(無候選配方)</div>
+          <div class="cup-card ${labelClass}">
+            <div class="cup-card-head">
+              <div class="cup-card-label">${escapeHtml(lbl)}</div>
+            </div>
+            <div class="cup-card-empty">（無候選配方）</div>
           </div>
         `;
       }
       const r = items[0];
       return `
-        <div class="recipe-card" style="min-width: 320px; max-width: 360px; flex-shrink: 0; border-radius: 12px; padding: 1.2rem; background: #fff; border: 1px solid #e4d7cb;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
-            <div>
-              <div class="muted" style="font-size: 0.85em; font-weight: bold; color: #bb5f2a;">${lbl}</div>
-              <h3 style="margin: 4px 0 0; font-size: 1.1em; color: #4e6b5b;">Score ${r.score.toFixed(1)}</h3>
-            </div>
+        <div class="cup-card ${labelClass}">
+          <div class="cup-card-head">
+            <div class="cup-card-label">${escapeHtml(lbl)}</div>
+            <div class="cup-card-score">${r.score.toFixed(1)}</div>
           </div>
-          <div style="font-size: 0.9em; color: #6d6358; line-height: 1.5;">
-            <strong>Temp ${r.temp}°C / Dial ${r.dial} / Dose ${r.dose}g</strong><br>
-            Steep: ${formatTime(r.steep_sec)} / Contact: ${formatTime(r.total_contact_sec)}<br>
-            TDS ${r.tds.toFixed(2)}% | EY ${r.ey.toFixed(1)}%
+          <div class="cup-card-params">
+            ${r.temp}°C · dial ${r.dial} · ${r.dose}g · steep ${formatTime(r.steep_sec)}<br>
+            TDS ${r.tds.toFixed(2)}% · EY ${r.ey.toFixed(1)}%
           </div>
-          <div class="muted" style="margin-top: 8px; font-size: 0.78em; word-break: break-all;">recipe_id: ${r.recipe_id || "—"}</div>
+          <div class="cup-card-id">recipe_id ${r.recipe_id || "—"}</div>
           ${renderFeedbackForm(r, `channelb-${idx}`)}
         </div>
       `;
     }).join("");
 
     resultsNode.innerHTML = `
-      <div class="muted" style="margin-bottom: 0.5rem;">Channel B — 各 label 各自最佳化 Top 1（並列 cupping 比對）</div>
-      <div class="scroll-container" style="display: flex; overflow-x: auto; gap: 16px; padding: 0 0 16px 0;">
-        ${cards}
-      </div>
-      <div class="muted" style="font-size: 0.85em; margin-top: 0.5rem;">
-        要看單一 label 的詳細時間軸 / timer，請在上方下拉切換到該 label 後重跑。
-      </div>
+      <div class="channel-b-intro">CHANNEL B · 各 label 各自最佳化 Top 1（cupping 比對）</div>
+      <div class="channel-b-strip">${cards}</div>
+      <div class="channel-b-hint">切回單一 label 可看完整 timeline / timer</div>
     `;
-    // No radar in Channel B (results aren't comparable across labels).
     updateRadarTrigger([]);
     attachFeedbackHandlers();
   }
