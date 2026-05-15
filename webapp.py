@@ -6,14 +6,16 @@ from flask import Flask, jsonify, render_template, request
 
 import constants
 from data.water_presets import WATER_PRESETS
-from optimizer import optimize
+from models.labels import get_label, ideal_abs as label_ideal_abs, label_names
+from models.scoring import compute_actual_abs
+from optimizer import optimize, optimize_parallel
 from runtime import apply_environment_settings, resolve_water_profile
-from models.scoring import build_ideal_abs, compute_actual_abs
 
 
 def _serialize_result(result: dict, roast_code: str) -> dict:
+    label = result.get("label", "balanced")
     actual_abs = compute_actual_abs(result["compounds"], result["tds"])
-    ideal_abs = build_ideal_abs(roast_code, result["tds"])
+    ideal_abs = label_ideal_abs(label, result["tds"])
     mel_coeff = constants.MEL_BITTER_COEFF[roast_code]
     actual_ac_sw = actual_abs["AC"] / max(actual_abs["SW"], 1e-8)
     ideal_ac_sw = ideal_abs["AC"] / max(ideal_abs["SW"], 1e-8)
@@ -27,6 +29,7 @@ def _serialize_result(result: dict, roast_code: str) -> dict:
     )
     return {
         **result,
+        "label": label,
         "compounds_abs": {key: round(actual_abs[key], 4) for key in constants.KEYS},
         "ratios": {
             "ac_sw_actual": round(actual_ac_sw, 3),
@@ -66,9 +69,13 @@ def create_app() -> Flask:
                 ],
                 "brewers": constants.BREWER_PRESETS,
                 "presets": WATER_PRESETS,
+                "labels": [
+                    {"name": name, **get_label(name)} for name in label_names()
+                ],
                 "defaults": {
                     "brewer": "xl",
                     "roast": "medium",
+                    "label": "balanced",
                     "top": 3,
                     "t_env": 25.0,
                     "altitude": 0.0,
@@ -97,20 +104,47 @@ def create_app() -> Flask:
         dose_max = payload.get("dose_max")
         dose_min = float(dose_min) if dose_min is not None else None
         dose_max = float(dose_max) if dose_max is not None else None
-        results = optimize(
+
+        requested_label = payload.get("label")
+        common = dict(
             roast_code=roast_code,
             brewer_size=payload.get("brewer", "xl"),
             water_gh=water_gh,
             water_kh=water_kh,
             water_mg_frac=water_mg_frac,
-            top_n=int(payload.get("top", 3)),
             dose_min_override=dose_min,
             dose_max_override=dose_max,
         )
-        
-        # Calculate theoretical maximums for this roast level for the progress bars
-        max_tds = constants.TDS_PREFER.get(roast_code, 1.25) + 0.2
-        flavor_max_raw = build_ideal_abs(roast_code, max_tds)
+
+        if requested_label and requested_label != "__all__":
+            results = optimize(
+                top_n=int(payload.get("top", 3)),
+                label=requested_label,
+                **common,
+            )
+            results_serialized = [_serialize_result(item, roast_code) for item in results]
+            label_used = requested_label
+            top_tds = results[0]["tds"] if results else 1.25
+        else:
+            parallel = optimize_parallel(
+                top_n=int(payload.get("top", 1)),
+                **common,
+            )
+            results_serialized = {
+                lbl: [_serialize_result(item, roast_code) for item in items]
+                for lbl, items in parallel.items()
+            }
+            label_used = "__all__"
+            first_tds = next(
+                (items[0]["tds"] for items in parallel.values() if items),
+                1.25,
+            )
+            top_tds = first_tds
+
+        # 顯示用 flavor_max（progress bar 上限）— 取 label 的 ideal × (tds + 0.2)
+        ref_label = requested_label if (requested_label and requested_label != "__all__") else "balanced"
+        max_tds = top_tds + 0.2
+        flavor_max_raw = label_ideal_abs(ref_label, max_tds)
         flavor_max = {k: round(v, 4) for k, v in flavor_max_raw.items()}
 
         return jsonify(
@@ -122,9 +156,10 @@ def create_app() -> Flask:
                     "water_kh": water_kh,
                     "water_mg_frac": water_mg_frac,
                     "water_source": water_source,
+                    "label": label_used,
                     "flavor_max": flavor_max,
                 },
-                "results": [_serialize_result(item, roast_code) for item in results],
+                "results": results_serialized,
             }
         )
 

@@ -69,27 +69,24 @@ def test_export_json_csv_and_radar(tmp_path: Path) -> None:
 
 
 
-def test_cli_reference_command_ranges(tmp_path: Path) -> None:
+def test_cli_reference_command_ranges(tmp_path: Path, monkeypatch) -> None:
     root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
     command = [
         sys.executable,
         str(root / "main.py"),
-        "--brewer",
-        "xl",
-        "--roast",
-        "medium",
-        "--gh",
-        "50",
-        "--kh",
-        "30",
-        "--t-env",
-        "25",
-        "--altitude",
-        "0",
-        "--top",
-        "1",
+        "--brewer", "xl",
+        "--roast", "medium_light",
+        "--label", "balanced",
+        "--gh", "50", "--kh", "30",
+        "--t-env", "25", "--altitude", "0",
+        "--top", "1",
     ]
-    completed = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, check=True, timeout=120)
+    completed = subprocess.run(
+        command, cwd=tmp_path, capture_output=True, text=True, check=True,
+        timeout=120, env=env, encoding="utf-8",
+    )
     stdout = completed.stdout
 
     temp = int(re.search(r"水溫 (\d+)°C", stdout).group(1))
@@ -102,15 +99,17 @@ def test_cli_reference_command_ranges(tmp_path: Path) -> None:
     score = float(re.search(r"風味評分：([\d.]+) / 100", stdout).group(1))
     t_slurry = float(re.search(r"漿體起始 ([\d.]+)°C", stdout).group(1))
 
-    # Phase 6 behavior shift: pure Arrhenius × first-order kinetics let
-    # low-temp/long-steep recipes emerge naturally for medium roast (Hedrick/Gagne style).
-    # Range widened to accept both Hoffman-style (~92°C/120s) and long-steep (~87°C/390s) optima.
-    assert 84 <= temp <= 94
-    assert 4.0 <= dial <= 6.5
+    # Phase 8: medium_light × balanced is the proper Hoffman bullseye combination.
+    # Optimizer finds the recipe that produces a Hoffman-style compound profile.
+    assert 90 <= temp <= 99
+    assert 3.5 <= dial <= 5.5
     assert 30 <= steep <= 420
-    assert 20 <= dose <= 32
-    assert 14 <= ey <= 26
-    assert 1.05 <= tds <= 1.55
+    assert 18 <= dose <= 32
+    assert 18 <= ey <= 25
+    assert 1.10 <= tds <= 1.55
     assert score > 70
     assert 3 <= (temp - t_slurry) <= 7
+    # Phase 8: label + recipe_id appear in output
+    assert "[label=balanced]" in stdout
+    assert re.search(r"recipe_id=[0-9a-f]{12}", stdout)
 

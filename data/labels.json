@@ -1,0 +1,36 @@
+{
+  "_schema": {
+    "version": 1,
+    "note": "Phase 8 Layer 2 sensory label islands. Each label = independent flavor target (IDEAL compound fractions + TDS_PREFER). Labels are zero-coupled — editing one cannot affect another's scores. New labels are append-only (Channel A discovery).",
+    "fields": {
+      "ideal": "compound mass-fractions (AC/SW/PS/CA/CGA/MEL), nominally summing to 1.0; used as bullseye in scoring.flavor_score log-ratio Gaussian",
+      "tds_prefer": "target TDS percentage for this label; scoring's TDS Super-Gaussian centers here",
+      "description": "human-readable summary",
+      "bullseye_anchor": "name of the calibration recipe this label was seeded from (Layer 1 link); null for hypothetical labels"
+    }
+  },
+  "balanced": {
+    "ideal": {"AC": 0.13, "SW": 0.42, "PS": 0.15, "CA": 0.07, "CGA": 0.12, "MEL": 0.11},
+    "tds_prefer": 1.27,
+    "description": "Hoffman-style 平衡（Heath bar + 檸檬點心）。中等酸、突出甜感、適度醇厚與烘焙感。",
+    "bullseye_anchor": "Hoffman"
+  },
+  "acid-forward": {
+    "ideal": {"AC": 0.22, "SW": 0.44, "PS": 0.13, "CA": 0.09, "CGA": 0.06, "MEL": 0.06},
+    "tds_prefer": 1.17,
+    "description": "April Coffee 酸質為主（清爽、多汁）。AC 主導、低 CGA / MEL、TDS 偏低。",
+    "bullseye_anchor": "April"
+  },
+  "sweet-body": {
+    "ideal": {"AC": 0.22, "SW": 0.45, "PS": 0.13, "CA": 0.09, "CGA": 0.06, "MEL": 0.05},
+    "tds_prefer": 1.56,
+    "description": "2021 世界冠軍甜感醇厚（奶油、牛軋糖、濃稠）。低溫倒置、高 TDS、低 CGA / MEL。",
+    "bullseye_anchor": "Championship"
+  },
+  "coarse-modern": {
+    "ideal": {"AC": 0.13, "SW": 0.46, "PS": 0.14, "CA": 0.07, "CGA": 0.10, "MEL": 0.10},
+    "tds_prefer": 1.40,
+    "description": "Hedrick / Gagne 粗磨長浸泡（甜+平衡、不澀）。粗磨壓低 CGA 累積速率、長時間擴展 SW / PS。",
+    "bullseye_anchor": "Hedrick"
+  }
+}

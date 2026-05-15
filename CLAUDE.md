@@ -11,13 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Data flow / Grid search / 化合物模型 / 評分公式細節 / 感知前處理 / Key files / Water 參數 / 修改方向表 | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 
 **僅剩待辦：**
-- **Phase 8 — 感官 label 島分裂（Layer 2 分層，原則 #5 後半實作）**：每個 label 自帶 IDEAL + TDS_PREFER，廢除 single-IDEAL + TDS bracket 內插，多 label 並列 Top + 假想 label discovery 通道。設計需求詳見 [`TASKS.md`](TASKS.md) §Phase 8
-- UI — Chip 標籤重寫（與 Phase 8 共同設計）
+- **Phase 9 — Feedback UI（webapp 卡片內 comment + tags + stars，append `data/feedback.jsonl`）**；refine 由 Claude 對話讀 jsonl 做語意分析、提建議、編輯 `data/labels.json`，不寫 `refine_label.py`。Schema 規格見 [`docs/FEEDBACK_FORMAT.md`](docs/FEEDBACK_FORMAT.md)
+- UI — Chip 標籤重寫（依 Phase 8 label 改 UI 風味描述）
 - `light` 槽真淺焙錨點待補（找到 Nordic-style AeroPress 食譜後校準）
-- scoring 殘留 issue：90s vs 120s 在 standard brewer 同 dose 鑑別力不足（`build_ideal_abs` 隨 actual TDS 內插 bracket 吸收絕對差距）— **Phase 8 完成後自動消失**
 - 化合物層 brewer geometry 建模（未來 phase）— XL 深床效應未進化合物層，現用 `dial_offset` 兜底
+- 非 medium_light 焙度的 label IDEAL 校準 — Phase 8 僅校準 medium_light 4 個錨點；medium / dark 等焙度套用 balanced label 時無 roast-specific bullseye，可能不貼。等未來新增非 medium_light 焙度的食譜錨點時補
 
-**目前狀態（Phase 7 完成）：** 6 錨點全 PASS（Hoffman 89.6 / April 75.0 / Champion 61.6 / Under 0 / Over 34.1 / Hedrick **85.7**，從 68.1 大幅修正），11 pytest PASS。`compounds.py` 已純 Arrhenius × first-order；Phase 7 把 `grind_kinetics` 也套到 `k_mel_eff` 上（與 CGA 同結構），讓粗磨真實壓低 MEL 累積 — 文獻機制 Gagné「fines × time = astringency」的最小連續代理。**化合物層在 dial/steep/temp 全域掃描下處處連續單調或單峰，無島（驗證原則 #4）**。Hoffman vs Hedrick 的雙峰地形完全來自 scoring 層 IDEAL 校準，合法。
+**目前狀態（Phase 8 完成）：** 6 錨點全 PASS（Hoffman 92.8 / April 90.6 / Champion 86.9 / Hedrick 92.5 / Under 0 / Over 44.6）、28 pytest PASS（含新增 Layer 1 `test_compound_calibration.py` × 8 + Layer 2 `test_label_scoring.py` × 8）。`data/labels.json` 持有 4 個 label 島（balanced / acid-forward / sweet-body / coarse-modern），每個自帶 IDEAL fractions + tds_prefer；scoring 層拿掉 `build_ideal_abs` TDS bracket 內插與 `ratio_bonus` 全套（純化為 log-ratio Gaussian × Super-Gaussian × 感知 gates）。optimizer 新增 `optimize_parallel()`（Channel B — 多 label 並列 Top）、每個結果帶 `recipe_id`（Phase 9 feedback 鉤子）；`diversify_top` 廢除。CLI `--label <name>` 單 label、無 flag = Channel B。
 
 ## Commands
 
@@ -60,11 +60,13 @@ python diagnose_anchor.py
 
 | 參數 | Hoffman 實測值 | 模型目標 |
 |------|--------------|---------|
-| TDS | 1.23%（稍粗）→ 原版 ~1.27% | `TDS_PREFER["medium_light"] = 1.27` |
+| TDS | 1.23%（稍粗）→ 原版 ~1.27% | `data/labels.json[balanced].tds_prefer = 1.27` |
 | EY | 20–22% | `EY_PREFER["medium_light"] = 21.0` |
 | 研磨 | 450–600µm EK43 → ZP6 dial ≈ 4.3 | `dial_prefer["medium_light"] = 4.3` |
-| 水溫 | 97.8°C（208°F） | 錨點檢查固定 98–99°C |
+| 水溫 | 97.8°C（208°F） | 錨點檢查固定 98°C |
 | 浸泡 | 2:00 → swirl → press | 錨點 `fixed_steep=120s` |
+
+**Phase 8 後：** 每個 label 自帶 `ideal` + `tds_prefer`（`data/labels.json`），不再有 per-roast `TDS_PREFER` 也不再有跨 TDS bracket 內插。改 label 屬性 = 改該 label 的口感目標，**零副作用其他 label**。
 
 ---
 
@@ -139,8 +141,8 @@ python diagnose_anchor.py
      | Under-extract | EY < 15% 邊界 | （無 — 應在所有 label 下打低分）|
      | Over-extract | EY > 22% / 高 CGA 邊界 | （無 — 應在所有 label 下打低分）|
 
-   - **目前狀態（Phase 7）：** Layer 1 已成型（`compounds.py` 純 Arrhenius × first-order）；Layer 2 尚未分裂（仍是單一 IDEAL_FLAVOR 隨 TDS bracket 內插，三錨點被迫共用）。Phase 8 = 完成 Layer 2 分裂。
-   - **違反此原則的症狀：** `diagnose_anchor.py` 對每個錨點寫「物理檢查（AC>CGA）+ 分數檢查（>=60）」混合斷言；`ratio_bonus` 為了讓 April / Championship 在 Hoffman-IDEAL 下也高分而存在 — 都是「單層假裝多層」的代償補丁。
+   - **目前狀態（Phase 8 完成）：** Layer 1（`compounds.py` 純 Arrhenius × first-order）+ Layer 2（`data/labels.json` 4 個 label 島）都已落地。`tests/test_compound_calibration.py` 只看物理 band、`tests/test_label_scoring.py` 只看分數；`diagnose_anchor.py` 兩層分別顯示。`ratio_bonus` 全套（AC/CGA、SW/(MEL+CGA)、PS/CA）已刪除 — 每個 label 的 IDEAL 已內含 ratio 偏好。新增 label 是 `data/labels.json` 的 append-only 操作（Channel A discovery）；多 label cupping 比對用 `optimize_parallel()`（Channel B）。
+   - **歷史症狀（Phase 8 前）：** `diagnose_anchor.py` 對每個錨點寫「物理檢查（AC>CGA）+ 分數檢查（>=60）」混合斷言；`ratio_bonus` 為了讓 April / Championship 在 Hoffman-IDEAL 下也高分而存在 — 都是「單層假裝多層」的代償補丁。Phase 8 拆掉之後通通消失。
 
 ### 原則 #1 vs #4 的關係（層次補強）
 
@@ -163,16 +165,17 @@ python diagnose_anchor.py
 └─ 這是人類感知？→ sigmoid / softplus（必須平滑）
 ```
 
-### 三錨點各自「分數不低」的物理原因
+### 四錨點各自「分數不低」的物理原因（Phase 8 後）
 
-| 錨點 | 為何分數不低 | 關鍵信號 |
+| 錨點 → label | 為何分數不低 | 關鍵信號 |
 |------|------------|---------|
-| Hoffman | 化合物 log-ratio 偏差小，TDS≈1.27 接近 `TDS_PREFER` | compound_reward 接近 1.0；tds_factor 接近 1.0 |
-| April | AC > CGA 且 AC > MEL（純淨酸質）；TDS=1.17% 在 SCA 範圍 | ratio bonus 補償；tds_factor 對 1.17 寬鬆 |
-| Championship | SW+PS > 0.35；SW > MEL/CGA（甜感主導）；TDS=1.56% 高濃縮 | ratio bonus 補償；TDS Super-Gaussian 高側 sigma=0.65 寬腰 |
+| Hoffman → balanced | predicted compound profile ≈ balanced IDEAL；TDS≈1.39 vs prefer 1.27（高側 sigma 0.65 寬腰） | compound_reward ≈ 1.0；tds_factor ≈ 0.99 |
+| April → acid-forward | acid-forward IDEAL 本身就是 April predicted profile；TDS≈1.14 vs prefer 1.17 | compound_reward ≈ 1.0；tds_factor 接近 1.0 |
+| Championship → sweet-body | sweet-body IDEAL = Champion predicted；TDS=1.55 vs prefer 1.56 | 同上 |
+| Hedrick → coarse-modern | coarse-modern IDEAL = Hedrick predicted；TDS=1.44 vs prefer 1.40 | 同上 |
 
-April / Champion 在 `diagnose_anchor.py` 也檢查 `compounds["AC"] > compounds["CGA"]` 等 profile-specific 條件作為輔助斷言，但**評分本身用統一的 `flavor_score()`**（原則 #2）。
+每個錨點都在**自己的 label**上拿高分，跨 label 比分數是 apples and oranges（cross_scores 在 `diagnose_anchor.py` 只是供參考）。Under/Over-extract 在**所有** label 上必須得低分（< 40 / < 50）。
 
 ---
 
-**禁止為了讓某錨點通過而削弱某項懲罰** → 必須找出物理根本原因。
+**禁止為了讓某錨點通過而削弱某項懲罰** → 必須找出物理根本原因。對於某個 label 的口感矯正，優先動該 label 在 `data/labels.json` 的 `ideal` / `tds_prefer`（零副作用其他 label），最後才動 scoring/compounds 層的全域常數（會牽動所有 label）。

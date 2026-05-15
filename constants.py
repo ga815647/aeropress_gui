@@ -196,16 +196,8 @@ LOW_GH_THRESHOLD = 20           # ppm；低於此視為軟水（如 RO）
 SOFT_WATER_BITTER_AMP = 0.25    # 軟水苦味感知放大係數：GH→0 時苦味感知 +25%（preprocessing）
 GH_SOFT_SIGMOID_K = 0.3         # 軟水 sigmoid 平滑過渡斜率
 
-# 全面上調 TDS 偏好值，鼓勵更濃郁、有層次的萃取（Aeropress 哲學）
-TDS_PREFER = {
-    "very_light": 1.28,
-    "light": 1.30,           # Nordic 真淺焙：高 TDS 才壓得住酸刺、撐得起香氣
-    "medium_light": 1.27,    # Hoffman 錨點搬遷：原 light=1.27（El Tambo 實測 1.23）
-    "medium": 1.20,
-    "moderately_dark": 1.15,
-    "dark": 1.12,
-    "very_dark": 1.09,
-}
+# Phase 8: TDS_PREFER 已移至 data/labels.json 的 per-label tds_prefer。
+# 不再有 per-roast TDS_PREFER — 每個感官 label 自帶 TDS 目標。
 TDS_GAUSS_SIGMA_LOW = 0.15   # 低 TDS 側 sigma（Super-Gaussian）：April 1.17% 不嚴懲
 TDS_GAUSS_SIGMA_HIGH = 0.65  # 高 TDS 側 sigma 適度放寬（0.50→0.65），解除 dose 鎖定但防極端
 TDS_SIGMA_BLEND_K = 5.0      # TDS sigma 平滑混合斜率
@@ -271,8 +263,6 @@ EY_DEMAND_WEIGHT = 0.30       # 最大懲罰強度（細磨 + EY 差 1 個 sigma
 TDS_EY_MISMATCH_WEIGHT = 2.0  # 兩個 deficit/surplus 各為 1 單位時扣分強度
 TDS_EY_MISMATCH_K = 10.0      # softplus 銳度（中等銳度，平滑 gradient 對齊 Frost 線性 TDS 模型）
 
-CGA_ASTRINGENCY_THRESHOLD = 1.10  # diagnose_anchor.py 顯示用，不進評分公式；Phase 5 full：IDEAL_CGA 從 0.057→0.12，過萃 CGA 相對 ideal 的 ratio 從 1.287 降到 ~1.13，閾值同步降到 1.10
-
 SW_AROMA_SLOPE = 0.025      # 從 0.015→0.025：強化 >97°C 的香氣熱失，搭配 light base_ey 降低後 light 仍需 99°C，但 medium_light 會明顯偏好 97-98°C（Hoffmann 97.8°C 對齊）
 SW_AROMA_THRESH = 97.0      # Sigmoid 中心溫度（低於此≈無損失，高於此平滑飽和）
 SW_AROMA_CAP = 0.25         # 最大香氣損失比例
@@ -292,10 +282,8 @@ STEEP_STEP = 30
 DIAL_PREFER_WEIGHT = 0.15  # 最大 15% 懲罰（Phase 3 提升鑑別度）
 DIAL_PREFER_SIGMA = 0.6    # ±0.6 dial 懲罰區間（Phase 3 收緊）
 
-# Top N 多樣化門檻（#2 起每名強制與已選方案在三軸至少一軸差異 ≥ 閾值）
-TOP_DIVERSITY_DIAL_MIN = 1.0   # dial 至少差 1 格（粗磨/細磨明確區分）
-TOP_DIVERSITY_STEEP_MIN = 60   # steep 至少差 60s（2 個 STEEP_STEP）
-TOP_DIVERSITY_DOSE_MIN = 2.0   # dose 至少差 2g（劑量改變要明顯）
+# Phase 8: TOP_DIVERSITY_* 已移除 — Channel B（多 label 並列 Top）取代之，
+# 每個 label 各自最佳化，不再需要在單 label 內人工多樣化。
 
 TEMP_BOILING_POINT = 100.0
 SCORCH_PARAMS = {
@@ -407,38 +395,11 @@ ROAST_TABLE = {
     },
 }
 
-TDS_ANCHORS = {"low": 1.00, "mid": 1.20, "high": 1.40}
-IDEAL_FLAVOR = {
-    # 極淺焙：大幅提高醇厚度和甜感，降低酸質（Aeropress 哲學）
-    ("very_light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
-    ("very_light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
-    ("very_light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 淺焙（Nordic, Agtron 75-85）：暫用 very_light 同款 profile（豆質接近，差別在發展度）
-    # 待真淺焙實測食譜後重校
-    ("light", "low"): {"AC": 0.20, "SW": 0.36, "PS": 0.24, "CA": 0.09, "CGA": 0.07, "MEL": 0.04},
-    ("light", "mid"): {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
-    ("light", "high"): {"AC": 0.15, "SW": 0.40, "PS": 0.28, "CA": 0.07, "CGA": 0.06, "MEL": 0.04},
-    # 中淺焙（Hoffman 錨點）— Phase 5 full 對齊文獻（Cordoba 2023, Vignoli 2016, Nunes/Wolfrom）：
-    # PS 從 0.29→0.16（文獻 GM+AG 上限 ≤17%）、CGA 從 0.057→0.12（Cordoba 11/110 mg/mL）、
-    # MEL 從 0.05→0.10（Vignoli 10%）、CA 從 0.09→0.07（Cordoba 5-7%）、SW 補足為 0.40
-    ("medium_light", "low"): {"AC": 0.17, "SW": 0.37, "PS": 0.15, "CA": 0.07, "CGA": 0.14, "MEL": 0.10},
-    ("medium_light", "mid"): {"AC": 0.15, "SW": 0.40, "PS": 0.16, "CA": 0.07, "CGA": 0.12, "MEL": 0.10},
-    ("medium_light", "high"): {"AC": 0.13, "SW": 0.42, "PS": 0.17, "CA": 0.07, "CGA": 0.11, "MEL": 0.10},
-    ("medium", "low"): {"AC": 0.12, "SW": 0.38, "PS": 0.22, "CA": 0.14, "CGA": 0.08, "MEL": 0.06},
-    ("medium", "mid"): {"AC": 0.10, "SW": 0.40, "PS": 0.24, "CA": 0.13, "CGA": 0.07, "MEL": 0.06},
-    ("medium", "high"): {"AC": 0.09, "SW": 0.42, "PS": 0.24, "CA": 0.12, "CGA": 0.07, "MEL": 0.06},
-    ("moderately_dark", "low"): {"AC": 0.08, "SW": 0.32, "PS": 0.22, "CA": 0.13, "CGA": 0.08, "MEL": 0.17},
-    ("moderately_dark", "mid"): {"AC": 0.07, "SW": 0.34, "PS": 0.23, "CA": 0.12, "CGA": 0.07, "MEL": 0.17},
-    ("moderately_dark", "high"): {"AC": 0.06, "SW": 0.35, "PS": 0.24, "CA": 0.11, "CGA": 0.07, "MEL": 0.17},
-    ("dark", "low"): {"AC": 0.05, "SW": 0.28, "PS": 0.22, "CA": 0.12, "CGA": 0.06, "MEL": 0.27},
-    ("dark", "mid"): {"AC": 0.05, "SW": 0.30, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.26},
-    ("dark", "high"): {"AC": 0.04, "SW": 0.30, "PS": 0.24, "CA": 0.10, "CGA": 0.05, "MEL": 0.27},
-    ("very_dark", "low"): {"AC": 0.04, "SW": 0.26, "PS": 0.22, "CA": 0.12, "CGA": 0.05, "MEL": 0.30},
-    ("very_dark", "mid"): {"AC": 0.04, "SW": 0.28, "PS": 0.23, "CA": 0.11, "CGA": 0.05, "MEL": 0.29},
-    ("very_dark", "high"): {"AC": 0.03, "SW": 0.28, "PS": 0.24, "CA": 0.10, "CGA": 0.04, "MEL": 0.30},
-}
+# Phase 8: IDEAL_FLAVOR 與 TDS_ANCHORS 已移至 data/labels.json。
+# 感官目標（compound fractions + tds_prefer）現按 label 分島；TDS bracket
+# 內插（low/mid/high × roast）廢除 — 每個 label 自帶單一 IDEAL，原則 #5 落地。
 
-# 萃取模型用的豆子原始化合物基準（與 IDEAL_FLAVOR 評分目標獨立）
+# 萃取模型用的豆子原始化合物基準（與 label IDEAL 評分目標獨立 — Layer 1 物理校準）
 COMPOUND_BASE = {
     "very_light":      {"AC": 0.18, "SW": 0.38, "PS": 0.26, "CA": 0.08, "CGA": 0.06, "MEL": 0.04},
     "light":           {"AC": 0.16, "SW": 0.40, "PS": 0.26, "CA": 0.07, "CGA": 0.05, "MEL": 0.04},   # Nordic 真淺焙暫定
@@ -462,18 +423,9 @@ EY_BLEND_K = 8.0               # EY 不對稱 sigma sigmoid 混合斜率
 TDS_FLOOR_MID = 0.50           # Sigmoid 中心：TDS=0.50 → factor=0.5
 TDS_FLOOR_K = 8.0              # Sigmoid 斜率
 
-# Ideal 內插 Gaussian basis 寬度
-IDEAL_INTERP_SIGMA = 0.15      # TDS 錨點間 Gaussian 基函數寬度
-
-# 化合物比值獎勵（純淨酸質 + 甜感主導 + 醇厚乾淨度）
-AC_CGA_RATIO_IDEAL = 1.25      # AC/CGA 理想比值（Phase 5 full：15/12=1.25）
-SW_BITTER_RATIO_IDEAL = 1.82   # SW/(MEL+CGA) 理想比值（Phase 5 full：40/(10+12)=1.82）
-PS_CA_RATIO_IDEAL = 2.29       # PS/CA 理想比值（Phase 5 full：16/7=2.29）
-RATIO_SIGMOID_K = 1.0          # 比值評分 sigmoid 斜率
-RATIO_WEIGHT = 0.15            # 比值獎勵權重（最多降 15% compound_loss）
-RATIO_W_AC_CGA = 1.0           # AC/CGA 比值權重
-RATIO_W_SW_BITTER = 1.0        # SW/(MEL+CGA) 比值權重
-RATIO_W_PS_CA = 0.6            # PS/CA 比值權重（醇厚乾淨度，Phase 2）
+# Phase 8: IDEAL_INTERP_SIGMA / ratio_bonus 全套（AC_CGA / SW_BITTER / PS_CA × WEIGHT）
+# 已廢除 — 每個 label 自帶單一 IDEAL 不再需要跨 bracket 內插；label IDEAL 已包含
+# 各 ratio 偏好不需全域 ratio 加分疊加。
 
 # Phase 2: 苦澀化合物超標加速懲罰（壞處邊際遞增）
 # 物理意義：CGA/MEL 超標代表過萃澀感/焦苦，偏離越多懲罰越大

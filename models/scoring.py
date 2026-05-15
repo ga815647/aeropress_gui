@@ -3,12 +3,11 @@ from __future__ import annotations
 import math
 
 import constants
+from models.labels import get_label, ideal_abs as label_ideal_abs
 
 _CONC_FLOOR = 1e-8
 _WEIGHT_TOTAL = sum(constants.WEIGHTS.values())
 
-
-# ── 平滑輔助函數 ──────────────────────────────────────────────────────────────
 
 def _sigmoid(x: float) -> float:
     """Logistic sigmoid via tanh identity — numerically stable for all x."""
@@ -19,39 +18,24 @@ def _softplus(x: float, k: float = 1.0) -> float:
     """Smooth ReLU: ln(1 + exp(k·x)) / k.  Stable for all inputs."""
     kx = k * x
     abs_kx = math.fabs(kx)
-    # identity: log(1+exp(t)) = max(t,0) + log(1+exp(-|t|))
     return (math.log1p(math.exp(-abs_kx)) + (kx + abs_kx) * 0.5) / k
 
 
-# ── 公開 API ──────────────────────────────────────────────────────────────────
-
 def compute_actual_abs(actual_raw: dict, tds: float) -> dict:
+    """Normalize raw compound predictions into TDS-weighted absolute amounts."""
     total_raw = sum(actual_raw[k] for k in constants.KEYS)
-    if total_raw > 0:                           # 退化輸入保護，非評分邏輯
-        actual_fraction = {k: actual_raw[k] / total_raw for k in constants.KEYS}
+    if total_raw > 0:
+        fraction = {k: actual_raw[k] / total_raw for k in constants.KEYS}
     else:
-        actual_fraction = {k: 0.0 for k in constants.KEYS}
-    return {k: actual_fraction[k] * tds for k in constants.KEYS}
-
-
-def build_ideal_abs(roast_code: str, tds: float) -> dict:
-    """Gaussian basis interpolation — continuous, no clamp / if-else."""
-    sigma = constants.IDEAL_INTERP_SIGMA
-    brackets = [("low", 1.00), ("mid", 1.20), ("high", 1.40)]
-    w = {b: math.exp(-0.5 * ((tds - c) / sigma) ** 2) for b, c in brackets}
-    w_total = sum(w.values())
-    prop = {
-        k: sum(w[b] * constants.IDEAL_FLAVOR[(roast_code, b)][k] for b in w) / w_total
-        for k in constants.KEYS
-    }
-    return {k: prop[k] * tds for k in constants.KEYS}
+        fraction = {k: 0.0 for k in constants.KEYS}
+    return {k: fraction[k] * tds for k in constants.KEYS}
 
 
 def flavor_score(
     actual_raw: dict,
-    ideal_abs: dict,
     tds: float,
     roast_code: str,
+    label: str,
     water_kh: float = 30,
     water_gh: float = 50,
     t_slurry: float = 90,
@@ -60,89 +44,66 @@ def flavor_score(
     steep_sec: float = 0.0,
     dial: float = 4.5,
 ) -> float:
+    """Phase 8 — label-parameterized flavor score.
 
-    # ── 1. 感知前處理（物理，非評分邏輯） ────────────────────────────────
+    Scoring structure (log-ratio Gaussian × TDS Super-Gaussian × perceptual gates)
+    is identical for every label per principle #2; only `IDEAL` and `TDS_PREFER`
+    differ by label (loaded from data/labels.json). Labels are zero-coupled —
+    editing one label cannot move another label's scores.
+    """
+    label_spec = get_label(label)
+    ideal_abs = label_ideal_abs(label, tds)
+    tds_prefer = label_spec["tds_prefer"]
+
+    # ── 1. perception preprocessing (physical, not scoring) ─────────────
     actual_abs = compute_actual_abs(actual_raw, tds)
     actual_perceived = dict(actual_abs)
 
-    # KH 壓制酸質感知 — 漸近底線 KH_FLOOR，無 max
     kh_factor = constants.KH_FLOOR + (1.0 - constants.KH_FLOOR) * math.exp(
         -water_kh / constants.KH_PERCEPT_DECAY_SMOOTH
     )
     actual_perceived["AC"] = actual_abs["AC"] * kh_factor
 
-    # 高溫 SW 香氣損失 — softplus onset + tanh saturation，無 max/min
-    # softplus(x, k) ≈ max(0,x) smoothly; tanh(x/cap)*cap ≈ min(x, cap) smoothly
     sw_raw = constants.SW_AROMA_SLOPE * _softplus(
         temp_initial - constants.SW_AROMA_THRESH, k=constants.SW_AROMA_SIGMOID_K
     )
     sw_loss = constants.SW_AROMA_CAP * math.tanh(sw_raw / constants.SW_AROMA_CAP)
     actual_perceived["SW"] = actual_abs["SW"] * (1.0 - sw_loss)
 
-    # 高溫焦苦放大 — softplus 平滑過渡，無 if
     scorch_threshold, cga_sens, mel_sens = constants.SCORCH_PARAMS[roast_code]
     scorch_excess = _softplus(t_slurry - scorch_threshold, k=constants.SCORCH_SOFTPLUS_K)
     actual_perceived["CGA"] *= 1.0 + scorch_excess * cga_sens
     actual_perceived["MEL"] *= 1.0 + scorch_excess * mel_sens
 
-    # 軟水放大苦味感知 — sigmoid 平滑過渡，無 max/if
     gh_soft = _sigmoid(constants.GH_SOFT_SIGMOID_K * (constants.LOW_GH_THRESHOLD - water_gh))
     for k in ("CA", "CGA", "MEL"):
         actual_perceived[k] *= 1.0 + gh_soft * constants.SOFT_WATER_BITTER_AMP
 
-    # ── 2. 理想苦味微調 ────────────────────────────────────────────────
+    # ── 2. ideal bitterness micro-adjust ───────────────────────────────
     ideal_adj = dict(ideal_abs)
     for k in ("CA", "CGA", "MEL"):
         ideal_adj[k] = ideal_abs[k] * constants.IDEAL_BITTER_REDUCTION
 
-    # ── 3. 化合物品質（log-ratio Gaussian + 平滑不對稱 sigma） ──────────
+    # ── 3. compound quality (log-ratio Gaussian, smooth asymmetric σ) ──
     compound_loss = 0.0
     for k in constants.KEYS:
-        ref = ideal_adj[k] + _CONC_FLOOR       # 防除零
+        ref = ideal_adj[k] + _CONC_FLOOR
         act = actual_perceived[k] + _CONC_FLOOR
         log_dev = math.log(act / ref)
-        # 平滑不對稱 sigma：sigmoid blend（取代 if-else）
         s_lo = constants.COMPOUND_SIGMA_LO[k]
         s_hi = constants.COMPOUND_SIGMA_HI[k]
         blend = _sigmoid(constants.SIGMA_BLEND_K * log_dev)
         sigma = s_lo + (s_hi - s_lo) * blend
         r_sq = (log_dev / sigma) ** 2
-        # 壞處邊際遞增：超標加速懲罰（sigmoid 方向門控 + softplus 強度閾值，全程平滑）
-        # excess ≈ 0 當 log_dev < 0（不足），≈ 1 當 log_dev > 0（超標）
         excess = _sigmoid(constants.ACCEL_ONSET_K * log_dev)
         accel = excess * _softplus(r_sq - constants.PENALTY_ACCEL_THRESHOLD,
                                    k=constants.PENALTY_ACCEL_K)
         r_sq = r_sq + constants.ACCEL_W_PER_COMPOUND[k] * accel
         compound_loss += constants.WEIGHTS[k] * r_sq
 
-    # ── 3b. 化合物比值獎勵（降低 compound_loss，保持 reward ∈ [0,1]） ──
-    ac_p  = actual_perceived["AC"]  + _CONC_FLOOR
-    sw_p  = actual_perceived["SW"]  + _CONC_FLOOR
-    ps_p  = actual_perceived["PS"]  + _CONC_FLOOR
-    ca_p  = actual_perceived["CA"]  + _CONC_FLOOR
-    cga_p = actual_perceived["CGA"] + _CONC_FLOOR
-    mel_p = actual_perceived["MEL"] + _CONC_FLOOR
+    compound_reward = math.exp(-compound_loss / _WEIGHT_TOTAL)
 
-    r_ac_cga    = ac_p / cga_p                 # 純淨酸質指標
-    r_sw_bitter = sw_p / (mel_p + cga_p)       # 甜感 vs 苦澀指標
-    r_ps_ca     = ps_p / ca_p                  # 醇厚乾淨度指標
-
-    r1_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_ac_cga    - constants.AC_CGA_RATIO_IDEAL))
-    r2_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_sw_bitter  - constants.SW_BITTER_RATIO_IDEAL))
-    r3_score = _sigmoid(constants.RATIO_SIGMOID_K * (r_ps_ca      - constants.PS_CA_RATIO_IDEAL))
-
-    ratio_bonus = (
-        constants.RATIO_W_AC_CGA    * r1_score
-        + constants.RATIO_W_SW_BITTER * r2_score
-        + constants.RATIO_W_PS_CA     * r3_score
-    ) / (constants.RATIO_W_AC_CGA + constants.RATIO_W_SW_BITTER + constants.RATIO_W_PS_CA)
-
-    # ratio bonus 降低 compound_loss → compound_reward 保持 [0, 1]
-    adjusted_loss = compound_loss * (1.0 - constants.RATIO_WEIGHT * ratio_bonus)
-    compound_reward = math.exp(-adjusted_loss / _WEIGHT_TOTAL)
-
-    # ── 4. TDS 品質因子（非對稱 Super-Gaussian，平滑 sigma） ────────────
-    tds_prefer = constants.TDS_PREFER[roast_code]
+    # ── 4. TDS quality factor (label-specific Super-Gaussian) ─────────
     delta = tds - tds_prefer
     blend_tds = _sigmoid(constants.TDS_SIGMA_BLEND_K * delta)
     sigma_tds = (
@@ -151,7 +112,7 @@ def flavor_score(
     )
     tds_factor = math.exp(-0.5 * (delta / sigma_tds) ** constants.TDS_SUPER_GAUSS_EXP)
 
-    # ── 5. EY 底線（過程變數，極低權重，平滑 sigma） ─────────────────
+    # ── 5. EY contribution (off by default; perceptual EY guards below) ─
     ey_prefer = constants.EY_PREFER[roast_code]
     ey_diff = ey - ey_prefer
     blend_ey = _sigmoid(constants.EY_BLEND_K * ey_diff)
@@ -161,13 +122,10 @@ def flavor_score(
     ey_gauss = math.exp(-0.5 * (ey_diff / ey_sigma) ** 2)
     ey_factor = 1.0 - constants.EY_GAUSS_WEIGHT + constants.EY_GAUSS_WEIGHT * ey_gauss
 
-    # ── 6. TDS 底線 — sigmoid（太淡無口感） ────────────────────────────
+    # ── 6. TDS floor (太淡無口感) ─────────────────────────────────────
     tds_floor_factor = _sigmoid(constants.TDS_FLOOR_K * (tds - constants.TDS_FLOOR_MID))
 
-    # ── 7. Grind-dependent EY deficit 懲罰（Phase 5 lite，單側）─────
-    # 細磨：目標 Hoffman 風格高 EY；EY 不足要扣分
-    # 粗磨：April/Hedrick 風格刻意低 EY；不扣分
-    # softplus k=5.0 讓 EY=PREFER 時殘留懲罰 ≈ 0（避免 Hoffman 達標仍被誤扣）
+    # ── 7. Grind-dependent EY deficit (細磨欠萃單側懲罰) ───────────────
     grind_ey_demand = _sigmoid(
         constants.GRIND_EY_DEMAND_K * (constants.DIAL_BASE - dial)
     )
@@ -177,18 +135,22 @@ def flavor_score(
         -constants.EY_DEMAND_WEIGHT * grind_ey_demand * ey_z * ey_z
     )
 
-    # ── 8. TDS-EY mismatch 懲罰（Phase 5 lite+，雙側 gating）────────
-    # 「低 TDS + 高 EY」= dose 過瘦 + 過萃補強度 = 酸感集中、澀鹹、無香
-    # 兩條件 AND gated：任一不滿足則 mismatch ≈ 0，正常配方不誤殺
-    # softplus k=10 確保負側 arg → 0（Hoffman 達標 ey_surplus≈0、tds_deficit≈0）
+    # ── 8. TDS-EY mismatch (低 TDS + 高 EY 過萃補濃) ──────────────────
     ey_surplus = _softplus(ey - ey_prefer, k=constants.TDS_EY_MISMATCH_K)
     tds_deficit = _softplus(tds_prefer - tds, k=constants.TDS_EY_MISMATCH_K)
     mismatch = ey_surplus * tds_deficit
     mismatch_factor = math.exp(-constants.TDS_EY_MISMATCH_WEIGHT * mismatch)
 
-    return compound_reward * tds_factor * ey_factor * tds_floor_factor * grind_ey_factor * mismatch_factor
+    return (
+        compound_reward
+        * tds_factor
+        * ey_factor
+        * tds_floor_factor
+        * grind_ey_factor
+        * mismatch_factor
+    )
 
 
-def score_to_display(raw: float, roast_code: str) -> float:
-    """raw (0–1) → 顯示用分數 (0–100)。直接線性映射。"""
+def score_to_display(raw: float, roast_code: str = None) -> float:
+    """raw (0–1) → 顯示用分數 (0–100)，線性映射。"""
     return round(raw * 100, 1)

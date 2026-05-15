@@ -30,6 +30,7 @@
 | 2026-05-14 | 6 | 化合物模型純物理化：`compounds.py` 全部改寫為 Arrhenius × first-order，刪除所有非物理 gate；六錨點全 PASS |
 | 2026-05-14 | XL dial_offset | `BREWER_PRESETS["xl"]["dial_offset"] = 0.10` 經驗 patch（不修改化合物層）|
 | 2026-05-15 | 7 | MEL grind coupling：`k_mel_eff *= grind_kinetics`（同 CGA 結構）。Hedrick 68.1→85.7；化合物層連續性全域驗證；CLAUDE.md 新增原則 #5（錨點分 Layer 1 校準 / Layer 2 感官 label 雙層）|
+| 2026-05-15 | 8 | 感官 label 島分裂（Layer 2 落地）：`data/labels.json` 4 個 label（balanced/acid-forward/sweet-body/coarse-modern），廢 build_ideal_abs TDS bracket 內插 + 廢 ratio_bonus 全套 + 廢 diversify_top；新增 `optimize_parallel()`（Channel B 多 label 並列 Top）、`recipe_id`（Phase 9 feedback 鉤子）、`models/labels.py` loader；tests 拆 `test_compound_calibration.py`（Layer 1）+ `test_label_scoring.py`（Layer 2）；6 錨點 + 28 pytest 全 PASS |
 
 詳細實作見下方各 Phase section。
 
@@ -405,9 +406,68 @@ Sum=1.000；驗證 Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（AC 15.16 
 
 ---
 
-## Phase 8 — 感官 label 島分裂（Layer 2 分層）
+## Phase 8 — 感官 label 島分裂（Layer 2 分層）✅（2026-05-15）
 
 **起源（2026-05-15 對話）：** Phase 7 後使用者觀察到 Top N 仍只給 Hoffman 群集，重新審視後共識為 **CLAUDE.md 原則 #5 — 錨點 2-layer**（Layer 1 化合物校準 / Layer 2 感官 label 島）。Layer 1 已成型；Phase 8 = 完成 Layer 2 分裂。
+
+### 完成內容（2026-05-15）
+
+**1. 資料層**
+- `data/labels.json`：4 個 label（balanced/acid-forward/sweet-body/coarse-modern），每個含 `ideal`（compound fractions, sum=1）+ `tds_prefer` + `description` + `bullseye_anchor`
+- IDEAL 數值從各錨點 predicted compound profile 反推、四捨五入到 0.01 並對齊 sum=1
+- `models/labels.py`：`load_labels()` / `get_label()` / `ideal_abs(label, tds)` / `recipe_id(...)` — `@lru_cache` 載入 JSON、`recipe_id` 用 sha1[:12] 哈希所有 brew 參數作為 Phase 9 feedback 反查鍵
+
+**2. Scoring 層**
+- `flavor_score()` 簽名改 `(actual_raw, tds, roast_code, label, ...)`；IDEAL 從 `labels.ideal_abs(label, tds)` 動態取
+- **刪除** `build_ideal_abs(roast, tds)` 與 `TDS_ANCHORS` low/mid/high bracket 內插
+- **刪除** `ratio_bonus` 全套（AC/CGA、SW/(MEL+CGA)、PS/CA 三個全域 sigmoid 加分曲線）— label IDEAL 已隱含 ratio 偏好
+- TDS_PREFER 從 per-roast 移成 per-label（每個 label 自帶 `tds_prefer`）
+
+**3. Optimizer / CLI / Webapp**
+- `optimizer.optimize(label=X)` 單 label 模式；`optimizer.optimize_parallel(labels=None)` Channel B 並列 Top-N per label（共用一份物理 grid pass）
+- 所有結果 dict 新增 `label` + `recipe_id` 欄位
+- CLI `--label X` 單 label；無 flag = Channel B 並列
+- Webapp `/api/optimize` payload 加 `label`；回傳結構 single-label 仍是 list，Channel B 是 `dict[label] → list`；config endpoint 多回 `labels` 陣列
+- **刪除** `TOP_DIVERSITY_*` 與 `diversify_top` 機制（Channel B 取代）
+
+**4. 測試拆分（CLAUDE.md 原則 #5 落地）**
+- 新 `tests/test_compound_calibration.py` — 純 Layer 1 物理檢查（EY/TDS band + Under-EY/Over-CGA + April AC>CGA + Hedrick AC>CGA），不看分數
+- 新 `tests/test_label_scoring.py` — 純 Layer 2 分數檢查（每錨點在自家 label ≥ 閾值 + Under/Over 在所有 label < 閾值 + April→acid-forward 高於→balanced）
+- `diagnose_anchor.py` 同樣兩層顯示：Layer 1（EY/TDS band）+ Layer 2（label score + cross-label）
+
+**5. 廢除常數（constants.py）**
+- `IDEAL_FLAVOR`（21 行 dict 變 0）、`TDS_ANCHORS`、`IDEAL_INTERP_SIGMA`、`TDS_PREFER`（per-roast）
+- `AC_CGA_RATIO_IDEAL` / `SW_BITTER_RATIO_IDEAL` / `PS_CA_RATIO_IDEAL`
+- `RATIO_WEIGHT` / `RATIO_SIGMOID_K` / `RATIO_W_AC_CGA` / `RATIO_W_SW_BITTER` / `RATIO_W_PS_CA`
+- `TOP_DIVERSITY_DIAL_MIN` / `_STEEP_MIN` / `_DOSE_MIN`
+- `CGA_ASTRINGENCY_THRESHOLD`（diagnose 用，新 diagnose 不需）
+
+**6. Phase 9 鉤子**
+- `docs/FEEDBACK_FORMAT.md` — `data/feedback.jsonl` schema 規格寫死，append-only，`comment` 是主 input
+- `recipe_id` 進每個 optimizer 輸出
+- 寫入流（webapp UI 卡片 + Claude 對話 refine）= Phase 9 工作
+
+### 結果（Phase 8 最終，2026-05-15）
+
+| 錨點 | label | 分數 | 物理 band | 跨 label 分數（參考） |
+|------|-------|------|----------|---------------------|
+| Hoffman | balanced | 92.8 | EY 22.6%, TDS 1.39% | acid-forward / sweet-body / coarse-modern 不適用 |
+| April | acid-forward | 90.6 | EY 15.3%, TDS 1.14% | balanced 43.0 |
+| Championship | sweet-body | 86.9 | EY 15.2%, TDS 1.55% | balanced 56.8, acid-forward 84.6, coarse-modern 66.0 |
+| Hedrick | coarse-modern | 92.5 | EY 18.0%, TDS 1.44% | balanced 91.7, acid-forward 2.8, sweet-body 1.4 |
+| Under-extract | (all labels) | 0.0 | EY 8.8%, TDS 0.54% | 全 label PASS < 40 |
+| Over-extract | (all labels) | max 44.6 (balanced) | EY 24.8%, TDS 1.53% | 全 label PASS < 50 |
+
+**28 pytest PASS**（含 Layer 1 × 8、Layer 2 × 8、既有 test_models/output_and_cli/webapp/water_presets × 12）
+
+### Phase 8 後待辦
+- Phase 9（feedback UI + Claude refine 流程）
+- 非 medium_light 焙度的 label IDEAL 校準（目前所有焙度共用同一份 label IDEAL；medium 焙的 balanced 推薦可能不貼）
+- Chip 標籤 UI 重寫（依 label 風味描述）
+
+---
+
+## Phase 8 — 原始設計需求（已實作完成）
 
 ### 設計目標
 

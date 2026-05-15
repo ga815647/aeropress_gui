@@ -10,25 +10,42 @@ def test_webapp_routes() -> None:
     assert b"AeroPress" in index_response.data
     assert b"data-controls-toggle" in index_response.data
 
+    # single-label mode (label specified)
     api_response = client.post(
         "/api/optimize",
         json={
             "brewer": "xl",
-            "roast": "medium",
-            "gh": 50,
-            "kh": 30,
-            "mg_frac": 0.40,
-            "top": 1,
-            "t_env": 25,
-            "altitude": 0,
+            "roast": "medium_light",
+            "label": "balanced",
+            "gh": 50, "kh": 30, "mg_frac": 0.40,
+            "top": 1, "t_env": 25, "altitude": 0,
         },
     )
     payload = api_response.get_json()
     assert api_response.status_code == 200
-    assert payload["meta"]["roast_code"] == "medium"
+    assert payload["meta"]["roast_code"] == "medium_light"
+    assert payload["meta"]["label"] == "balanced"
+    assert isinstance(payload["results"], list)
     assert len(payload["results"]) == 1
     assert "compounds_abs" in payload["results"][0]
     assert "swirl_wait_sec" in payload["results"][0]
+    assert payload["results"][0]["label"] == "balanced"
+    assert "recipe_id" in payload["results"][0]
+
+    # Channel B mode (no label → parallel Top-1 per label)
+    api_b = client.post(
+        "/api/optimize",
+        json={
+            "brewer": "xl",
+            "roast": "medium_light",
+            "gh": 50, "kh": 30, "mg_frac": 0.40,
+            "top": 1, "t_env": 25, "altitude": 0,
+        },
+    )
+    payload_b = api_b.get_json()
+    assert payload_b["meta"]["label"] == "__all__"
+    assert isinstance(payload_b["results"], dict)
+    assert set(payload_b["results"].keys()) == {"balanced", "acid-forward", "sweet-body", "coarse-modern"}
 
 
 def test_webapp_parser_exposes_lan_by_default() -> None:
