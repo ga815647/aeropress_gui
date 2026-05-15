@@ -446,27 +446,75 @@ Sum=1.000；驗證 Hoffman 化合物 profile 落在新 IDEAL ±0.1pp（AC 15.16 
    - 廢除 `feedback_top_n_diversity` 機制（diversify_top）— 通道 B 取代
 
 6. **Feedback 機制鉤子（為 Phase 9 預留，本期只做資料結構，不做 UI/CLI）**
-   - **6.1 IDEAL/TDS_PREFER 搬離 Python 常數，落到 `data/labels.json`**（或 YAML）
-     - Phase 9 的 `refine_label.py` 才能寫入；Phase 8 後 hand-editing 已比現在容易
+
+   **架構決定（2026-05-15 對話）：** webapp UI 是 **唯一**寫入 channel；Claude 在對話中讀取 `feedback.jsonl` 作為 refine layer，**不寫腳本**。原因：使用者跑完 optimizer 在 webapp 看結果 → 同一頁直接寫感想 → 零 context switch；refine 邏輯由 LLM 語意分析做，比 regex/stats 腳本聰明且不需 codify 信心區間 / 樣本數判斷。
+
+   - **6.1 IDEAL/TDS_PREFER 搬離 Python 常數，落到 `data/labels.json`**
+     - 未來 Claude（或人類）改 IDEAL 不需動 code，只動 data
      - 載入器：`load_labels() -> dict[label, {ideal, tds_prefer}]`，啟動時讀一次
+     - 寫回路徑：人類手動改、或 Claude 在對話中 Edit
    - **6.2 每個 recipe 輸出帶 `recipe_id`**
-     - Deterministic hash（例如 `sha1(f"{roast}|{brewer}|{dial:.2f}|{steep_sec}|{temp:.1f}|{dose:.1f}|{water_gh}|{water_kh}|{water_mg_frac}")[:12]`）
-     - feedback 才有東西可 reference
+     - Deterministic hash：`sha1(f"{roast}|{brewer}|{dial:.2f}|{steep_sec}|{temp:.1f}|{dose:.1f}|{water_gh}|{water_kh}|{water_mg_frac}")[:12]`
+     - feedback entry 用這個 id 反向 reference 哪一份 recipe
    - **6.3 Output 顯式帶 `label` 欄位**
-     - JSON/CSV 輸出多一欄；CLI terminal 顯示時加「[label=balanced]」標記
+     - JSON/CSV 輸出多一欄；CLI terminal 顯示時加「[label=balanced]」標記；webapp UI 顯示 label chip
    - **6.4 `feedback.jsonl` schema 規格寫死（即使 Phase 8 不寫入）**
-     - 一行一筆 JSON：`{"timestamp": ISO8601, "recipe_id": str, "label": str, "rating": "good"|"ok"|"bad", "tags": [str], "roast": str, "brewer": str, "water": {gh, kh, mg_frac}}`
-     - 規格寫進 `docs/FEEDBACK_FORMAT.md` 或 TASKS.md
-     - Phase 9 的 CLI/UI 只是按這 schema append-only 寫入
-   - **本期不做**：CLI `--rate` flag、webapp thumb up/down 按鈕、`refine_label.py` — 全部 Phase 9
+     - 一行一筆 JSON，schema：
+       ```json
+       {
+         "timestamp": "ISO8601",
+         "recipe_id": "abc123def456",
+         "label": "balanced",
+         "rating": "good" | "ok" | "bad" | null,
+         "stars": 1-5 | null,
+         "comment": "自由文字感想，可選",
+         "tags": ["acidic", "thin", "great-body", ...],
+         "roast": "medium_light",
+         "brewer": "xl",
+         "water": {"gh": 50, "kh": 30, "mg_frac": 0.40}
+       }
+       ```
+     - `comment` 自由文字是**主要 input channel**（人類寫得最自然）；rating/stars/tags 是輔助結構化欄位（webapp 用 quick chip 提供，optional）
+     - 規格寫進 `docs/FEEDBACK_FORMAT.md`
+     - 永遠 append-only，禁止 in-place 修改
+   - **本期不做**：webapp UI 元件、CLI `--rate` flag — 全部 Phase 9
 
-### Phase 9 — Feedback 實作（後續 phase，依賴 Phase 8 鉤子）
+### Phase 9 — Feedback UI 實作（後續 phase，依賴 Phase 8 鉤子）
 
-- CLI `python main.py --rate good --tag bitter,thin --recipe-id abc123`
-- webapp 跑完顯示推薦時加 thumb up/down + tag chip
-- `refine_label.py`：讀 `feedback.jsonl` + 統計每個 (label, rating) 對應的 compound profile → 建議 `labels.json` 微調
-- **永遠人類 approve**：refine_label 只 print suggested diff，使用者手動套用
-- 個人 label fork 工作流：N 筆同 label 的 good rating 後，suggest「你的 balanced 跟 Hoffman 差 X%，要不要 fork 成 `balanced-mine`」
+**主戰場：webapp**（不是 CLI，不是腳本）
+
+**Webapp UI 設計（草圖）：**
+跑完 optimizer 在結果頁，每個 recipe 卡片下面加：
+- 「I tried this」摺疊區
+  - Optional rating: 1-5 星 或 thumb up/down
+  - Optional quick tags: chip 選單（acidic / thin / great-body / bitter / muted / floral 等）
+  - **主 input**: textarea「Comment（自由文字、隨便寫）」
+  - [Save to feedback.jsonl] 按鈕 → POST 到後端 → append 進 `data/feedback.jsonl`
+- 寫過的 recipe，卡片永久顯示「You tried 2026-05-15: ⭐⭐⭐⭐ '稍微偏酸 ...'」
+
+**Claude refine layer（對話模式，不是腳本）：**
+- 使用者對話：「最近的 balanced 都偏酸」
+- Claude 動作：`Read data/feedback.jsonl` → 過濾 label=balanced 最近 N 筆 → 看 comment + tags 模式
+- Claude 輸出：「過去 30 杯 balanced，22 杯提到 acidic / 偏酸。compound 平均 AC=0.16 比 IDEAL 0.15 略高，TDS 平均 1.32 比 PREFER 1.27 略高。建議 fork 一個 `balanced-mine`，IDEAL AC 0.15→0.13、TDS_PREFER 1.27→1.30？」
+- 使用者：「好」→ Claude 直接 Edit `data/labels.json` 加新 label
+
+**為什麼不寫 `refine_label.py`：**
+- 信心區間判斷（N 樣本夠不夠、tag 顯不顯著、cluster 純不純）寫成腳本要 1000 行；LLM 看 30 行 comment 直接判斷
+- 「使用者描述跟 compound 數字的對應」是語意問題，不是統計問題（「偏酸」可能是 AC 高，也可能是 SW 不足顯出 AC，需要看完整 profile 才知道）
+- IDEAL 改動是低頻事件（一個月幾次），不需要自動化
+
+**CLI 補充（low priority）：**
+- `python main.py --rate good --tag bitter --recipe-id abc123 --comment "..."` 給 headless 使用者
+- 走的是同一個 `feedback.jsonl` append-only 路徑
+
+**個人 label fork 工作流：**
+- 使用者多次 mention「我的 balanced ...」→ Claude 主動建議 fork
+- 或使用者主動：「幫我 fork balanced 成 balanced-mine」→ Claude 拷貝 labels.json 條目 + 根據近期 feedback 微調 IDEAL
+
+**Phase 10+ 才考慮：**
+- vector DB / semantic tag search（目前 sklearn + JSONL 線性掃描足夠）
+- 自動化 ML refine（保持 human-in-the-loop）
+- 多使用者 / 雲端同步
 
 ### 初步 label 清單（暫定）
 
