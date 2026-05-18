@@ -10,7 +10,7 @@ suggesting label IDEAL diffs (see Phase 8 memo).
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 _FEEDBACK_PATH = Path(__file__).resolve().parents[1] / "data" / "feedback.jsonl"
@@ -20,6 +20,7 @@ ALLOWED_TAGS = {
     "sweet", "harsh", "clean", "balanced", "fruity", "roasty",
 }
 ALLOWED_RATINGS = {"good", "ok", "bad"}
+EDIT_WINDOW_HOURS = 1
 
 
 def _now_iso() -> str:
@@ -122,3 +123,67 @@ def read_all() -> list[dict]:
 def read_for_recipe(recipe_id: str) -> list[dict]:
     """Return feedback entries for a single recipe_id, oldest first."""
     return [e for e in read_all() if e.get("recipe_id") == recipe_id]
+
+
+def update_feedback(timestamp: str, updates: dict) -> dict:
+    """In-place edit of an existing entry within EDIT_WINDOW_HOURS of creation.
+
+    Editable fields: stars, comment, tags, rating. Other fields (recipe_id,
+    label, roast, brewer, water, recipe snapshot) are immutable — they reflect
+    the brewing context and must match the original recommendation.
+
+    Violates the append-only spirit of the JSONL log, but the short window
+    (EDIT_WINDOW_HOURS) confines the damage to the "misclick / UI bug" use
+    case. Beyond the window the entry is frozen and corrections must be new
+    entries.
+    """
+    if not timestamp:
+        raise ValueError("timestamp required")
+
+    entries = read_all()
+    target_idx = next((i for i, e in enumerate(entries) if e.get("timestamp") == timestamp), None)
+    if target_idx is None:
+        raise ValueError(f"feedback entry not found: {timestamp}")
+    target = entries[target_idx]
+
+    try:
+        created = datetime.fromisoformat(target["timestamp"]).astimezone(timezone.utc)
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"entry timestamp malformed: {exc}")
+    if datetime.now(timezone.utc) - created > timedelta(hours=EDIT_WINDOW_HOURS):
+        raise ValueError(f"edit window expired ({EDIT_WINDOW_HOURS}h)")
+
+    if "stars" in updates:
+        stars = updates["stars"]
+        if stars is not None:
+            try:
+                stars = int(stars)
+            except (TypeError, ValueError):
+                raise ValueError("stars must be 1-5 integer or null")
+            if not 1 <= stars <= 5:
+                raise ValueError("stars must be 1-5 integer or null")
+        target["stars"] = stars
+
+    if "rating" in updates:
+        rating = updates["rating"]
+        if rating is not None and rating not in ALLOWED_RATINGS:
+            raise ValueError(f"rating must be one of {ALLOWED_RATINGS} or null")
+        target["rating"] = rating
+
+    if "tags" in updates:
+        tags = updates["tags"] or []
+        if not isinstance(tags, list):
+            raise ValueError("tags must be a list")
+        target["tags"] = [str(t).strip().lower() for t in tags if str(t).strip()]
+
+    if "comment" in updates:
+        target["comment"] = str(updates["comment"] or "").strip()
+
+    if (not target.get("comment") and target.get("stars") is None
+            and not target.get("tags") and target.get("rating") is None):
+        raise ValueError("entry must retain at least one of comment / stars / tags / rating")
+
+    with _FEEDBACK_PATH.open("w", encoding="utf-8") as handle:
+        for e in entries:
+            handle.write(json.dumps(e, ensure_ascii=False) + "\n")
+    return target

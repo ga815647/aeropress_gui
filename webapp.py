@@ -9,9 +9,11 @@ from data.water_presets import WATER_PRESETS
 from models.feedback import (
     ALLOWED_RATINGS,
     ALLOWED_TAGS,
+    EDIT_WINDOW_HOURS,
     append_feedback,
     read_all as read_all_feedback,
     read_for_recipe,
+    update_feedback,
 )
 from models.labels import get_label, ideal_abs as label_ideal_abs, label_names
 from models.scoring import compute_actual_abs
@@ -197,6 +199,16 @@ def create_app() -> Flask:
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         return jsonify({"ok": True, "entry": entry})
+
+    @app.post("/api/feedback/update")
+    def feedback_update_route():
+        payload = request.get_json(silent=True) or {}
+        ts = payload.get("timestamp")
+        try:
+            entry = update_feedback(ts, payload)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "entry": entry, "edit_window_hours": EDIT_WINDOW_HOURS})
 
     @app.get("/api/feedback/<recipe_id>")
     def feedback_for_recipe(recipe_id: str):

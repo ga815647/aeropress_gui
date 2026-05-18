@@ -228,6 +228,17 @@
 
   let historyCache = { entries: [], fetchedAt: 0 };
   let historyFilters = { label: "__all__", minStars: 0 };
+  let editingTimestamp = null;
+  const HISTORY_EDIT_WINDOW_HOURS = 1;
+
+  function historyEditRemainingHours(entry) {
+    if (!entry.timestamp) return null;
+    const created = new Date(entry.timestamp).getTime();
+    if (isNaN(created)) return null;
+    const ageH = (Date.now() - created) / 3_600_000;
+    const remain = HISTORY_EDIT_WINDOW_HOURS - ageH;
+    return remain > 0 ? remain : null;
+  }
 
   function formatHistoryTime(iso) {
     if (!iso) return "—";
@@ -307,6 +318,22 @@
                      text-transform:uppercase;font-weight:600;">✦ 目前最佳沖煮</div>`
       : "";
 
+    const isEditing = editingTimestamp === entry.timestamp;
+    const remainH = historyEditRemainingHours(entry);
+    const remainLabel = remainH !== null
+      ? (remainH >= 1 ? `${Math.floor(remainH)}h` : `${Math.max(1, Math.ceil(remainH * 60))}m`)
+      : "";
+    const editTriggerHtml = (!isEditing && remainH !== null)
+      ? `<div style="margin-top:12px;display:flex;justify-content:flex-end;">
+           <button type="button" data-edit-open="${entry.timestamp}"
+             style="background:none;border:none;cursor:pointer;color:#a89c8a;
+                    font-size:0.78em;letter-spacing:0.04em;padding:2px 4px;">
+             ✎ 編輯 <span style="color:#c5b49e;">· 剩 ${remainLabel}</span>
+           </button>
+         </div>`
+      : "";
+    const editFormHtml = isEditing ? renderHistoryEditFields(entry) : "";
+
     return `
       <article class="history-entry" data-label="${entry.label}" data-stars="${entry.stars || 0}"
         style="display:flex;gap:18px;padding:24px 4px;border-bottom:1px solid #ece2d2;">
@@ -338,8 +365,67 @@
           </div>
           ${tagsHtml}
           ${bestRibbon}
+          ${editTriggerHtml}
+          ${editFormHtml}
         </div>
       </article>
+    `;
+  }
+
+  function renderHistoryEditFields(entry) {
+    const stars = entry.stars || 0;
+    const starButtons = [1, 2, 3, 4, 5].map((n) =>
+      `<button type="button" class="history-edit-star" data-edit-star="${n}"
+        aria-pressed="${stars >= n}"
+        style="background:none;border:none;cursor:pointer;font-size:1.5em;padding:0 2px;
+               color:${stars >= n ? '#bb5f2a' : '#e4d7cb'};line-height:1;
+               transition:color 0.12s;">★</button>`
+    ).join("");
+    const tagSet = new Set(entry.tags || []);
+    const tagButtons = (window.APP_FEEDBACK_TAGS || []).map((t) => {
+      const on = tagSet.has(t);
+      return `<button type="button" class="history-edit-tag" data-edit-tag="${t}"
+        data-edit-active="${on ? '1' : '0'}"
+        style="background:${on ? '#fdf3ed' : 'transparent'};
+               border:1px solid ${on ? '#bb5f2a' : '#d8c7b7'};
+               color:${on ? '#bb5f2a' : '#6d6358'};
+               border-radius:14px;padding:3px 11px;font-size:0.85em;
+               cursor:pointer;margin:2px 6px 2px 0;
+               transition:background 0.12s, border-color 0.12s, color 0.12s;">${t}</button>`;
+    }).join("");
+    return `
+      <div class="history-edit-form" data-edit-ts="${entry.timestamp}"
+           style="margin-top:14px;padding:16px 18px;background:#fbf3e8;
+                  border:1px solid #e8d8c2;border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+          <span style="font-size:0.7em;color:#a89c8a;letter-spacing:0.18em;
+                       text-transform:uppercase;font-weight:600;min-width:36px;">星等</span>
+          <div class="history-edit-stars">${starButtons}</div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="font-size:0.7em;color:#a89c8a;letter-spacing:0.18em;
+                      text-transform:uppercase;font-weight:600;margin-bottom:8px;">標籤</div>
+          <div class="history-edit-tags" style="display:flex;flex-wrap:wrap;">${tagButtons}</div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <div style="font-size:0.7em;color:#a89c8a;letter-spacing:0.18em;
+                      text-transform:uppercase;font-weight:600;margin-bottom:8px;">感想</div>
+          <textarea class="history-edit-comment" rows="3"
+            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d8c7b7;
+                   border-radius:6px;font-family:inherit;font-size:0.95em;line-height:1.6;
+                   resize:vertical;background:#fdfaf3;color:#3a3a36;">${escapeHtml(entry.comment || "")}</textarea>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <button type="button" data-edit-save
+            style="background:#bb5f2a;color:#fdf7ef;border:none;border-radius:6px;
+                   padding:7px 18px;font-size:0.9em;font-weight:500;cursor:pointer;
+                   letter-spacing:0.02em;">儲存修改</button>
+          <button type="button" data-edit-cancel
+            style="background:none;border:none;color:#7a6e5f;font-size:0.88em;cursor:pointer;
+                   text-decoration:underline;text-underline-offset:3px;">取消</button>
+          <span class="history-edit-msg" style="font-size:0.85em;color:#7a6e5f;"></span>
+        </div>
+      </div>
     `;
   }
 
@@ -479,6 +565,89 @@
         rerenderHistoryModal();
       });
     });
+
+    modal.querySelectorAll("[data-edit-open]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        editingTimestamp = btn.dataset.editOpen;
+        rerenderHistoryModal();
+        document.querySelector(`.history-edit-form[data-edit-ts="${editingTimestamp}"] .history-edit-comment`)?.focus();
+      });
+    });
+    modal.querySelectorAll("[data-edit-cancel]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        editingTimestamp = null;
+        rerenderHistoryModal();
+      });
+    });
+    modal.querySelectorAll(".history-edit-star").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const form = btn.closest(".history-edit-form");
+        if (!form) return;
+        const current = Number(btn.dataset.editStar);
+        // Toggle off if clicking the same star that's the current max
+        const allOn = form.querySelectorAll('.history-edit-star[aria-pressed="true"]');
+        const isOnlyClickedAtCurrent = allOn.length === current && btn.getAttribute("aria-pressed") === "true";
+        const target = isOnlyClickedAtCurrent ? 0 : current;
+        form.querySelectorAll(".history-edit-star").forEach((b) => {
+          const n = Number(b.dataset.editStar);
+          const on = n <= target;
+          b.setAttribute("aria-pressed", on ? "true" : "false");
+          b.style.color = on ? "#bb5f2a" : "#e4d7cb";
+        });
+      });
+    });
+    modal.querySelectorAll(".history-edit-tag").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const on = btn.dataset.editActive === "1";
+        btn.dataset.editActive = on ? "0" : "1";
+        btn.style.background = on ? "transparent" : "#fdf3ed";
+        btn.style.borderColor = on ? "#d8c7b7" : "#bb5f2a";
+        btn.style.color = on ? "#6d6358" : "#bb5f2a";
+      });
+    });
+    modal.querySelectorAll("[data-edit-save]").forEach((btn) => {
+      btn.addEventListener("click", () => submitHistoryEdit(btn));
+    });
+  }
+
+  async function submitHistoryEdit(btn) {
+    const form = btn.closest(".history-edit-form");
+    if (!form) return;
+    const ts = form.dataset.editTs;
+    const msg = form.querySelector(".history-edit-msg");
+    const starCount = form.querySelectorAll('.history-edit-star[aria-pressed="true"]').length;
+    const stars = starCount > 0 ? starCount : null;
+    const tags = Array.from(form.querySelectorAll('.history-edit-tag[data-edit-active="1"]'))
+      .map((b) => b.dataset.editTag);
+    const comment = (form.querySelector(".history-edit-comment").value || "").trim();
+
+    if (!comment && stars === null && !tags.length) {
+      msg.textContent = "至少填一項（星等 / 標籤 / 感想）";
+      msg.style.color = "var(--cinnabar, #bb5f2a)";
+      return;
+    }
+    btn.disabled = true;
+    msg.textContent = "儲存中…";
+    msg.style.color = "#7a6e5f";
+
+    try {
+      const resp = await fetch("/api/feedback/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timestamp: ts, stars, tags, comment }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || "save failed");
+      // Update cache in place
+      const idx = historyCache.entries.findIndex((e) => e.timestamp === ts);
+      if (idx >= 0) historyCache.entries[idx] = data.entry;
+      editingTimestamp = null;
+      rerenderHistoryModal();
+    } catch (err) {
+      msg.textContent = `失敗：${err.message || err}`;
+      msg.style.color = "var(--cinnabar, #bb5f2a)";
+      btn.disabled = false;
+    }
   }
 
   function rerenderHistoryModal() {
@@ -524,6 +693,7 @@
   function closeHistoryModal() {
     document.getElementById("history-modal")?.remove();
     document.body.style.overflow = "";
+    editingTimestamp = null;
   }
 
   function mountHistoryTrigger() {
@@ -639,7 +809,7 @@
     const msg = document.querySelector(`.fb-save-msg[data-fb-slot="${slot}"]`);
     const starsInput = document.querySelector(`.fb-stars-input[data-fb-slot="${slot}"]`);
     const commentInput = document.querySelector(`.fb-comment-input[data-fb-slot="${slot}"]`);
-    const tags = Array.from(document.querySelectorAll(`.fb-tags[data-fb-slot="${slot}"] [data-fb-active="1"]`))
+    const tags = Array.from(document.querySelectorAll(`.feedback-tags[data-fb-slot="${slot}"] [data-fb-active="1"]`))
       .map((b) => b.dataset.fbTag);
     const stars = starsInput.value ? Number(starsInput.value) : null;
     const comment = (commentInput.value || "").trim();
