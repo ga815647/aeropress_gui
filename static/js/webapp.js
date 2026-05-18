@@ -18,7 +18,6 @@
   const tooltipMeta = document.getElementById("tooltip-meta");
   const controlsPanel = document.querySelector("[data-controls-panel]");
   const controlsBody = document.querySelector("[data-controls-body]");
-  const controlsToggle = document.querySelector("[data-controls-toggle]");
 
   const presets = window.APP_PRESETS || {};
   const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
@@ -27,7 +26,6 @@
   let currentDetailIndex = 0;
   let latestPayload = null;
   let latestRadarResults = [];
-  let mobileControlsHidden = false;
   let brewTimerInterval = null;
   let activeTimers = {};
 
@@ -162,32 +160,13 @@
     tooltipMeta.textContent = entry.meta;
   }
 
-  function syncControlsPanelState() {
-    if (!controlsPanel || !controlsBody || !controlsToggle) return;
-
-    const hiddenOnMobile = mobileControlsQuery.matches && mobileControlsHidden;
-    if (hiddenOnMobile) {
-      controlsPanel.classList.add("is-collapsed");
-      controlsBody.hidden = true;
-    } else {
-      controlsPanel.classList.remove("is-collapsed");
-      controlsBody.hidden = false;
-    }
-    controlsPanel.hidden = false; // Never hide the whole panel anymore
-  }
-
-  function setMobileControlsHidden(nextValue, { scrollToResults = false } = {}) {
-    if (!mobileControlsQuery.matches) return;
-    mobileControlsHidden = nextValue;
-    syncControlsPanelState();
-
-    if (nextValue && scrollToResults) {
-      requestAnimationFrame(() => {
-        if (resultsNode) {
-          resultsNode.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      });
-    }
+  // Mobile collapse toggle removed — controls panel is always visible.
+  // After a submit on mobile we just smooth-scroll to results.
+  function scrollMobileToResults() {
+    if (!mobileControlsQuery.matches || !resultsNode) return;
+    requestAnimationFrame(() => {
+      resultsNode.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function formatTime(seconds) {
@@ -210,20 +189,16 @@
     })[ch]);
   }
 
-  // ── 沖煮歷史 / Brewing Journal modal ─────────────────────────────
-  // Design notes (5 lines):
-  //   1) Editorial layout — comment is the visual hero (1.08em), metadata is engraved-small.
-  //   2) Each entry sits on a 4px terracotta stripe; no card-on-card nesting.
-  //   3) Label = colored dot (per-label), not a pill. Filters are text + active underline.
-  //   4) Recent timestamps soften to "N 天前"; older entries show ISO date.
-  //   5) Best 5-star entry by score earns a quiet "✦ 目前最佳沖煮" annotation.
+  // ── 沖煮歷史 / Brewing Lab Logbook modal ─────────────────────────
+  // All styling lives in webapp.css under .history-* classes — keep JS
+  // free of inline hex colors so palette tweaks happen in one place.
 
   const HISTORY_LABEL_COLORS = {
-    "balanced":      "#bb5f2a",
-    "acid-forward":  "#d4a017",
-    "sweet-body":    "#8f6a3d",
-    "coarse-modern": "#6b4c32",
-    "tim":           "#7d9173",
+    "balanced":      "#1d4ed8",
+    "acid-forward":  "#b45309",
+    "sweet-body":    "#7c2d12",
+    "coarse-modern": "#3f6b3a",
+    "tim":           "#5b6770",
   };
 
   let historyCache = { entries: [], fetchedAt: 0 };
@@ -279,43 +254,37 @@
   }
 
   function renderHistoryEntry(entry, isBest) {
-    const accent = HISTORY_LABEL_COLORS[entry.label] || "#bb5f2a";
+    const accent = HISTORY_LABEL_COLORS[entry.label] || "#1d4ed8";
     const time = formatHistoryTime(entry.timestamp);
 
     const starsHtml = entry.stars
-      ? `<span style="letter-spacing:2px;font-size:0.95em;">` +
-        `<span style="color:#bb5f2a;">${"★".repeat(entry.stars)}</span>` +
-        `<span style="color:#e4d7cb;">${"★".repeat(5 - entry.stars)}</span></span>`
-      : `<span style="color:#c5b49e;font-size:0.85em;letter-spacing:0.05em;">— 未評星 —</span>`;
+      ? `<span class="history-entry-stars">` +
+        `<span class="history-entry-stars-on">${"★".repeat(entry.stars)}</span>` +
+        `<span class="history-entry-stars-off">${"★".repeat(5 - entry.stars)}</span></span>`
+      : `<span class="history-entry-stars-empty">— 未評星 —</span>`;
 
     const r = entry.recipe;
     const recipeLine = r
       ? `${r.temp}°C · dial ${r.dial} · ${r.dose}g · steep ${formatSteepShort(r.steep_sec)}`
-      : `<span style="color:#a89c8a;font-style:italic;">舊紀錄無 brew 快照</span>`;
+      : `<span class="history-entry-recipe-missing">舊紀錄無 brew 快照</span>`;
     const metricsLine = r && r.tds != null && r.ey != null && r.score != null
       ? `TDS ${r.tds.toFixed(2)}% · EY ${r.ey.toFixed(1)}% · score ${r.score.toFixed(1)}`
       : "";
 
     const tagsHtml = (entry.tags || []).length
-      ? `<div style="margin-top:10px;font-size:0.82em;color:#7a6e5f;letter-spacing:0.02em;">
-           ${entry.tags.map(t => `<span style="color:#6d6358;">${escapeHtml(t)}</span>`).join(
-             '<span style="color:#d8c7b7;margin:0 6px;">·</span>'
+      ? `<div class="history-entry-tags">
+           ${entry.tags.map(t => `<span>${escapeHtml(t)}</span>`).join(
+             '<span class="history-entry-tag-sep">·</span>'
            )}
          </div>`
       : "";
 
     const commentHtml = entry.comment
-      ? `<div style="margin-top:14px;font-size:1.08em;line-height:1.7;color:#3a3a36;
-                     font-weight:450;letter-spacing:0.005em;">
-           <span style="color:#bb5f2a;margin-right:2px;">「</span>${escapeHtml(entry.comment)}<span style="color:#bb5f2a;margin-left:2px;">」</span>
-         </div>`
-      : `<div style="margin-top:14px;font-size:0.92em;color:#a89c8a;font-style:italic;">
-           （無感想文字 — 只有快速評分）
-         </div>`;
+      ? `<div class="history-entry-comment">${escapeHtml(entry.comment)}</div>`
+      : `<div class="history-entry-comment-empty">（無感想文字 — 只有快速評分）</div>`;
 
     const bestRibbon = isBest
-      ? `<div style="margin-top:12px;font-size:0.72em;color:#bb5f2a;letter-spacing:0.18em;
-                     text-transform:uppercase;font-weight:600;">✦ 目前最佳沖煮</div>`
+      ? `<div class="history-entry-best">✦ 目前最佳沖煮</div>`
       : "";
 
     const isEditing = editingTimestamp === entry.timestamp;
@@ -324,11 +293,9 @@
       ? (remainH >= 1 ? `${Math.floor(remainH)}h` : `${Math.max(1, Math.ceil(remainH * 60))}m`)
       : "";
     const editTriggerHtml = (!isEditing && remainH !== null)
-      ? `<div style="margin-top:12px;display:flex;justify-content:flex-end;">
-           <button type="button" data-edit-open="${entry.timestamp}"
-             style="background:none;border:none;cursor:pointer;color:#a89c8a;
-                    font-size:0.78em;letter-spacing:0.04em;padding:2px 4px;">
-             ✎ 編輯 <span style="color:#c5b49e;">· 剩 ${remainLabel}</span>
+      ? `<div class="history-entry-edit-trigger">
+           <button type="button" class="history-edit-open" data-edit-open="${entry.timestamp}">
+             ✎ 編輯 <span class="history-edit-remain">· 剩 ${remainLabel}</span>
            </button>
          </div>`
       : "";
@@ -336,32 +303,27 @@
 
     return `
       <article class="history-entry" data-label="${entry.label}" data-stars="${entry.stars || 0}"
-        style="display:flex;gap:18px;padding:24px 4px;border-bottom:1px solid #ece2d2;">
-        <div aria-hidden="true" style="width:4px;background:${accent};border-radius:2px;
-                                        flex-shrink:0;align-self:stretch;"></div>
-        <div style="flex:1;min-width:0;">
-          <header style="display:flex;justify-content:space-between;align-items:baseline;
-                         flex-wrap:wrap;gap:8px 16px;font-size:0.85em;color:#6d6358;">
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-              <span style="font-variant-numeric:tabular-nums;">${time}</span>
-              <span style="color:#d8c7b7;">·</span>
+               style="--accent:${accent};">
+        <div aria-hidden="true" class="history-entry-bar"></div>
+        <div class="history-entry-body">
+          <header class="history-entry-head">
+            <div class="history-entry-meta">
+              <span class="history-entry-time">${time}</span>
+              <span class="history-entry-divider">·</span>
               ${starsHtml}
             </div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:0.85em;
-                        color:#7a6e5f;letter-spacing:0.015em;">
-              <span aria-hidden="true" style="display:inline-block;width:7px;height:7px;
-                                              border-radius:50%;background:${accent};"></span>
-              <span style="font-weight:600;color:#4e6b5b;">${escapeHtml(entry.label)}</span>
-              <span style="color:#d8c7b7;">·</span>
+            <div class="history-entry-id">
+              <span aria-hidden="true" class="history-entry-id-dot"></span>
+              <span class="history-entry-label-text">${escapeHtml(entry.label)}</span>
+              <span class="history-entry-divider">·</span>
               <span>${escapeHtml(entry.roast || "")}</span>
-              <span style="color:#d8c7b7;">·</span>
+              <span class="history-entry-divider">·</span>
               <span>${escapeHtml(entry.brewer || "")}</span>
             </div>
           </header>
           ${commentHtml}
-          <div style="margin-top:14px;font-size:0.85em;color:#6d6358;
-                      font-variant-numeric:tabular-nums;letter-spacing:0.01em;line-height:1.55;">
-            ${recipeLine}${metricsLine ? `<br><span style="color:#9b9080;">${metricsLine}</span>` : ""}
+          <div class="history-entry-recipe">
+            ${recipeLine}${metricsLine ? `<span class="history-entry-metrics">${metricsLine}</span>` : ""}
           </div>
           ${tagsHtml}
           ${bestRibbon}
@@ -375,55 +337,33 @@
   function renderHistoryEditFields(entry) {
     const stars = entry.stars || 0;
     const starButtons = [1, 2, 3, 4, 5].map((n) =>
-      `<button type="button" class="history-edit-star" data-edit-star="${n}"
-        aria-pressed="${stars >= n}"
-        style="background:none;border:none;cursor:pointer;font-size:1.5em;padding:0 2px;
-               color:${stars >= n ? '#bb5f2a' : '#e4d7cb'};line-height:1;
-               transition:color 0.12s;">★</button>`
+      `<button type="button" class="history-edit-star history-edit-star-btn"
+        data-edit-star="${n}" aria-pressed="${stars >= n}">★</button>`
     ).join("");
     const tagSet = new Set(entry.tags || []);
     const tagButtons = (window.APP_FEEDBACK_TAGS || []).map((t) => {
       const on = tagSet.has(t);
-      return `<button type="button" class="history-edit-tag" data-edit-tag="${t}"
-        data-edit-active="${on ? '1' : '0'}"
-        style="background:${on ? '#fdf3ed' : 'transparent'};
-               border:1px solid ${on ? '#bb5f2a' : '#d8c7b7'};
-               color:${on ? '#bb5f2a' : '#6d6358'};
-               border-radius:14px;padding:3px 11px;font-size:0.85em;
-               cursor:pointer;margin:2px 6px 2px 0;
-               transition:background 0.12s, border-color 0.12s, color 0.12s;">${t}</button>`;
+      return `<button type="button" class="history-edit-tag history-edit-tag-btn"
+        data-edit-tag="${t}" data-edit-active="${on ? '1' : '0'}">${t}</button>`;
     }).join("");
     return `
-      <div class="history-edit-form" data-edit-ts="${entry.timestamp}"
-           style="margin-top:14px;padding:16px 18px;background:#fbf3e8;
-                  border:1px solid #e8d8c2;border-radius:8px;">
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-          <span style="font-size:0.7em;color:#a89c8a;letter-spacing:0.18em;
-                       text-transform:uppercase;font-weight:600;min-width:36px;">星等</span>
+      <div class="history-edit-form" data-edit-ts="${entry.timestamp}">
+        <div class="history-edit-row">
+          <span class="history-edit-key">星等</span>
           <div class="history-edit-stars">${starButtons}</div>
         </div>
-        <div style="margin-bottom:14px;">
-          <div style="font-size:0.7em;color:#a89c8a;letter-spacing:0.18em;
-                      text-transform:uppercase;font-weight:600;margin-bottom:8px;">標籤</div>
-          <div class="history-edit-tags" style="display:flex;flex-wrap:wrap;">${tagButtons}</div>
+        <div class="history-edit-block">
+          <div class="history-edit-key">標籤</div>
+          <div class="history-edit-tags">${tagButtons}</div>
         </div>
-        <div style="margin-bottom:14px;">
-          <div style="font-size:0.7em;color:#a89c8a;letter-spacing:0.18em;
-                      text-transform:uppercase;font-weight:600;margin-bottom:8px;">感想</div>
-          <textarea class="history-edit-comment" rows="3"
-            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d8c7b7;
-                   border-radius:6px;font-family:inherit;font-size:0.95em;line-height:1.6;
-                   resize:vertical;background:#fdfaf3;color:#3a3a36;">${escapeHtml(entry.comment || "")}</textarea>
+        <div class="history-edit-block">
+          <div class="history-edit-key">感想</div>
+          <textarea class="history-edit-comment history-edit-comment-input" rows="3">${escapeHtml(entry.comment || "")}</textarea>
         </div>
-        <div style="display:flex;align-items:center;gap:14px;">
-          <button type="button" data-edit-save
-            style="background:#bb5f2a;color:#fdf7ef;border:none;border-radius:6px;
-                   padding:7px 18px;font-size:0.9em;font-weight:500;cursor:pointer;
-                   letter-spacing:0.02em;">儲存修改</button>
-          <button type="button" data-edit-cancel
-            style="background:none;border:none;color:#7a6e5f;font-size:0.88em;cursor:pointer;
-                   text-decoration:underline;text-underline-offset:3px;">取消</button>
-          <span class="history-edit-msg" style="font-size:0.85em;color:#7a6e5f;"></span>
+        <div class="history-edit-actions">
+          <button type="button" class="history-edit-save" data-edit-save>儲存 · SAVE</button>
+          <button type="button" class="history-edit-cancel" data-edit-cancel>取消</button>
+          <span class="history-edit-msg"></span>
         </div>
       </div>
     `;
@@ -435,31 +375,24 @@
 
     const labelBtn = (name, accent) => {
       const active = historyFilters.label === name;
-      return `<button type="button" data-history-label="${name}"
-        style="background:none;border:none;cursor:pointer;padding:5px 2px;
-               font-size:0.92em;color:${active ? '#bb5f2a' : '#6d6358'};
-               font-weight:${active ? '600' : '400'};
-               border-bottom:1px solid ${active ? '#bb5f2a' : 'transparent'};
-               display:inline-flex;align-items:center;gap:6px;
-               transition:color 0.12s, border-color 0.12s;">
-        ${accent ? `<span aria-hidden="true" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${accent};"></span>` : ""}
-        ${name === "__all__" ? "全部" : escapeHtml(name)}
+      const cls = `history-filter-btn${active ? " is-active" : ""}`;
+      const swatch = accent
+        ? `<span aria-hidden="true" class="history-filter-swatch" style="color:${accent};"></span>`
+        : "";
+      return `<button type="button" class="${cls}" data-history-label="${name}">
+        ${swatch}${name === "__all__" ? "全部" : escapeHtml(name)}
       </button>`;
     };
 
     const starBtn = (n) => {
       const active = historyFilters.minStars === n;
-      return `<button type="button" data-history-stars="${n}"
-        style="background:none;border:none;cursor:pointer;padding:5px 2px;
-               font-size:0.9em;color:${active ? '#bb5f2a' : '#6d6358'};
-               font-weight:${active ? '600' : '400'};
-               border-bottom:1px solid ${active ? '#bb5f2a' : 'transparent'};
-               transition:color 0.12s, border-color 0.12s;">
-        ${n === 0 ? "全部" : `⭐ ${n}+`}
+      const cls = `history-filter-btn${active ? " is-active" : ""}`;
+      return `<button type="button" class="${cls}" data-history-stars="${n}">
+        ${n === 0 ? "全部" : `★ ${n}+`}
       </button>`;
     };
 
-    const dot = `<span style="color:#d8c7b7;margin:0 4px;">·</span>`;
+    const dot = `<span class="history-filter-dot">·</span>`;
     const labels = Object.keys(HISTORY_LABEL_COLORS);
     const labelFilter = [labelBtn("__all__", null)]
       .concat(labels.map(l => labelBtn(l, HISTORY_LABEL_COLORS[l])))
@@ -472,58 +405,41 @@
           .sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""))
           .map(e => renderHistoryEntry(e, bestTs && e.timestamp === bestTs))
           .join("")
-      : `<div style="padding:80px 24px;text-align:center;color:#a89c8a;">
-           <div style="font-size:2.4em;margin-bottom:14px;opacity:0.35;letter-spacing:0.1em;">⌬</div>
-           <div style="font-size:1.05em;letter-spacing:0.02em;">
+      : `<div class="history-empty">
+           <div class="history-empty-mark" aria-hidden="true">⌬</div>
+           <div class="history-empty-text">
              ${entries.length ? "此條件下無紀錄。" : "尚無紀錄。下一杯就是第一筆。"}
            </div>
          </div>`;
 
     const filterStrip = `
-      <div style="position:sticky;top:0;background:#fdf7ef;padding:14px 28px 16px;
-                  border-bottom:1px solid #ece2d2;z-index:1;">
-        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
-          <span style="font-size:0.72em;color:#a89c8a;letter-spacing:0.18em;
-                       text-transform:uppercase;min-width:42px;font-weight:600;">標籤</span>
-          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0;">${labelFilter}</div>
+      <div class="history-filter-strip">
+        <div class="history-filter-row">
+          <span class="history-filter-key">標籤</span>
+          <div class="history-filter-options">${labelFilter}</div>
         </div>
-        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:8px;">
-          <span style="font-size:0.72em;color:#a89c8a;letter-spacing:0.18em;
-                       text-transform:uppercase;min-width:42px;font-weight:600;">星等</span>
-          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0;">${starFilter}</div>
+        <div class="history-filter-row">
+          <span class="history-filter-key">星等</span>
+          <div class="history-filter-options">${starFilter}</div>
         </div>
       </div>
     `;
 
     return `
-      <div id="history-modal" class="modal" style="display:flex;align-items:center;
-           justify-content:center;position:fixed;inset:0;background:rgba(58,52,46,0.42);
-           z-index:1000;backdrop-filter:blur(2px);">
-        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="history-modal-title"
-          style="max-width:760px;width:calc(100% - 32px);background:#fdf7ef;
-                 border-radius:14px;display:flex;flex-direction:column;max-height:90vh;
-                 box-shadow:0 24px 60px -20px rgba(58,52,46,0.25),
-                            0 4px 12px -4px rgba(58,52,46,0.12);
-                 overflow:hidden;">
-          <div class="modal-head" style="display:flex;justify-content:space-between;
-               align-items:flex-start;padding:24px 28px 18px;gap:16px;">
+      <div id="history-modal" class="history-modal">
+        <div class="history-modal-panel" role="dialog" aria-modal="true" aria-labelledby="history-modal-title">
+          <div class="history-modal-head">
             <div>
-              <span class="eyebrow" style="font-size:0.7em;color:#a89c8a;
-                    letter-spacing:0.2em;text-transform:uppercase;font-weight:600;">Brewing Journal</span>
-              <h2 id="history-modal-title" style="margin:6px 0 4px;color:#4e6b5b;
-                  font-size:1.5em;font-weight:500;letter-spacing:-0.005em;">我的沖煮歷史</h2>
-              <p style="margin:0;font-size:0.88em;color:#7a6e5f;">
+              <span class="history-eyebrow">§ LOGBOOK · 沖煮歷史</span>
+              <h2 id="history-modal-title" class="history-title">Brewing Lab Logbook</h2>
+              <p class="history-subtitle">
                 共 ${entries.length} 筆紀錄${filtered.length !== entries.length ? `（過濾後 ${filtered.length} 筆）` : ""}
               </p>
             </div>
-            <button id="history-modal-close" class="modal-close" type="button" aria-label="關閉"
-              style="background:none;border:none;font-size:1.6em;cursor:pointer;color:#a89c8a;
-                     line-height:1;padding:4px 10px;border-radius:6px;
-                     transition:background 0.15s, color 0.15s;">×</button>
+            <button id="history-modal-close" class="history-close" type="button" aria-label="關閉">×</button>
           </div>
           ${filterStrip}
-          <div id="history-modal-body"
-               style="overflow-y:auto;padding:0 28px;flex:1;min-height:0;">
+          <div id="history-modal-body" class="history-modal-body">
             ${body}
           </div>
         </div>
@@ -540,18 +456,6 @@
     modal.addEventListener("click", (e) => {
       if (e.target === modal) closeHistoryModal();
     });
-
-    const close = modal.querySelector("#history-modal-close");
-    if (close) {
-      close.addEventListener("mouseenter", () => {
-        close.style.background = "#fdf3ed";
-        close.style.color = "#bb5f2a";
-      });
-      close.addEventListener("mouseleave", () => {
-        close.style.background = "none";
-        close.style.color = "#a89c8a";
-      });
-    }
 
     modal.querySelectorAll("[data-history-label]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -584,15 +488,12 @@
         const form = btn.closest(".history-edit-form");
         if (!form) return;
         const current = Number(btn.dataset.editStar);
-        // Toggle off if clicking the same star that's the current max
         const allOn = form.querySelectorAll('.history-edit-star[aria-pressed="true"]');
         const isOnlyClickedAtCurrent = allOn.length === current && btn.getAttribute("aria-pressed") === "true";
         const target = isOnlyClickedAtCurrent ? 0 : current;
         form.querySelectorAll(".history-edit-star").forEach((b) => {
           const n = Number(b.dataset.editStar);
-          const on = n <= target;
-          b.setAttribute("aria-pressed", on ? "true" : "false");
-          b.style.color = on ? "#bb5f2a" : "#e4d7cb";
+          b.setAttribute("aria-pressed", n <= target ? "true" : "false");
         });
       });
     });
@@ -600,9 +501,6 @@
       btn.addEventListener("click", () => {
         const on = btn.dataset.editActive === "1";
         btn.dataset.editActive = on ? "0" : "1";
-        btn.style.background = on ? "transparent" : "#fdf3ed";
-        btn.style.borderColor = on ? "#d8c7b7" : "#bb5f2a";
-        btn.style.color = on ? "#6d6358" : "#bb5f2a";
       });
     });
     modal.querySelectorAll("[data-edit-save]").forEach((btn) => {
@@ -623,12 +521,12 @@
 
     if (!comment && stars === null && !tags.length) {
       msg.textContent = "至少填一項（星等 / 標籤 / 感想）";
-      msg.style.color = "var(--cinnabar, #bb5f2a)";
+      msg.style.color = "var(--amber)";
       return;
     }
     btn.disabled = true;
     msg.textContent = "儲存中…";
-    msg.style.color = "#7a6e5f";
+    msg.style.color = "var(--ink-mute)";
 
     try {
       const resp = await fetch("/api/feedback/update", {
@@ -638,14 +536,13 @@
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || "save failed");
-      // Update cache in place
       const idx = historyCache.entries.findIndex((e) => e.timestamp === ts);
       if (idx >= 0) historyCache.entries[idx] = data.entry;
       editingTimestamp = null;
       rerenderHistoryModal();
     } catch (err) {
       msg.textContent = `失敗：${err.message || err}`;
-      msg.style.color = "var(--cinnabar, #bb5f2a)";
+      msg.style.color = "var(--amber)";
       btn.disabled = false;
     }
   }
@@ -1162,7 +1059,7 @@
         const y = center + Math.sin(angle) * radius * ring;
         return `${x},${y}`;
       }).join(" ");
-      return `<polygon points="${points}" fill="none" stroke="#e4d7cb"></polygon>`;
+      return `<polygon points="${points}" fill="none" stroke="#dadce1"></polygon>`;
     }).join("");
 
     const spokes = keys.map((key, idx) => {
@@ -1172,13 +1069,13 @@
       const lx = center + Math.cos(angle) * (radius + 28);
       const ly = center + Math.sin(angle) * (radius + 28);
       return `
-        <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#d8c7b7"></line>
-        <text x="${lx}" y="${ly}" text-anchor="middle" font-size="13" fill="#6d6358">${key}</text>
+        <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#a3a7af"></line>
+        <text x="${lx}" y="${ly}" text-anchor="middle" font-size="12" fill="#3f434b" font-family="JetBrains Mono, monospace" font-weight="600" letter-spacing="0.06em">${key}</text>
       `;
     }).join("");
 
     const series = results.slice(0, 3).map((result, index) => {
-      const color = ["#bb5f2a", "#4e6b5b", "#8f4667"][index] || "#555";
+      const color = ["#1d4ed8", "#b45309", "#3f6b3a"][index] || "#3f434b";
       const points = keys.map((key, idx) => {
         const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
         const normalized = result.compounds_abs[key] / maxByKey[key];
@@ -1440,13 +1337,12 @@
 
     // Channel B: results is dict[label] → list. Render parallel cards.
     if (results && !Array.isArray(results) && typeof results === "object") {
-      setMobileControlsHidden(true, { scrollToResults: true });
+      scrollMobileToResults();
       renderChannelB(meta, results);
       return;
     }
 
     if (!results || !results.length) {
-      setMobileControlsHidden(false);
       resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
       updateRadarTrigger([]);
       return;
@@ -1492,14 +1388,6 @@
   document.querySelectorAll("[data-help-target]").forEach((button) => {
     button.addEventListener("click", () => showHelp(button.dataset.helpTarget));
   });
-
-  mobileControlsQuery.addEventListener("change", () => {
-    if (!mobileControlsQuery.matches) {
-      mobileControlsHidden = false;
-    }
-    syncControlsPanelState();
-  });
-
 
   resultsNode.addEventListener("click", (event) => {
     const selectTrigger = event.target.closest("[data-select-recipe]");
@@ -1567,20 +1455,20 @@
       return;
     }
   });
-  
-  controlsToggle.addEventListener("click", () => {
-    if (!mobileControlsQuery.matches) return;
-    setMobileControlsHidden(!mobileControlsHidden);
-  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    setMobileControlsHidden(true, { scrollToResults: true });
+    scrollMobileToResults();
     submitButton.disabled = true;
-    submitButton.textContent = "計算中...";
+    const submitLabelEl = submitButton.querySelector(".submit-label");
+    const submitArrowEl = submitButton.querySelector(".submit-arrow");
+    const originalLabel = submitLabelEl ? submitLabelEl.textContent : "";
+    const originalArrow = submitArrowEl ? submitArrowEl.textContent : "";
+    if (submitLabelEl) submitLabelEl.textContent = "COMPUTING · 計算中";
+    if (submitArrowEl) submitArrowEl.textContent = "…";
 
     const payload = Object.fromEntries(new FormData(form).entries());
     ["gh", "kh", "mg_frac", "top", "t_env", "altitude", "dose_min", "dose_max"].forEach((key) => {
@@ -1596,17 +1484,16 @@
       const data = await response.json();
       renderResults(data);
     } catch (error) {
-      setMobileControlsHidden(false);
       resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
       updateRadarTrigger([]);
     } finally {
       submitButton.disabled = false;
-      submitButton.textContent = "開始最佳化";
+      if (submitLabelEl) submitLabelEl.textContent = originalLabel;
+      if (submitArrowEl) submitArrowEl.textContent = originalArrow;
     }
   });
 
   showHelp("brewer");
-  syncControlsPanelState();
   mountHistoryTrigger();
   fetchHistory();
 })();

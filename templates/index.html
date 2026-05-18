@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AeroPress · 沖煮樣本台</title>
+    <title>AeroPress · 萃取分析實驗室</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600;6..72,700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/webapp.css') }}">
   </head>
   <body>
@@ -19,17 +19,17 @@
           <span class="mark-glyph" aria-hidden="true">⌬</span>
           <div class="mark-stack">
             <span class="mark-en">AEROPRESS</span>
-            <span class="mark-tw">沖煮樣本台 · BREWING JOURNAL</span>
+            <span class="mark-tw">EXTRACTION LAB · 萃取分析手稿</span>
           </div>
         </div>
         <div class="masthead-tools">
           <span class="masthead-meta">
-            <span class="meta-key">SESSION</span>
+            <span class="meta-key">SESSION ID</span>
             <span class="meta-val" id="session-stamp"></span>
           </span>
           <button id="history-trigger" type="button" class="masthead-btn">
             <span class="btn-glyph" aria-hidden="true">⊟</span>
-            <span class="btn-label">歷史評論</span>
+            <span class="btn-label">LOGBOOK · 歷史</span>
             <span class="history-count">(0)</span>
           </button>
         </div>
@@ -40,25 +40,14 @@
 
         <!-- ────── INPUTS / left ledger ────── -->
         <aside class="input-ledger" data-controls-panel>
-          <div class="ledger-tab" data-controls-toggle>
-            <span class="tab-no">№</span>
-            <span class="tab-name">INTAKE · 取樣參數</span>
-            <span class="tab-chevron" aria-hidden="true">▾</span>
-          </div>
-
           <div class="ledger-form" data-controls-body>
             <form id="optimize-form" autocomplete="off">
 
               <!-- group: vessel -->
               <section class="field-group">
-                <h3 class="group-title">
-                  <span class="group-no">01</span>
-                  <span class="group-name">VESSEL · 器皿</span>
-                </h3>
-
                 <div class="field" data-help-key="brewer">
                   <div class="field-head">
-                    <label for="brewer">器材尺寸 · BREWER</label>
+                    <label for="brewer">容量 · BREWER SIZE</label>
                     <button type="button" class="hint-button" data-help-target="brewer" aria-label="說明">?</button>
                   </div>
                   <div class="field-control">
@@ -87,14 +76,9 @@
 
               <!-- group: target -->
               <section class="field-group">
-                <h3 class="group-title">
-                  <span class="group-no">02</span>
-                  <span class="group-name">TARGET · 口感方向</span>
-                </h3>
-
                 <div class="field field-full" data-help-key="label">
                   <div class="field-head">
-                    <label for="label">SENSORY LABEL</label>
+                    <label for="label">風味目標 · FLAVOR TARGET</label>
                     <button type="button" class="hint-button" data-help-target="label" aria-label="說明">?</button>
                   </div>
                   <div class="field-control">
@@ -110,54 +94,51 @@
 
               <!-- group: water -->
               <section class="field-group">
-                <h3 class="group-title">
-                  <span class="group-no">03</span>
-                  <span class="group-name">WATER · 水質</span>
-                </h3>
+                <div class="field-cluster">
+                  <div class="field field-full" data-help-key="preset">
+                    <div class="field-head">
+                      <label for="preset">水質 · WATER PRESET</label>
+                      <button type="button" class="hint-button" data-help-target="preset" aria-label="說明">?</button>
+                    </div>
+                    <div class="field-control">
+                      <select id="preset" name="preset">
+                        <option value="">手動輸入 · MANUAL</option>
+                        {% for key, preset in presets.items() %}
+                        <option value="{{ key }}">{{ preset.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                  </div>
 
-                <div class="field field-full" data-help-key="preset">
-                  <div class="field-head">
-                    <label for="preset">PRESET</label>
-                    <button type="button" class="hint-button" data-help-target="preset" aria-label="說明">?</button>
-                  </div>
-                  <div class="field-control">
-                    <select id="preset" name="preset">
-                      <option value="">手動輸入 · MANUAL</option>
-                      {% for key, preset in presets.items() %}
-                      <option value="{{ key }}">{{ preset.name }}</option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                </div>
-
-                <div class="field-row">
-                  <div class="field" data-help-key="gh">
-                    <div class="field-head">
-                      <label for="gh">GH</label>
-                      <button type="button" class="hint-button" data-help-target="gh" aria-label="說明">?</button>
+                  <div class="field-row field-row-sub">
+                    <div class="field" data-help-key="gh">
+                      <div class="field-head">
+                        <label for="gh">GH</label>
+                        <button type="button" class="hint-button" data-help-target="gh" aria-label="說明">?</button>
+                      </div>
+                      <div class="field-control">
+                        <input id="gh" name="gh" type="number" step="0.1" value="50">
+                        <span class="field-unit">ppm</span>
+                      </div>
                     </div>
-                    <div class="field-control">
-                      <input id="gh" name="gh" type="number" step="0.1" value="50">
-                      <span class="field-unit">ppm</span>
+                    <div class="field" data-help-key="kh">
+                      <div class="field-head">
+                        <label for="kh">KH</label>
+                        <button type="button" class="hint-button" data-help-target="kh" aria-label="說明">?</button>
+                      </div>
+                      <div class="field-control">
+                        <input id="kh" name="kh" type="number" step="0.1" value="30">
+                        <span class="field-unit">ppm</span>
+                      </div>
                     </div>
-                  </div>
-                  <div class="field" data-help-key="kh">
-                    <div class="field-head">
-                      <label for="kh">KH</label>
-                      <button type="button" class="hint-button" data-help-target="kh" aria-label="說明">?</button>
-                    </div>
-                    <div class="field-control">
-                      <input id="kh" name="kh" type="number" step="0.1" value="30">
-                      <span class="field-unit">ppm</span>
-                    </div>
-                  </div>
-                  <div class="field" data-help-key="mg_frac">
-                    <div class="field-head">
-                      <label for="mg_frac">Mg 比例</label>
-                      <button type="button" class="hint-button" data-help-target="mg_frac" aria-label="說明">?</button>
-                    </div>
-                    <div class="field-control">
-                      <input id="mg_frac" name="mg_frac" type="number" step="0.01" min="0" max="1" value="0.40">
+                    <div class="field" data-help-key="mg_frac">
+                      <div class="field-head">
+                        <label for="mg_frac">MG RATIO</label>
+                        <button type="button" class="hint-button" data-help-target="mg_frac" aria-label="說明">?</button>
+                      </div>
+                      <div class="field-control">
+                        <input id="mg_frac" name="mg_frac" type="number" step="0.01" min="0" max="1" value="0.40">
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -165,46 +146,38 @@
 
               <!-- group: range -->
               <section class="field-group">
-                <h3 class="group-title">
-                  <span class="group-no">04</span>
-                  <span class="group-name">RANGE · 搜尋範圍</span>
-                </h3>
+                <div class="field-row field-row-half">
+                  <div class="field" data-help-key="top">
+                    <div class="field-head">
+                      <label for="top">TOP N</label>
+                      <button type="button" class="hint-button" data-help-target="top" aria-label="說明">?</button>
+                    </div>
+                    <div class="field-control">
+                      <input id="top" name="top" type="number" min="1" max="10" value="3">
+                    </div>
+                  </div>
 
-                <div class="field" data-help-key="top">
-                  <div class="field-head">
-                    <label for="top">TOP N</label>
-                    <button type="button" class="hint-button" data-help-target="top" aria-label="說明">?</button>
-                  </div>
-                  <div class="field-control">
-                    <input id="top" name="top" type="number" min="1" max="10" value="3">
-                  </div>
-                </div>
-
-                <div class="field field-full" data-help-key="dose_range">
-                  <div class="field-head">
-                    <label>豆量區間 · DOSE</label>
-                    <button type="button" class="hint-button" data-help-target="dose_range" aria-label="說明">?</button>
-                  </div>
-                  <div class="field-control field-control-range">
-                    <input id="dose_min" name="dose_min" type="number" step="0.5" min="0" placeholder="min">
-                    <span class="range-dash">—</span>
-                    <input id="dose_max" name="dose_max" type="number" step="0.5" min="0" placeholder="max">
-                    <span class="field-unit">g</span>
+                  <div class="field" data-help-key="dose_range">
+                    <div class="field-head">
+                      <label>DOSE</label>
+                      <button type="button" class="hint-button" data-help-target="dose_range" aria-label="說明">?</button>
+                    </div>
+                    <div class="field-control field-control-range">
+                      <input id="dose_min" name="dose_min" type="number" step="0.5" min="0" placeholder="min">
+                      <span class="range-dash">—</span>
+                      <input id="dose_max" name="dose_max" type="number" step="0.5" min="0" placeholder="max">
+                      <span class="field-unit">g</span>
+                    </div>
                   </div>
                 </div>
               </section>
 
               <!-- group: env -->
               <section class="field-group">
-                <h3 class="group-title">
-                  <span class="group-no">05</span>
-                  <span class="group-name">AMBIENT · 環境</span>
-                </h3>
-
-                <div class="field-row">
+                <div class="field-row field-row-half">
                   <div class="field" data-help-key="t_env">
                     <div class="field-head">
-                      <label for="t_env">環境溫</label>
+                      <label for="t_env">T-ENV</label>
                       <button type="button" class="hint-button" data-help-target="t_env" aria-label="說明">?</button>
                     </div>
                     <div class="field-control">
@@ -214,7 +187,7 @@
                   </div>
                   <div class="field" data-help-key="altitude">
                     <div class="field-head">
-                      <label for="altitude">海拔</label>
+                      <label for="altitude">ALTITUDE</label>
                       <button type="button" class="hint-button" data-help-target="altitude" aria-label="說明">?</button>
                     </div>
                     <div class="field-control">
@@ -246,12 +219,12 @@
           <div id="results" class="specimen-body">
             <div class="empty-state">
               <div class="empty-mark" aria-hidden="true">⊕</div>
-              <div class="empty-title">AWAITING FIRST SAMPLE</div>
-              <div class="empty-tw">尚未取樣</div>
+              <div class="empty-title">NO SAMPLE LOADED</div>
+              <div class="empty-tw">尚未載入樣本</div>
               <p class="empty-instructions">
-                左側填妥取樣參數 — 焙度、口感方向、水質 — 然後按下
+                於左側登錄取樣參數 — 焙度、口感方向、水質 — 後執行
                 <span class="empty-cmd">[ RUN · 最佳化 → ]</span>
-                建立第一筆沖煮樣本。
+                以產生第一筆萃取分析結果。
               </p>
             </div>
           </div>
@@ -261,7 +234,7 @@
 
       <footer class="ledger-foot">
         <span class="foot-mark">⌬</span>
-        <span class="foot-line">a personal coffee laboratory · printed in code</span>
+        <span class="foot-line">a personal coffee extraction lab · ver. 8.1 · printed in code</span>
       </footer>
     </main>
 
@@ -270,8 +243,8 @@
       <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="radar-modal-title">
         <div class="modal-head">
           <div>
-            <span class="eyebrow">FLAVOR RADAR · 風味雷達</span>
-            <h2 id="radar-modal-title">六向量風味比較</h2>
+            <span class="eyebrow">§ FLAVOR RADAR · 風味雷達</span>
+            <h2 id="radar-modal-title">六向量化合物比對</h2>
             <p class="muted">前三筆樣本在 AC / SW / PS / CA / CGA / MEL 六個向量上的相對強度。</p>
           </div>
           <button id="radar-close" class="modal-close" type="button" aria-label="關閉">×</button>
