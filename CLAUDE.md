@@ -9,9 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 待辦任務 / phase 歷史 / 評分鑑別度改革紀錄 | [`TASKS.md`](TASKS.md) |
 | 泡法時間軸 / 各時間參數定義 / 三錨點時間圖 | [`BREW_PROTOCOL.md`](BREW_PROTOCOL.md) |
 | Data flow / Grid search / 化合物模型 / 評分公式細節 / 感知前處理 / Key files / Water 參數 / 修改方向表 | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
-| **進行中 — Phase 10 感官重構**（架構、6 感官軸、執行步驟）| [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md) |
+| **進行中 — Phase 10 感官重構**（架構、訓練資料、8 步執行步驟）| [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md) |
+| **Phase 10 Step 1 — 6 感官軸定案**（屬性表、軸定義、湧現概念）| [`docs/PHASE10_STEP1_SENSORY_AXES.md`](docs/PHASE10_STEP1_SENSORY_AXES.md) |
 
-> **🚧 進行中：Phase 10 — 感官重新奠基。** 模型從「6 化合物」改為「6 感官軸」。藍圖已定案於 [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md)（架構、訓練資料、8 步執行步驟）。舊化合物模型凍結於 git branch `compound-model-legacy`。**程式尚未開始** — 下一步是該文件 §11 的 **Step 1**（定案 6 感官軸）。下方「僅剩待辦 / 目前狀態」描述的是 Phase 10 之前的 Phase 8 狀態,Phase 10 落地後一併改寫。
+> **🚧 進行中：Phase 10 — 感官重新奠基。** 模型從「6 化合物」改為「6 感官軸」。藍圖見 [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md)（架構、訓練資料、8 步執行步驟）。舊化合物模型凍結於 git branch `compound-model-legacy`。**Step 1 完成（2026-05-21）** — 6 感官軸定案 = `acidity`/`sweetness`/`body`/`bitterness`/`astringency`/`roast`,見 [`docs/PHASE10_STEP1_SENSORY_AXES.md`](docs/PHASE10_STEP1_SENSORY_AXES.md)。**程式仍未開始** — 下一步是 §11 的 **Step 2**（建 Layer 2 風味模型 `f(TDS,EY,roast,溫度,研磨)→6 軸`）。下方「僅剩待辦 / 目前狀態」描述的是 Phase 10 之前的 Phase 8 狀態,Phase 10 落地後一併改寫。
 
 **僅剩待辦：**
 - **Phase 9 — Feedback UI（webapp 卡片內 comment + tags + stars，append `data/feedback.jsonl`）**；refine 由 Claude 對話讀 jsonl 做語意分析、提建議、編輯 `data/labels.json`，不寫 `refine_label.py`。Schema 規格見 [`docs/FEEDBACK_FORMAT.md`](docs/FEEDBACK_FORMAT.md)

@@ -37,19 +37,21 @@
 
 ## 3. 架構
 
+> **2026-05-21 營運決定 — 無折射儀。** 使用者不使用折射儀 → TDS/EY 永遠是 Layer 1 算出的**內部潛變數**,從不實測。原「評估已沖的杯時 input 實測 TDS、旁路 Layer 1」的設計**取消** —— 推薦與評估都走完整 `旋鈕 → Layer 1 → Layer 2`。Layer 1 因此一直在迴路裡,其準度更關鍵（規格見 §6）。feedback 維持定性（見 §10）。
+
 ```
 knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 (溫度/   │     knob→TDS/EY 粗估           │
- 研磨/   │     會被實測修正               ├──→ [Layer 2 風味模型] ──→ 6 感官軸 ──→ [評分]
+ 研磨/   │   (內部潛變數,無實測)          ├──→ [Layer 2 風味模型] ──→ 6 感官軸 ──→ [評分]
  dose/   └──→ 溫度, 研磨 ─────────────────┘     主軸: TDS / EY / roast        ↑
  水量/時間)        (次要殘差,直連)              次軸: 溫度, 研磨            label IDEAL
                                                                            (6 軸感官目標)
 
-評估已沖的杯：TDS / EY 直接用「實測值」當 input，整段薄 Layer 1 被旁路。
+無折射儀 → TDS/EY 不實測;推薦與評估都走完整 Layer 1。
 ```
 
-- **薄 Layer 1（knob → TDS/EY）** —— 只在「推薦新配方」時需要，而且只要大概對；使用者沖完會實測，真正進評分的是實測值。
-- **中樞 TDS / EY** —— 唯一在家量得到（TDS 折射儀；EY = TDS% × 出杯重 ÷ 粉重）、又有公開風味資料的量。
+- **薄 Layer 1（knob → TDS/EY）** —— 推薦配方與評估已沖杯都會用到（無實測可旁路）。物理結構化、外觀即黑箱,只要粗估;規格見 §6。
+- **中樞 TDS / EY** —— 公開風味資料（cotter / BCC）所在的座標軸,也是把使用者旋鈕接上那些資料的樞紐。本系統不實測它,它是 Layer 1 的內部輸出。
 - **Layer 2（TDS/EY → 風味）** —— 系統的核心，可訓練、method-agnostic。
 - **評分** —— 預測的 6 軸 vs label 的 6 軸 IDEAL，sensory-space 距離。
 
@@ -75,7 +77,10 @@ knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 
 ---
 
-## 5. 6 感官軸（暫定 —— Step 1 從資料定案）
+## 5. 6 感官軸（✅ 已定案 —— 見 [`PHASE10_STEP1_SENSORY_AXES.md`](PHASE10_STEP1_SENSORY_AXES.md)）
+
+> **Step 1 完成（2026-05-21）：** 6 軸鎖定 = `acidity` / `sweetness` / `body` / `bitterness` / `astringency` / `roast`。
+> 第 6 軸取 `astringency`（使用者裁決）、不加第 7 軸。完整定案論證、屬性表、湧現概念區分見 Step 1 交付文件。下表為原暫定版,保留供對照。
 
 對齊 SCA cupping form / DA panel 詞彙。暫定：
 
@@ -88,20 +93,22 @@ knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 | `roast` | 焙烤感 | roasted, smoky, burnt | MEL |
 | `astringency` | 澀 / 粗糙 | astringent, paper | （無乾淨對應）|
 
-**待定案問題（Step 1 解決）：**
-- 第 6 軸取 `astringency` 還是 `clarity`（乾淨度）？`astringency` 是 DA panel 直接量的、可訓練；`clarity`/clean cup 是 cupping 品質分，較難訓練。暫定 `astringency`。
-- 花香 / 茶感 / 果香（floral / black tea / fruity）是**風味性格**，不是強度軸。tim label 很在意「茶感」。選項：(a) 維持 6 軸，茶感由「低 roast + 高 acidity + 低 astringency」的位置隱含表達；(b) 加第 7 軸 `aroma-character`。暫定 (a)，Step 1 看 Dryad 資料的屬性結構再定。
+**待定案問題 —— ✅ Step 1 已解決（見 [`PHASE10_STEP1_SENSORY_AXES.md`](PHASE10_STEP1_SENSORY_AXES.md) §5–§7）：**
+- 第 6 軸 → **`astringency`**（使用者裁決）。`astringent` 是 BCC/TEMP/IMM 三份研究都量測的 DA 屬性、可訓練；`clarity` 在三份都無對應屬性。
+- 第 7 軸 `aroma-character` → **不加,維持 6 軸**。茶感/花果香是 TDS/EY 空間裡的「位置」（TEMP 資料:black tea 唯一隨 TDS↓/EY↑）,由 6 軸隱含表達 = 原選項 (a)。
+- 補充更正:`clarity`（乾淨度）與 `muted`（香味淡 / 低香氣強度）是**兩個不同概念**,不可混用;連同 `aroma-character` 三者都不是軸、各有獨立湧現路徑（Step 1 文件 §7）。
 
 ---
 
 ## 6. 薄 Layer 1 規格（knob → TDS/EY）
 
-取代現行 `ey_model.py` + `tds_model.py` + `compounds.py` 的全套機械。依平衡脫附 / BCC 框架：
+取代現行 `ey_model.py` + `tds_model.py` + `compounds.py` 的全套機械。**薄、物理結構化、外觀即黑箱** —— 使用者只見「旋鈕進、TDS/EY 出」,內部是少數參數的平衡脫附曲線：
 
-- `EY ≈ K · E_max` —— `K` 隨 roast / 溫度 / 研磨 / 時間 緩慢變化（浸泡在平衡態近似與 brew ratio 無關；愛樂壓短浸泡屬動力學區，brew ratio 仍有作用，需保留一個 dose 項）。
+- `EY ≈ K · E_max` —— `K` 隨 roast / 溫度 / 研磨 / 浸泡時間 緩慢變化,自帶單調性 + 飽和（越熱 / 越細 / 越久 → 越多,但會飽和）。`容器`(standard/XL) 進一個小 offset 項;愛樂壓短浸泡屬動力學區,保留一個 dose 項。
 - `TDS ≈ EY × dose ÷ 出杯重`。
-- 用現有的 Layer 1 錨點（Hoffman/April/Champion 的**實測 TDS**）校 `K` 與少數常數。
-- **設計要求：只要粗估。** 推薦配方時給使用者一個起點；使用者沖完實測 TDS（+ 秤出杯重得 EY），評估時用實測值。Layer 1 的誤差不會污染風味評分。
+- 約 5 個自由參數,用現有 Layer 1 錨點（Hoffman/April/Champion/Hedrick 的**已知 TDS**）校準。
+- **為什麼是物理結構、不是學出來的黑箱（2026-05-21 定）：** 學一個自由黑箱需要 (旋鈕 → 實測 TDS) 訓練配對;無折射儀則一個都產不出（文獻錨點是 drip / EK43、cotter 是滴漏機,都不是使用者的愛樂壓 + ZP6）。6 個 input × 約 5 個可用點 → 自由黑箱必 overfit（完美命中錨點、其餘全錯）。平衡脫附式只有 ~5 參數且自帶單調 + 飽和 → 5 個錨點剛好釘得動。**結構替代缺的資料。** 受「單調 + 飽和」約束的黑箱本就會收斂成這條物理曲線。
+- **設計要求：只要粗估。** Layer 1 永遠在迴路裡（無實測可旁路,見 §3）—— 它的輸出是內部潛變數,只需物理上合理、單調。日後若使用者取得折射儀並記錄 20–30 杯實測,可改為真正學出來的黑箱。
 
 ---
 
@@ -152,22 +159,14 @@ knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 
 ---
 
-## 10. feedback schema 擴充
+## 10. feedback schema（無折射儀 —— 維持現狀）
 
-`docs/FEEDBACK_FORMAT.md` 的 `recipe` 區塊加實測欄位（仍 append-only、向後相容、舊紀錄欄位為 `null`）：
+> **2026-05-21 改：** 使用者決定不使用折射儀。原規劃「`recipe` 區塊加實測 TDS / 出杯重欄位」**取消**。
 
-```json
-"recipe": {
-  "temp": 98, "dial": 3.9, "dose": 28.0, "steep_sec": 60,
-  "tds": 1.50,            // 改為「實測 TDS」（折射儀），無實測則 null
-  "beverage_g": 240,      // 新增：出杯重（秤），用來算實測 EY
-  "ey": 18.6,             // 由實測 tds × beverage_g ÷ dose 得；無實測則 null
-  "score": 95.5
-}
-```
-
-- webapp 沖煮回饋表單加「實測 TDS」「出杯重」兩個欄位（optional 但強烈鼓勵）。
-- 有實測值的紀錄 = 對「你的豆 / 你的器具」的真實 (TDS,EY)→感官 訓練點。
+- `docs/FEEDBACK_FORMAT.md` 的 schema **不變**：`recipe` 區塊的 `tds` / `ey` 維持**模型預測值**（與 `score` 同源,由 Layer 1 算出）。
+- feedback 的訓練價值是**定性的**：`stars` + `comment` + `tags` —— 對 6 感官軸與 label IDEAL 的精修訊號。Claude 在對話中讀 `feedback.jsonl` 做語意分析（Phase 9 流程）。
+- 「太濃 / 偏薄 / 剛好」這類評語 = 定性的強度訊號,框得出強度方向,不需數字。
+- webapp 沖煮回饋表單**不**加實測欄位。
 
 ---
 
@@ -176,7 +175,7 @@ knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 | # | 步驟 | 主要檔案 |
 |---|---|---|
 | 0 | ✅ 切 `compound-model-legacy` branch 凍結舊模型 | （git）|
-| 1 | 下載 Dryad 資料、整理 BCC 屬性表，定案 6 感官軸 | docs |
+| 1 | ✅ 整理 BCC 屬性表、定案 6 感官軸 → [`PHASE10_STEP1_SENSORY_AXES.md`](PHASE10_STEP1_SENSORY_AXES.md)；取得 UC Davis 27-cell 因子網格 `data/phase10_training/cotter_dataset.csv`（浸泡 DA raw 資料未公開,改靠 feedback）| docs |
 | 2 | 建 Layer 2 `f(TDS,EY,roast,溫度,研磨)→6 軸`（回歸/查表）| `models/`（新檔）|
 | 3 | 重寫 `data/labels.json` —— IDEAL 改 6 感官軸 | `data/labels.json` |
 | 4 | 薄 Layer 1（平衡脫附式 knob→TDS/EY）| `models/`，退役 `ey_model`/`tds_model`/`compounds` |
@@ -203,14 +202,15 @@ knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 **收益：**
 - 模型名實相符 —— 表徵就是使用者實際感知與標記的東西。
 - 落在**有公開訓練資料**的軸上；使用者的 feedback 直接可用、每杯都是訓練點。
-- **tim bug 預期自然消解：** 評估 tim ⭐2 杯時直接 input 實測 TDS 1.50 → Layer 2 給高 `roast` / 低 `sweetness` → 偏離 tim IDEAL → 低分，對上舌頭。壞掉的 light 焙 EY 預測被整段旁路。（待重構後驗證。）
+- **tim bug 預期由 6 軸表徵修好：** 高 TDS + 淺焙 → Layer 2 給高 `roast` / 高 `bitterness` → 偏離 tim 低-roast IDEAL → 低分,對上舌頭。修法是新表徵本身,與「實測 vs 預測」無關（Layer 1 對該杯預測的 TDS≈1.50 本就大致對）。**無折射儀的代價：失去安全網** —— 日後 Layer 1 若對某杯淺焙預測失準,沒有實測值能當場抓到,只能靠 tim feedback 定性校。（待重構後驗證。）
 - Layer 1 大幅簡化（平衡脫附論文發現溫度/研磨對 TDS/EY 幾乎無感，舊那套精細 Arrhenius 從未被驗證）。
 
 **未解問題（Step 1 起逐一處理）：**
-- 6 軸最終定案、第 6 軸 `astringency` vs `clarity`、要不要第 7 軸 `aroma-character`。
+- ~~6 軸最終定案、第 6 軸 `astringency` vs `clarity`、要不要第 7 軸 `aroma-character`~~ → ✅ Step 1 已解決。
+- ~~Dryad 浸泡 raw 資料下載~~ → 該資料集未公開（見 Step 1 文件 §9）;改用 `data/phase10_training/cotter_dataset.csv`。
 - drip 與浸泡資料的加權方式。
 - `tds_prefer` 是否確定被 IDEAL 吸收。
-- 實測 EY 需使用者秤出杯重 —— webapp UX 流程。
+- 無折射儀 → Layer 1 淺焙準度無實測安全網,靠 tim feedback 定性校（見上）。
 
 ---
 
