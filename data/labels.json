@@ -44,7 +44,7 @@
   },
   "tim": {
     "ideal": {"AC": 0.24, "SW": 0.37, "PS": 0.23, "CA": 0.09, "CGA": 0.04, "MEL": 0.03},
-    "tds_prefer": 1.50,
+    "tds_prefer": 1.44,
     "dial_prefer": 4.0,
     "description": "Tim Wendelboe Nordic 真淺焙風（多汁活潑酸質、茶感 body、極乾淨無焙烤雜味）。源自 14g / 200ml / 98°C / 細濾紙磨 / 60s 浸泡 / 正置插活塞封壓。",
     "bullseye_anchor": "Tim Wendelboe Filter"
