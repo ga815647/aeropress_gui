@@ -4,10 +4,10 @@ import argparse
 import sys
 
 from models.labels import label_names
-from optimizer import explore_bracket, optimize, optimize_parallel
+from optimizer import optimize, optimize_parallel
 from output.export import export_csv, export_json
 from output.radar import plot_radar
-from output.terminal import print_explore_bracket, print_terminal
+from output.terminal import print_terminal
 from runtime import apply_environment_settings, resolve_water_profile
 
 
@@ -33,14 +33,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sensory label (e.g. balanced / acid-forward / sweet-body / coarse-modern). "
              "Omit to run Channel B — Top-1 per label, side-by-side.",
     )
-    parser.add_argument(
-        "--explore",
-        default=None,
-        metavar="LABEL",
-        help="Exploration mode: print a calibration bracket for LABEL — the "
-             "optimum plus single-axis temp/dose offsets. Brew & rate the set "
-             "to accumulate feedback with a usable gradient. Terminal output only.",
-    )
     parser.add_argument("--preset", default=None)
     parser.add_argument("--gh", type=float, default=None, help="GH ppm")
     parser.add_argument("--kh", type=float, default=None, help="KH ppm")
@@ -64,21 +56,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     if source == "default":
         print("未指定水質，使用預設 GH=50 / KH=30 / mg_frac=0.40。", file=sys.stderr)
-
-    if args.explore:
-        if args.explore not in label_names():
-            print(f"未知 label '{args.explore}'。可用 labels: {label_names()}", file=sys.stderr)
-            return 2
-        bracket = explore_bracket(
-            roast_code=args.roast,
-            brewer_size=args.brewer,
-            water_gh=water_gh,
-            water_kh=water_kh,
-            water_mg_frac=water_mg_frac,
-            label=args.explore,
-        )
-        print_explore_bracket(bracket, args.roast, args.explore, water_gh, water_kh)
-        return 0
 
     if args.label:
         if args.label not in label_names():

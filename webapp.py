@@ -18,7 +18,7 @@ from models.feedback import (
 )
 from models.labels import get_label, ideal_abs as label_ideal_abs, label_names
 from models.scoring import compute_actual_abs
-from optimizer import explore_bracket, optimize, optimize_parallel
+from optimizer import optimize, optimize_parallel
 from runtime import apply_environment_settings, resolve_water_profile
 
 UI_HIDDEN_LABELS = {"sweet-body"}
@@ -218,46 +218,6 @@ def create_app() -> Flask:
                     "flavor_max": flavor_max,
                 },
                 "results": results_serialized,
-            }
-        )
-
-    @app.post("/api/explore")
-    def explore_route():
-        """Calibration bracket for one label — optimum + single-axis offsets."""
-        payload = request.get_json(silent=True) or {}
-        apply_environment_settings(
-            float(payload.get("t_env") or 25.0),
-            float(payload.get("altitude") or 0.0),
-        )
-        water_gh, water_kh, water_mg_frac, _ = resolve_water_profile(
-            gh=payload.get("gh"),
-            kh=payload.get("kh"),
-            mg_frac=payload.get("mg_frac"),
-            preset=payload.get("preset"),
-        )
-        roast_code = str(payload.get("roast", "medium"))
-        ui_labels = _ui_label_names()
-        label = payload.get("label") or "balanced"
-        if label not in ui_labels:        # explore needs a concrete label
-            label = "balanced" if "balanced" in ui_labels else ui_labels[0]
-        bracket = explore_bracket(
-            roast_code=roast_code,
-            brewer_size=payload.get("brewer", "xl"),
-            water_gh=water_gh,
-            water_kh=water_kh,
-            water_mg_frac=water_mg_frac,
-            label=label,
-        )
-        return jsonify(
-            {
-                "meta": {
-                    "roast_code": roast_code,
-                    "roast_name": constants.ROAST_TABLE[roast_code]["name"],
-                    "label": label,
-                    "water_gh": water_gh,
-                    "water_kh": water_kh,
-                },
-                "bracket": bracket,
             }
         )
 

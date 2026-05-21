@@ -57,22 +57,3 @@ def test_webapp_parser_exposes_lan_by_default() -> None:
     assert args.host == "0.0.0.0"
     assert args.port == 8000
     assert args.debug is True
-
-
-def test_explore_route() -> None:
-    app = create_app()
-    client = app.test_client()
-    resp = client.post(
-        "/api/explore",
-        json={
-            "brewer": "xl", "roast": "medium_light", "label": "balanced",
-            "gh": 50, "kh": 30, "mg_frac": 0.40, "t_env": 25, "altitude": 0,
-        },
-    )
-    assert resp.status_code == 200
-    data = resp.get_json()
-    assert data["meta"]["label"] == "balanced"
-    bracket = data["bracket"]
-    assert len(bracket) >= 3
-    assert bracket[0]["bracket"] == "optimum"
-    assert all("score" in r and "tds" in r for r in bracket)

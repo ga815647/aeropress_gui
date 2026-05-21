@@ -95,29 +95,3 @@ def print_terminal(results, roast_code: str, water_gh: float, water_kh: float) -
     print("════════════════════════════════════════════════════════\n")
     for i, r in enumerate(results, start=1):
         _print_single(r, roast_code, i)
-
-
-def print_explore_bracket(bracket, roast_code: str, label: str,
-                          water_gh: float, water_kh: float) -> None:
-    """Render an explore_bracket() set — a compact single-axis calibration plan."""
-    if not bracket:
-        print("無可用結果。")
-        return
-
-    roast_name = constants.ROAST_TABLE[roast_code]["name"]
-    print("════════════════════════════════════════════════════════")
-    print(f" AeroPress 探索 bracket — label「{label}」")
-    print(f" 機型：{bracket[0].get('brewer', '—')}  |  烘焙度：{roast_name} ({roast_code})")
-    print(f" 水質：GH {water_gh:g} ppm  /  KH {water_kh:g} ppm")
-    print(" 用途：這幾杯都泡來、各自評分 —— 單軸刻意偏移，讓回饋形成可校準的梯度")
-    print("════════════════════════════════════════════════════════\n")
-    print("  bracket            水溫    刻度  豆量     浸泡    預測 TDS / EY / 模型分")
-    print("  " + "─" * 62)
-    for r in bracket:
-        print(f"  {r['bracket']:<17s}{r['temp']:>4.0f}°C  {r['dial']:>4.1f}  "
-              f"{r['dose']:>5.1f}g  {_fmt_mmss(r['steep_sec']):>6s}   "
-              f"{r['tds']:.3f}  {r['ey']:>5.1f}  {r['score']:>5.1f}")
-    print()
-    print("  提示：模型分高 ≠ 你會喜歡。重點是「你的評分」在這幾杯之間的高低差 ——")
-    print("        那個梯度才是能拿來校準 data/labels.json 的訊號。")
-    print()
