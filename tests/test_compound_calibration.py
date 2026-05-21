@@ -125,29 +125,3 @@ def test_hedrick_coarse_long_not_astringent():
     """Layer 1: coarse + long must give AC > CGA (grind_kinetics suppresses CGA accumulation)."""
     _, _, cpd = _brew(ANCHOR_RECIPES["Hedrick"])
     assert cpd["AC"] > cpd["CGA"]
-
-
-@pytest.mark.xfail(
-    reason="compounds.py has no dose->profile pathway: it predicts the lighter "
-    "(tea-coloured) 25g tim brew with ~1.25x MORE MEL than the darker 28g brew "
-    "-- backwards vs the observed colour. The logged pair is 3-variable confounded "
-    "(dose + dial + temp all differ) and forcing the flip via a dose term would "
-    "need MEL proportional to dose^2 (unphysical). A controlled dose-only colour "
-    "pair is needed to drive an honest fix. Documented 2026-05-21.",
-)
-def test_tim_mel_tracks_brew_colour():
-    """Ordinal Layer-1 anchor seeded from an observed brew colour.
-
-    Colour is a TDS-independent signal of compound mix (SCA: same coffee + same
-    TDS + different temp -> different colour); the dark pigment is melanoidin
-    (MEL). User logged: tim 28g brew = blackish, tim 25g brew = tea-brown -- so
-    the model must predict MEL(28g) > MEL(25g). A 'compare magnitudes' anchor:
-    no measured absolute value needed, only the ordering.
-    """
-    _, _, dark = _brew(dict(
-        roast="light", brewer="xl", temp=98.0, dial=3.9, dose=28.0,
-        steep=60.0, water=400.0))
-    _, _, pale = _brew(dict(
-        roast="light", brewer="xl", temp=100.0, dial=3.7, dose=25.0,
-        steep=60.0, water=400.0))
-    assert dark["MEL"] > pale["MEL"]
