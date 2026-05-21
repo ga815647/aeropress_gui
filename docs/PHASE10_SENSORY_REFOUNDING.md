@@ -7,6 +7,30 @@
 
 ---
 
+## 0. 修訂紀錄
+
+### 2026-05-21 — `label` 概念移除（藍圖等級變更，使用者裁決）
+
+**決策：整個 `label` 概念移除。** Layer 2 的風味目標從「N 個並列的 label 島（`balanced` / `acid-forward` / `sweet-body` / `coarse-modern` / `tim`）」改成「**每個 roast 一個 6 感官軸 IDEAL**」（`light` / `medium_light` / `medium` / `moderately_dark`）。
+
+**理由（摘要；完整論證見 [`PHASE10_STEP3_LABELS.md`](PHASE10_STEP3_LABELS.md) §2）：**
+- 一台 AeroPress + 一支豆 + 一個焙度 = 一個固定設定；固定設定下「好喝只會有一種」，不是 N 個並列目標。
+- 舊 5 個 label 掛在**異質的錨點 / 不同豆**上（Hoffman/April/Champion 同支 El Tambo，Hedrick/tim 是別的豆）—— label 一半在描述「不同豆/焙度」，不是「同一支豆的 N 種風味」。
+- 使用者實際把 `label` 當「我在泡哪支豆」用（`feedback.jsonl` 的 label 與 roast 一一對應）—— label 在做 `roast` 該做的事。
+- Step 3 v4（5-label）文件曾記錄的彆扭（`sweet-body` 的 sweetness 軸不凸、`acid-forward` 的 acidity 軸絕對值第二低）是「硬從異質錨點擠 5 個並列 label」的產物 —— 移除 label 後自動消失。
+
+**保留：** `roast` 仍重要（另一個使用者明示：「不同焙度偏好不同」）→ 收斂成 **per-roast** IDEAL，不是單一全域 IDEAL。
+**失去：** 「同支豆刻意調風味」（三錨點文章的前提）—— 使用者為自己的單人系統砍掉此一般性；optimizer 的 Top-N 仍給鄰近變化版。
+
+**本修訂覆寫下列章節（下文未逐句改寫，以本 §0 為準）：**
+- **§7.2 評分**：改成 `roast → IDEAL(roast) → sensory-space 距離`，無 `label` 參數。
+- **§7.3 `labels.json` 重寫**：改成 per-roast（Step 3 已落地 → [`PHASE10_STEP3_LABELS.md`](PHASE10_STEP3_LABELS.md)，`data/labels.json` schema v5）。
+- **§9 原則 #5**：「Layer 2 = 感官 label 島」→「Layer 2 = per-roast 感官 IDEAL」。原則 #5 的核心（Layer 1 物理校準錨點 vs Layer 2 感官目標，角色分離）**仍成立**。
+- **§11 步驟表**：Step 3 = per-roast IDEAL（已完成）；Step 5 額外移除 `--label` CLI flag、`optimizer.optimize_parallel()`、Channel A/B，並改名 `data/labels.json` + `models/labels.py`；Step 6 移除 webapp label 下拉，`feedback.jsonl` 的 `label` 欄位變 vestigial（既有紀錄保留為歷史）。
+- §2 表的「6 感官軸」「薄 Layer 1」「TDS/EY 中樞」皆不變；§5 6 軸不變。
+
+---
+
 ## 1. 動機 —— 為什麼要重新奠基
 
 現行模型用 6 個「化合物」（AC / SW / PS / CA / CGA / MEL）當風味的核心表徵。這個抽象有一個結構性缺陷：

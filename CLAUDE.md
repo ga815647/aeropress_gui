@@ -12,8 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **進行中 — Phase 10 感官重構**（架構、訓練資料、8 步執行步驟）| [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md) |
 | **Phase 10 Step 1 — 6 感官軸定案**（屬性表、軸定義、湧現概念）| [`docs/PHASE10_STEP1_SENSORY_AXES.md`](docs/PHASE10_STEP1_SENSORY_AXES.md) |
 | **Phase 10 Step 2 — Layer 2 風味模型**（cotter 回歸、係數、驗證）| [`docs/PHASE10_STEP2_LAYER2.md`](docs/PHASE10_STEP2_LAYER2.md) |
+| **Phase 10 Step 3 — per-roast 感官 IDEAL（label 移除）**（per-roast IDEAL、schema v5、信心分層）| [`docs/PHASE10_STEP3_LABELS.md`](docs/PHASE10_STEP3_LABELS.md) |
 
-> **🚧 進行中：Phase 10 — 感官重新奠基。** 模型從「6 化合物」改為「6 感官軸」。藍圖見 [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md)（架構、訓練資料、8 步執行步驟）。舊化合物模型凍結於 git branch `compound-model-legacy`。**Step 1–2 完成（2026-05-21）** — 6 感官軸定案（`acidity`/`sweetness`/`body`/`bitterness`/`astringency`/`roast`）+ Layer 2 風味模型 [`models/sensory.py`](models/sensory.py)（`predict_axes()`,cotter 27-cell 回歸）。**下一步 §11 Step 3** — 重寫 `data/labels.json`,IDEAL 改 6 感官軸。下方「僅剩待辦 / 目前狀態」描述的是 Phase 10 之前的 Phase 8 狀態,Phase 10 落地後一併改寫。
+> **🚧 進行中：Phase 10 — 感官重新奠基。** 模型從「6 化合物」改為「6 感官軸」。藍圖見 [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md)（架構、訓練資料、8 步執行步驟）。舊化合物模型凍結於 git branch `compound-model-legacy`。**Step 1–3 完成（2026-05-21）** — 6 感官軸定案（`acidity`/`sweetness`/`body`/`bitterness`/`astringency`/`roast`）+ Layer 2 風味模型 [`models/sensory.py`](models/sensory.py)（`predict_axes()`,cotter 27-cell 回歸）+ **`label` 概念移除**（藍圖 §0,裁決 2026-05-21）→ [`data/labels.json`](data/labels.json) schema v5：Layer 2 目標從「N 個 label 島」改成「**每 roast 一個 6 感官軸 IDEAL**」（`light`/`medium_light`/`medium`/`moderately_dark`）,`tds_prefer`/`dial_prefer` 吸收進 IDEAL。**⚠️ Step 3 後舊評分鏈（`models/scoring.py`/`models/labels.py:ideal_abs`/`optimizer.py:optimize_parallel`/`diagnose_anchor.py`/`tests/`）暫時失效,待 Step 5/7 重寫 —— 既定過渡狀態。下一步 §11 Step 4** — 薄 Layer 1（平衡脫附式 knob→TDS/EY,退役 `ey_model`/`tds_model`/`compounds`）。**保留項：不同焙度偏好本身就不同,per-roast IDEAL 的 roast 維度靠 `models/sensory.py:_ROAST_OFFSET`（文獻先驗、未驗證）;`medium`/`moderately_dark` 目前是 placeholder,待 feedback 校準。** 下方「僅剩待辦 / 目前狀態」描述的是 Phase 10 之前的 Phase 8 狀態,Phase 10 落地後一併改寫。
 
 **僅剩待辦：**
 - **Phase 9 — Feedback UI（webapp 卡片內 comment + tags + stars，append `data/feedback.jsonl`）**；refine 由 Claude 對話讀 jsonl 做語意分析、提建議、編輯 `data/labels.json`，不寫 `refine_label.py`。Schema 規格見 [`docs/FEEDBACK_FORMAT.md`](docs/FEEDBACK_FORMAT.md)
@@ -117,6 +118,8 @@ python diagnose_anchor.py
    - **違反此原則的代價：** 化合物模型失去自我鑑別力（→ 違反原則 #3）→ 評分只能靠 process-variable 後置 gate 補救（如 `acid_trap = sigmoid(temp - 96) × sigmoid(120 - steep)`）→ 補丁是症狀治療，根因仍在 compounds.py 內部的非物理 gate。
 
 5. **錨點分兩層：化合物校準錨點 vs 感官 label 島（嚴格角色分工）** — 每個「錨點」原本被綁定兩個彼此無關的角色，必須拆開。違反此原則導致新增錨點時必然動到另一個錨點的分數（Phase 4 加 Hedrick 時打亂 Hoffman/April 即此症狀）。
+
+   > **⚠️ Phase 10 修訂中（2026-05-21）：`label` 概念已決定移除** —— Layer 2 從「感官 label 島」改成「per-roast 單一 IDEAL」（藍圖 [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md) §0）。本原則的核心（Layer 1 物理校準錨點 vs Layer 2 感官目標,角色分離）**仍成立**；但下文「label 島」相關字眼待 Phase 10 landing 時連同原則 #3/#4 一併改寫。
 
    - **Layer 1：化合物校準錨點**（屬於物理層）
      - 用途：擬合 `compounds.py` / `ey_model.py` / `tds_model.py` 的 Ea、K、base profile 參數
