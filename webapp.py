@@ -31,7 +31,7 @@ def _ui_label_names() -> list[str]:
 def _serialize_result(result: dict, roast_code: str, feedback_index: dict[str, list[dict]] | None = None) -> dict:
     label = result.get("label", "balanced")
     actual_abs = compute_actual_abs(result["compounds"], result["tds"])
-    ideal_abs = label_ideal_abs(label, result["tds"])
+    ideal_abs = label_ideal_abs(label, result["tds"], roast_code)
     mel_coeff = constants.MEL_BITTER_COEFF[roast_code]
     actual_ac_sw = actual_abs["AC"] / max(actual_abs["SW"], 1e-8)
     ideal_ac_sw = ideal_abs["AC"] / max(ideal_abs["SW"], 1e-8)
@@ -202,7 +202,7 @@ def create_app() -> Flask:
         # 顯示用 flavor_max（progress bar 上限）— 取 label 的 ideal × (tds + 0.2)
         ref_label = requested_label if (requested_label and requested_label != "__all__") else "balanced"
         max_tds = top_tds + 0.2
-        flavor_max_raw = label_ideal_abs(ref_label, max_tds)
+        flavor_max_raw = label_ideal_abs(ref_label, max_tds, roast_code)
         flavor_max = {k: round(v, 4) for k, v in flavor_max_raw.items()}
 
         return jsonify(

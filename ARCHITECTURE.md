@@ -113,9 +113,10 @@ flavor_score(actual, tds, roast, label, ...) =
 - sigmoid 方向門控（只懲罰超標、不懲罰不足）
 
 ### ideal_abs（Phase 8）
-- `models.labels.ideal_abs(label, tds)` — 直接從 `data/labels.json[label].ideal` × `tds`
+- `models.labels.ideal_abs(label, tds, roast=None)` — 直接從 `data/labels.json[label].ideal` × `tds`
 - 苦味化合物（CA/CGA/MEL）在 scoring 內部再乘 `IDEAL_BITTER_REDUCTION=0.95`
 - **No more bracket interpolation** — old `build_ideal_abs(roast, tds)` 已廢除
+- **roast override（labels.json v3）**：label 可帶 `ideal_by_roast`，某焙度搆不到預設 ideal 時改用自己的 bullseye。目前只有 `balanced.light`（淺焙搆不到 medium_light 的 CGA/MEL 0.12/0.11）—— 粗略 model-derived、無實測錨點，待 light-roast balanced 食譜出現後精修
 
 ### tds_factor — 不對稱 Super-Gaussian
 - `TDS_GAUSS_SIGMA_LOW=0.15`（太淡嚴懲）

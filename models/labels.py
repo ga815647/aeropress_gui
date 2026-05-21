@@ -37,13 +37,29 @@ def get_label(name: str) -> dict:
     return labels[name]
 
 
-def ideal_abs(label_name: str, tds: float) -> dict[str, float]:
-    """label IDEAL fractions × TDS → absolute compound targets used by scoring.
+def label_ideal(label_name: str, roast: str | None = None) -> dict[str, float]:
+    """label IDEAL compound fractions, roast-specific when an override exists.
 
-    Replaces the deprecated build_ideal_abs() Gaussian-bracket interpolation.
+    A label carries one default `ideal`; `ideal_by_roast` lets it also hold a
+    roast-appropriate bullseye where the default cannot be reached — a light
+    roast cannot reach the medium_light CGA/MEL levels of `balanced`, so light
+    gets its own IDEAL. Falls back to the default `ideal` when there is no
+    override for `roast`.
     """
     spec = get_label(label_name)
-    ideal = spec["ideal"]
+    overrides = spec.get("ideal_by_roast") or {}
+    if roast is not None and roast in overrides:
+        return overrides[roast]
+    return spec["ideal"]
+
+
+def ideal_abs(label_name: str, tds: float, roast: str | None = None) -> dict[str, float]:
+    """label IDEAL fractions × TDS → absolute compound targets used by scoring.
+
+    `roast` selects a per-roast IDEAL override when the label defines one.
+    Replaces the deprecated build_ideal_abs() Gaussian-bracket interpolation.
+    """
+    ideal = label_ideal(label_name, roast)
     return {k: ideal[k] * tds for k in constants.KEYS}
 
 

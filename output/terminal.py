@@ -19,7 +19,7 @@ def _describe_flavor(actual_abs: dict) -> str:
 def _print_single(result: dict, roast_code: str, index: int) -> None:
     label = result.get("label", "balanced")
     actual_abs = compute_actual_abs(result["compounds"], result["tds"])
-    ideal_abs = label_ideal_abs(label, result["tds"])
+    ideal_abs = label_ideal_abs(label, result["tds"], roast_code)
     swirl_mult = 1.0 + constants.SWIRL_CONVECTION_BASE * (constants.SWIRL_DOSE_REF / result["dose"])
     actual_ac_sw = actual_abs["AC"] / max(actual_abs["SW"], 1e-8)
     ideal_ac_sw = ideal_abs["AC"] / max(ideal_abs["SW"], 1e-8)

@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - UI — Chip 標籤重寫（依 Phase 8 label 改 UI 風味描述）
 - `light` 槽真淺焙錨點待補（找到 Nordic-style AeroPress 食譜後校準）
 - 化合物層 brewer geometry 建模（未來 phase）— XL 深床效應未進化合物層，現用 `dial_offset` 兜底
-- 非 medium_light 焙度的 label IDEAL 校準 — Phase 8 僅校準 medium_light 4 個錨點；medium / dark 等焙度套用 balanced label 時無 roast-specific bullseye，可能不貼。等未來新增非 medium_light 焙度的食譜錨點時補
+- 非 medium_light 焙度的 label IDEAL 校準 — Phase 8 僅校準 medium_light 4 個錨點。2026-05-21 新增 `labels.json` v3 `ideal_by_roast` 機制 + `balanced.light` 粗略 override（淺焙搆不到 medium_light 的 CGA/MEL，light×balanced 從 ~56 分修到 ~95）；其餘焙度×label 仍無 roast-specific bullseye。`balanced.light` 是 model-derived 粗估、無實測錨點，待 light-roast balanced 食譜出現後精修
 
 **目前狀態（Phase 8 完成）：** 6 錨點全 PASS（Hoffman 92.8 / April 90.6 / Champion 86.9 / Hedrick 92.5 / Under 0 / Over 44.6）、28 pytest PASS（含新增 Layer 1 `test_compound_calibration.py` × 8 + Layer 2 `test_label_scoring.py` × 8）。`data/labels.json` 持有 4 個 label 島（balanced / acid-forward / sweet-body / coarse-modern），每個自帶 IDEAL fractions + tds_prefer；scoring 層拿掉 `build_ideal_abs` TDS bracket 內插與 `ratio_bonus` 全套（純化為 log-ratio Gaussian × Super-Gaussian × 感知 gates）。optimizer 新增 `optimize_parallel()`（Channel B — 多 label 並列 Top）、每個結果帶 `recipe_id`（Phase 9 feedback 鉤子）；`diversify_top` 廢除。CLI `--label <name>` 單 label、無 flag = Channel B。
 

@@ -19,7 +19,7 @@ def _flatten(results) -> list[dict]:
 def _result_payload(result: dict, roast_code: str, rank: int) -> dict:
     label = result.get("label", "balanced")
     actual_abs = compute_actual_abs(result["compounds"], result["tds"])
-    ideal_abs = label_ideal_abs(label, result["tds"])
+    ideal_abs = label_ideal_abs(label, result["tds"], roast_code)
     return {
         "rank": rank,
         "label": label,

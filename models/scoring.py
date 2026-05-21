@@ -52,7 +52,7 @@ def flavor_score(
     editing one label cannot move another label's scores.
     """
     label_spec = get_label(label)
-    ideal_abs = label_ideal_abs(label, tds)
+    ideal_abs = label_ideal_abs(label, tds, roast_code)
     tds_prefer = label_spec["tds_prefer"]
 
     # ── 1. perception preprocessing (physical, not scoring) ─────────────
