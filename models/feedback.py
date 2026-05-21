@@ -125,6 +125,45 @@ def read_for_recipe(recipe_id: str) -> list[dict]:
     return [e for e in read_all() if e.get("recipe_id") == recipe_id]
 
 
+def recompute_entry(entry: dict) -> dict | None:
+    """Recompute an entry's derived fields (ey / tds / score / compounds) with
+    the CURRENT model, from its immutable recipe inputs. Returns None if the
+    entry has no recipe snapshot (legacy pre-Phase-10 — nothing to derive from).
+
+    feedback.jsonl is append-only: the stored recipe.tds/ey/score is the
+    as-submitted snapshot and is never mutated. This is the *current* projection
+    — after a model recalibration the stored snapshot goes stale, so the history
+    view should display this instead. The recipe inputs (temp/dial/dose/steep)
+    are durable; tds/ey/score are merely a projection of them through the model.
+    """
+    recipe = entry.get("recipe")
+    if not recipe:
+        return None
+    water = entry.get("water") or {}
+    try:
+        from optimizer import score_logged_recipe  # lazy: keeps append/read light
+        scored = score_logged_recipe(
+            roast_code=str(entry["roast"]),
+            brewer_size=str(entry["brewer"]),
+            temp=float(recipe["temp"]),
+            dial=float(recipe["dial"]),
+            steep_sec=int(recipe["steep_sec"]),
+            dose=float(recipe["dose"]),
+            water_gh=float(water.get("gh", 50)),
+            water_kh=float(water.get("kh", 30)),
+            water_mg_frac=float(water.get("mg_frac", 0.40)),
+            label=str(entry["label"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+    return {
+        "ey": round(scored["ey"], 3),
+        "tds": round(scored["tds"], 4),
+        "score": scored["score"],
+        "compounds": {k: round(v, 4) for k, v in scored["compounds"].items()},
+    }
+
+
 def update_feedback(timestamp: str, updates: dict) -> dict:
     """In-place edit of an existing entry within EDIT_WINDOW_HOURS of creation.
 

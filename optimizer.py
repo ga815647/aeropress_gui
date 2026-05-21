@@ -10,6 +10,135 @@ from models.scoring import flavor_score, score_to_display
 from models.tds_model import apply_channeling, calc_drip_volume, calc_press_time, calc_retention, calc_swirl_wait, calc_tds
 
 
+def evaluate_recipe(
+    roast_code: str,
+    brewer_size: str,
+    temp: float,
+    dial: float,
+    steep_sec: int,
+    dose: float,
+    water_gh: float = 50,
+    water_kh: float = 30,
+    water_mg_frac: float = 0.40,
+    ey_floor: float | None = None,
+) -> dict | None:
+    """Full physics for one recipe -> candidate dict (ey / tds / compounds / ...).
+
+    The per-recipe core shared by the optimizer grid (_grid_candidates) and any
+    out-of-grid evaluation — e.g. recomputing a logged feedback recipe with the
+    current model. One code path means a logged recipe re-scores identically to
+    a fresh optimizer run; no parallel pipeline that can silently drift.
+
+    `ey_floor`: optional perf fast-path for the grid — if the (pre-channeling) EY
+    is below it, return None before the expensive predict_compounds. Physics is
+    unaffected; the skipped candidate would have been discarded anyway. Leave it
+    None (default) to always get a full evaluation (feedback recompute path).
+    """
+    brewer = constants.BREWER_PRESETS[brewer_size]
+    water_ml = brewer["water_ml"]
+    area_cm2 = brewer.get("area_cm2", constants.DRIP_AREA_REF_CM2)
+    pour_offset = (water_ml / constants.POUR_RATE) / 2.0
+    seal_delay = constants.SEAL_DELAY_DEFAULT
+    drip_time = water_ml / constants.POUR_RATE + seal_delay
+
+    press_sec = calc_press_time(dose, dial, steep_sec, brewer_size=brewer_size)
+    if press_sec > constants.CHANNELING_PRESS_THRESHOLD:
+        collapsed_press = (
+            constants.CHANNELING_PRESS_THRESHOLD
+            + (press_sec - constants.CHANNELING_PRESS_THRESHOLD)
+            * constants.CHANNELING_COLLAPSE_RATIO
+        )
+        display_press_sec = int(collapsed_press)
+    else:
+        collapsed_press = press_sec
+        display_press_sec = press_sec
+
+    press_equiv = collapsed_press * constants.PRESS_EQUIV_FRACTION
+    swirl_wait = calc_swirl_wait(brewer_size)
+    ey = calc_ey(
+        roast_code, temp, dial, steep_sec, dose, water_ml,
+        water_gh=water_gh,
+        press_equiv=press_equiv,
+        pour_offset=pour_offset,
+        seal_delay=seal_delay,
+        swirl_wait_sec=swirl_wait,
+        area_cm2=area_cm2,
+    )
+    if ey_floor is not None and ey < ey_floor:
+        return None
+
+    t_slurry_val = round(
+        (water_ml * temp + dose * constants.COFFEE_SPECIFIC_HEAT_RATIO * constants.T_ENV)
+        / (water_ml + dose * constants.COFFEE_SPECIFIC_HEAT_RATIO)
+        - constants.BREWER_TEMP_DROP,
+        1,
+    )
+
+    compounds_raw = predict_compounds(
+        roast_code,
+        t_slurry_val,
+        dial,
+        steep_sec,
+        ey,
+        water_gh,
+        water_mg_frac,
+        press_equiv=press_equiv,
+        pour_offset=pour_offset,
+        water_ml=water_ml,
+        seal_delay=seal_delay,
+        dose=dose,
+        press_sec=press_sec,
+        area_cm2=area_cm2,
+    )
+    ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
+    tds = calc_tds(roast_code, dose, ey, dial, water_ml)
+    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2)
+
+    rid = recipe_id(
+        roast=roast_code,
+        brewer=brewer_size,
+        dial=dial,
+        steep_sec=steep_sec,
+        temp=temp,
+        dose=dose,
+        water_gh=water_gh,
+        water_kh=water_kh,
+        water_mg_frac=water_mg_frac,
+    )
+
+    return {
+        "recipe_id": rid,
+        "brewer": brewer["name"],
+        "water_ml": water_ml,
+        "temp": temp,
+        "dial": dial,
+        "steep_sec": steep_sec,
+        "dose": dose,
+        "swirl_sec": constants.SWIRL_TIME_SEC,
+        "swirl_wait_sec": swirl_wait,
+        "press_sec": display_press_sec,
+        "press_sec_internal": press_sec,
+        "seal_delay": seal_delay,
+        "pre_seal_drip_sec": round(drip_time, 1),
+        "pre_seal_drip_ml": drip_volume,
+        "total_contact_sec": steep_sec + constants.SWIRL_TIME_SEC + swirl_wait + display_press_sec,
+        "ey": ey,
+        "tds": tds,
+        "fines_ratio": calc_fines_ratio(dial),
+        "t_slurry": t_slurry_val,
+        "t_kinetic": round(
+            max(0, steep_sec - pour_offset)
+            + constants.SWIRL_TIME_SEC
+            * (1.0 + constants.SWIRL_CONVECTION_BASE * (constants.SWIRL_DOSE_REF / dose))
+            + swirl_wait * constants.SWIRL_WAIT_EXT_MULT
+            + press_equiv,
+            1,
+        ),
+        "retention": calc_retention(roast_code, dial),
+        "compounds": compounds,
+    }
+
+
 def _grid_candidates(
     roast_code: str,
     brewer_size: str,
@@ -31,7 +160,6 @@ def _grid_candidates(
     base_temp = cfg["base_temp"]
     brewer = constants.BREWER_PRESETS[brewer_size]
     water_ml = brewer["water_ml"]
-    area_cm2 = brewer.get("area_cm2", constants.DRIP_AREA_REF_CM2)
     dose_min_x2 = int(brewer["dose_min"] * 2)
     dose_max_x2 = int(brewer["dose_max"] * 2)
     dose_step_x2 = 2 if brewer_size == "xl" else 1
@@ -47,11 +175,6 @@ def _grid_candidates(
         dose_min_x2 = max(dose_min_x2, int(dose_min_override * 2))
     if dose_max_override is not None and fixed_dose is None:
         dose_max_x2 = min(dose_max_x2, int(dose_max_override * 2))
-
-    pour_time = water_ml / constants.POUR_RATE
-    pour_offset = pour_time / 2.0
-    seal_delay = constants.SEAL_DELAY_DEFAULT
-    drip_time = pour_time + seal_delay
 
     if temp_range is not None:
         temp_lo, temp_hi = temp_range
@@ -74,104 +197,13 @@ def _grid_candidates(
             dial = dial_x10 / 10
             for steep in steep_values:
                 for dose_x2 in dose_values:
-                    dose = dose_x2 / 2
-
-                    press_sec = calc_press_time(dose, dial, steep, brewer_size=brewer_size)
-                    if press_sec > constants.CHANNELING_PRESS_THRESHOLD:
-                        collapsed_press = (
-                            constants.CHANNELING_PRESS_THRESHOLD
-                            + (press_sec - constants.CHANNELING_PRESS_THRESHOLD)
-                            * constants.CHANNELING_COLLAPSE_RATIO
-                        )
-                        display_press_sec = int(collapsed_press)
-                    else:
-                        collapsed_press = press_sec
-                        display_press_sec = press_sec
-
-                    press_equiv = collapsed_press * constants.PRESS_EQUIV_FRACTION
-                    swirl_wait = calc_swirl_wait(brewer_size)
-                    ey = calc_ey(
-                        roast_code, temp, dial, steep, dose, water_ml,
-                        water_gh=water_gh,
-                        press_equiv=press_equiv,
-                        pour_offset=pour_offset,
-                        seal_delay=seal_delay,
-                        swirl_wait_sec=swirl_wait,
-                        area_cm2=area_cm2,
+                    candidate = evaluate_recipe(
+                        roast_code, brewer_size, temp, dial, steep, dose_x2 / 2,
+                        water_gh=water_gh, water_kh=water_kh, water_mg_frac=water_mg_frac,
+                        ey_floor=constants.EY_MIN,
                     )
-                    if ey < constants.EY_MIN:
-                        continue
-
-                    t_slurry_val = round(
-                        (water_ml * temp + dose * constants.COFFEE_SPECIFIC_HEAT_RATIO * constants.T_ENV)
-                        / (water_ml + dose * constants.COFFEE_SPECIFIC_HEAT_RATIO)
-                        - constants.BREWER_TEMP_DROP,
-                        1,
-                    )
-
-                    compounds_raw = predict_compounds(
-                        roast_code,
-                        t_slurry_val,
-                        dial,
-                        steep,
-                        ey,
-                        water_gh,
-                        water_mg_frac,
-                        press_equiv=press_equiv,
-                        pour_offset=pour_offset,
-                        water_ml=water_ml,
-                        seal_delay=seal_delay,
-                        dose=dose,
-                        press_sec=press_sec,
-                        area_cm2=area_cm2,
-                    )
-                    ey, compounds = apply_channeling(ey, compounds_raw, press_sec)
-                    tds = calc_tds(roast_code, dose, ey, dial, water_ml)
-                    drip_volume = calc_drip_volume(water_ml, dial, drip_time, dose, area_cm2)
-
-                    rid = recipe_id(
-                        roast=roast_code,
-                        brewer=brewer_size,
-                        dial=dial,
-                        steep_sec=steep,
-                        temp=temp,
-                        dose=dose,
-                        water_gh=water_gh,
-                        water_kh=water_kh,
-                        water_mg_frac=water_mg_frac,
-                    )
-
-                    candidates.append({
-                        "recipe_id": rid,
-                        "brewer": brewer["name"],
-                        "water_ml": water_ml,
-                        "temp": temp,
-                        "dial": dial,
-                        "steep_sec": steep,
-                        "dose": dose,
-                        "swirl_sec": constants.SWIRL_TIME_SEC,
-                        "swirl_wait_sec": swirl_wait,
-                        "press_sec": display_press_sec,
-                        "press_sec_internal": press_sec,
-                        "seal_delay": seal_delay,
-                        "pre_seal_drip_sec": round(drip_time, 1),
-                        "pre_seal_drip_ml": drip_volume,
-                        "total_contact_sec": steep + constants.SWIRL_TIME_SEC + swirl_wait + display_press_sec,
-                        "ey": ey,
-                        "tds": tds,
-                        "fines_ratio": calc_fines_ratio(dial),
-                        "t_slurry": t_slurry_val,
-                        "t_kinetic": round(
-                            max(0, steep - pour_offset)
-                            + constants.SWIRL_TIME_SEC
-                            * (1.0 + constants.SWIRL_CONVECTION_BASE * (constants.SWIRL_DOSE_REF / dose))
-                            + swirl_wait * constants.SWIRL_WAIT_EXT_MULT
-                            + press_equiv,
-                            1,
-                        ),
-                        "retention": calc_retention(roast_code, dial),
-                        "compounds": compounds,
-                    })
+                    if candidate is not None:
+                        candidates.append(candidate)
 
     return candidates
 
@@ -224,6 +256,33 @@ def _brewer_key_from_name(name: str) -> str:
         if spec["name"] == name:
             return key
     return "standard"
+
+
+def score_logged_recipe(
+    roast_code: str,
+    brewer_size: str,
+    temp: float,
+    dial: float,
+    steep_sec: int,
+    dose: float,
+    water_gh: float,
+    water_kh: float,
+    water_mg_frac: float,
+    label: str,
+) -> dict:
+    """Re-evaluate one known recipe against a label with the CURRENT model.
+
+    Refreshes the stale-able derived fields (ey / tds / score / compounds) of a
+    logged feedback recipe: the recipe inputs are durable, the derived numbers
+    are a projection that must track model recalibration. Reuses the optimizer's
+    own pipeline (evaluate_recipe + _score_against_label), so the refreshed
+    score matches what a fresh optimizer run would give for that recipe.
+    """
+    candidate = evaluate_recipe(
+        roast_code, brewer_size, temp, dial, steep_sec, dose,
+        water_gh=water_gh, water_kh=water_kh, water_mg_frac=water_mg_frac,
+    )
+    return _score_against_label(candidate, label, roast_code, water_kh, water_gh)
 
 
 def optimize(
