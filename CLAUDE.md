@@ -26,6 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 python main.py --roast light --brewer xl
 python main.py --roast light --brewer xl --preset volvic_pure --top 5
 python main.py --roast medium --gh 50 --kh 30 --output json --radar
+python main.py --roast medium_light --brewer xl --explore balanced  # calibration bracket
 
 # Run anchor validation (mandatory after any constants.py change)
 python diagnose_anchor.py
@@ -37,7 +38,7 @@ python -m pytest tests/
 python webapp.py
 ```
 
-**CLI key flags:** `--roast` (required), `--brewer` (standard/xl), `--preset` (water preset name), `--gh`/`--kh`/`--mg-frac` (manual water), `--top N`, `--output` (terminal/json/csv), `--radar`, `--t-env`, `--altitude`.
+**CLI key flags:** `--roast` (required), `--brewer` (standard/xl), `--preset` (water preset name), `--gh`/`--kh`/`--mg-frac` (manual water), `--top N`, `--output` (terminal/json/csv), `--radar`, `--explore <label>` (calibration bracket — optimum + 單軸 temp/dose 偏移,供累積有梯度的回饋), `--t-env`, `--altitude`.
 
 ---
 

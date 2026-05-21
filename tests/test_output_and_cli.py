@@ -113,3 +113,24 @@ def test_cli_reference_command_ranges(tmp_path: Path, monkeypatch) -> None:
     assert "[label=balanced]" in stdout
     assert re.search(r"recipe_id=[0-9a-f]{12}", stdout)
 
+
+def test_explore_bracket() -> None:
+    from optimizer import explore_bracket
+
+    bracket = explore_bracket("medium_light", "xl", label="balanced")
+
+    assert len(bracket) >= 3                        # optimum + offset variants
+    assert bracket[0]["bracket"] == "optimum"
+    opt = bracket[0]
+
+    for r in bracket:                               # every variant fully scored
+        assert {"score", "tds", "ey", "bracket"} <= r.keys()
+
+    for r in bracket[1:]:
+        # controlled bracket: each variant moves exactly ONE axis off the
+        # optimum (temp XOR dose); dial + steep are held constant
+        moved = (r["temp"] != opt["temp"]) + (r["dose"] != opt["dose"])
+        assert moved == 1, f"{r['bracket']} must move exactly one axis"
+        assert r["dial"] == opt["dial"]
+        assert r["steep_sec"] == opt["steep_sec"]
+
