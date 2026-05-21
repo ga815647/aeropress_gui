@@ -45,11 +45,11 @@ def test_webapp_routes() -> None:
     payload_b = api_b.get_json()
     assert payload_b["meta"]["label"] == "__all__"
     assert isinstance(payload_b["results"], dict)
-    # Match whatever labels are currently in data/labels.json (append-only file).
-    from models.labels import label_names
-    assert set(payload_b["results"].keys()) == set(label_names())
-    # All currently-shipped core labels must always be present.
-    assert {"balanced", "acid-forward", "sweet-body", "coarse-modern"} <= set(payload_b["results"].keys())
+    # Channel B in webapp uses _ui_label_names() — labels.json minus UI_HIDDEN_LABELS.
+    from webapp import _ui_label_names
+    assert set(payload_b["results"].keys()) == set(_ui_label_names())
+    # Core visible labels must always be present.
+    assert {"balanced", "acid-forward", "coarse-modern"} <= set(payload_b["results"].keys())
 
 
 def test_webapp_parser_exposes_lan_by_default() -> None:

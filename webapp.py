@@ -13,12 +13,19 @@ from models.feedback import (
     append_feedback,
     read_all as read_all_feedback,
     read_for_recipe,
+    recompute_entry,
     update_feedback,
 )
 from models.labels import get_label, ideal_abs as label_ideal_abs, label_names
 from models.scoring import compute_actual_abs
 from optimizer import optimize, optimize_parallel
 from runtime import apply_environment_settings, resolve_water_profile
+
+UI_HIDDEN_LABELS = {"sweet-body"}
+
+
+def _ui_label_names() -> list[str]:
+    return [name for name in label_names() if name not in UI_HIDDEN_LABELS]
 
 
 def _serialize_result(result: dict, roast_code: str, feedback_index: dict[str, list[dict]] | None = None) -> dict:
@@ -52,13 +59,35 @@ def _serialize_result(result: dict, roast_code: str, feedback_index: dict[str, l
     }
 
 
+def _with_current_derived(entry: dict) -> dict:
+    """Feedback entry with recipe.tds/ey/score refreshed by the current model.
+
+    The recipe *inputs* (temp/dial/dose/steep) are durable; tds/ey/score are a
+    stale-able projection — after a model recalibration the stored snapshot no
+    longer matches the model. Recompute for display; the on-disk JSONL stays
+    append-only and is never mutated. `compounds` is added (never stored in the
+    JSONL). Falls back to the entry as-is when there is no recipe snapshot.
+    """
+    current = recompute_entry(entry)
+    if current is None:
+        return entry
+    out = dict(entry)
+    recipe = dict(out.get("recipe") or {})
+    recipe["tds"] = current["tds"]
+    recipe["ey"] = current["ey"]
+    recipe["score"] = current["score"]
+    recipe["compounds"] = current["compounds"]
+    out["recipe"] = recipe
+    return out
+
+
 def _build_feedback_index() -> dict[str, list[dict]]:
     """One JSONL scan per /api/optimize call → dict[recipe_id] → entries."""
     index: dict[str, list[dict]] = {}
     for entry in read_all_feedback():
         rid = entry.get("recipe_id")
         if rid:
-            index.setdefault(rid, []).append(entry)
+            index.setdefault(rid, []).append(_with_current_derived(entry))
     return index
 
 
@@ -72,7 +101,7 @@ def create_app() -> Flask:
             for k, v in constants.ROAST_TABLE.items()
         ]
         labels = [
-            {"name": name, **get_label(name)} for name in label_names()
+            {"name": name, **get_label(name)} for name in _ui_label_names()
         ]
         return render_template(
             "index.html",
@@ -96,7 +125,7 @@ def create_app() -> Flask:
                 "brewers": constants.BREWER_PRESETS,
                 "presets": WATER_PRESETS,
                 "labels": [
-                    {"name": name, **get_label(name)} for name in label_names()
+                    {"name": name, **get_label(name)} for name in _ui_label_names()
                 ],
                 "defaults": {
                     "brewer": "xl",
@@ -156,6 +185,7 @@ def create_app() -> Flask:
         else:
             parallel = optimize_parallel(
                 top_n=int(payload.get("top", 1)),
+                labels=_ui_label_names(),
                 **common,
             )
             results_serialized = {
@@ -212,11 +242,13 @@ def create_app() -> Flask:
 
     @app.get("/api/feedback/<recipe_id>")
     def feedback_for_recipe(recipe_id: str):
-        return jsonify({"recipe_id": recipe_id, "entries": read_for_recipe(recipe_id)})
+        entries = [_with_current_derived(e) for e in read_for_recipe(recipe_id)]
+        return jsonify({"recipe_id": recipe_id, "entries": entries})
 
     @app.get("/api/feedback")
     def feedback_list():
-        return jsonify({"entries": read_all_feedback()})
+        entries = [_with_current_derived(e) for e in read_all_feedback()]
+        return jsonify({"entries": entries})
 
     return app
 
