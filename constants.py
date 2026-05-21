@@ -89,7 +89,8 @@ EY_MIN = 15.0  # 上調以排除大豆量極淺萃組合（brew_capacity 修正�
 EY_PREFER = {
     "very_light": 17.5,
     "light": 21.0,  # Nordic 真淺焙：硬豆需充分萃取（21%）才能展開香氣
-    "medium_light": 21.0,  # Hoffman 錨點搬遷：原 light=21.0 對應 El Tambo (Agtron 65) 中淺焙，實際 20-22%
+    "medium_light": 20.0,  # 2026-05-21 TDS-anchor 校準：base_ey 14.2 後 Hoffman 實測一致 EY=20.0%
+                           #（原 21.0 配 base_ey 17.0；不下調會對 Hoffman 本身誤判欠萃並扣 grind 懲罰）
     "medium": 19.0,
     "moderately_dark": 20.0,
     "dark": 20.0,
@@ -137,7 +138,10 @@ ARRHENIUS_COEFF = 0.05
 # optimizer 最低搜尋溫度：medium roast 88°C / light roast 93°C → 均高於 87°C 閾值，完全不受影響
 # April 85°C / Championship 80°C 才會觸發補正
 K_LOW_TEMP_FLOOR = 87.0   # °C，基於 temp_initial（注水溫度），非 t_avg
-K_LOW_TEMP_BOOST = 3.0    # 最大補正量（total = 1 + BOOST = 最高 4×）
+K_LOW_TEMP_BOOST = 7.0    # 最大補正量（total = 1 + BOOST = 最高 8×）
+                          # 2026-05-21 TDS-anchor 校準：April(85°C)/Championship(80°C) 實測 TDS
+                          # 反推需更強低溫萃取補正（原 3.0 配 base_ey 17.0；base_ey 降 14.2 後重校）。
+                          # 只對 temp_initial<87°C 生效 → optimizer 正常搜尋（medium 88°C+）完全不受影響。
 K_LOW_TEMP_DECAY = 2.0    # 飽和衰減參數（°C）；deficit / DECAY 作為指數輸入
 CONC_GRADIENT_COEFF = 0.5
 # §16 再評估後：貼近實務，漏水量由低估修正（0.30→0.38、η 1→1.2、上限 12%→18%）
@@ -357,7 +361,9 @@ ROAST_TABLE = {
         "agtron_min": 65,
         "agtron_max": 75,
         "base_temp": 96,
-        "base_ey": 17.0,
+        "base_ey": 14.2,   # 2026-05-21 TDS-anchor 校準：原 17.0 使 Hoffman predicted TDS 1.39
+                           # 嚴重高估實測 1.23。Hoffman 是 ceiling-limited → base_ey 直接定 EY 上限；
+                           # 14.2 → predicted EY 20.0% / TDS 1.234（實測 1.23）。
         "dial_prefer": 4.3,  # Hoffman 錨點搬遷：450–600µm EK43 ≈ ZP6 dial 4.3
         "dose_per_100ml": (5.0, 7.0),  # Hoffman 11g/200ml=5.5；Championship 17g/200ml=8.5 用 fixed_dose
         "note": "SCA: Medium-Light (Agtron #65-75)。Hoffmann/Square Mile filter roast 標竿，El Tambo 等中淺焙水洗豆。栗子色，一爆剛結束。台灣精品市場最大公約數。",

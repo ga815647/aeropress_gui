@@ -61,10 +61,12 @@ python diagnose_anchor.py
 | 參數 | Hoffman 實測值 | 模型目標 |
 |------|--------------|---------|
 | TDS | 1.23%（稍粗）→ 原版 ~1.27% | `data/labels.json[balanced].tds_prefer = 1.27` |
-| EY | 20–22% | `EY_PREFER["medium_light"] = 21.0` |
+| EY | 20–22% | `EY_PREFER["medium_light"] = 20.0` |
 | 研磨 | 450–600µm EK43 → ZP6 dial ≈ 4.3 | `dial_prefer["medium_light"] = 4.3` |
 | 水溫 | 97.8°C（208°F） | 錨點檢查固定 98°C |
 | 浸泡 | 2:00 → swirl → press | 錨點 `fixed_steep=120s` |
+
+**2026-05-21 TDS-anchor 校準：** `ey_model` 過去對 Hoffman 嚴重高估 TDS（predicted 1.39 vs measured 1.23），且誤差跟溫度走（April/Champion 80–85°C 幾乎準）。將三個有實測 TDS 的錨點設為 Layer 1 硬錨點後重校：`base_ey[medium_light]` 17.0→14.2（Hoffman ceiling-limited，定 EY 上限）、`K_LOW_TEMP_BOOST` 3.0→7.0（補償 April/Champion 低溫萃取，只對 <87°C 生效）、`EY_PREFER[medium_light]` 21.0→20.0（跟校準走）。三錨點 predicted TDS 現落在 measured ±0.05。`diagnose_anchor.py` / `test_compound_calibration.py` 的 TDS 檢查由「繞 predicted 自設 band」改為 assert `|predicted − measured| ≤ 0.05`。
 
 **Phase 8 後：** 每個 label 自帶 `ideal` + `tds_prefer`（`data/labels.json`），不再有 per-roast `TDS_PREFER` 也不再有跨 TDS bracket 內插。改 label 屬性 = 改該 label 的口感目標，**零副作用其他 label**。
 

@@ -22,6 +22,12 @@ from models.scoring import flavor_score, score_to_display
 from models.tds_model import calc_press_time, calc_tds
 
 
+# TDS-anchor 校準容忍（2026-05-21）：有實測 TDS 的錨點，predicted 必須落在
+# measured ± TDS_ANCHOR_TOL 之內。取代舊的「繞 predicted 自設 band」自證式檢查
+# （舊 band 不含 measured 值 → 只驗模型重現自己，沒驗對上現實）。
+TDS_ANCHOR_TOL = 0.05
+
+
 # ── anchor recipes (Layer 1 inputs + Layer 2 bullseye assignments) ──────────
 ANCHORS = {
     "Hoffman": {
@@ -29,9 +35,9 @@ ANCHORS = {
         "roast": "medium_light", "brewer": "standard",
         "temp": 98.0, "dial": 4.3, "dose": 11.0, "steep": 120.0, "water": 200.0,
         "t_env": 20.0,
-        "measured_tds": 1.23,            # Hoffman article
-        "predicted_tds_band": (1.25, 1.45),
-        "predicted_ey_band": (20.0, 24.0),
+        "measured_tds": 1.23,            # Hoffman article（使用者選定：忠於唯一實測值）
+        "predicted_tds_band": (1.25, 1.45),   # 未用（measured 走 ±TOL）；留作歷史紀錄
+        "predicted_ey_band": (17.0, 22.0),    # 2026-05-21 TDS-anchor 校準後 EY≈20.0%（sanity band）
         "score_min": 80.0,
     },
     "April": {
@@ -64,8 +70,8 @@ ANCHORS = {
         "roast": "medium_light", "brewer": "standard",
         "temp": 95.0, "dial": 6.0, "dose": 14.0, "steep": 240.0, "water": 200.0,
         "measured_tds": None,            # no published TDS
-        "predicted_tds_band": (1.25, 1.60),
-        "predicted_ey_band": (16.0, 20.0),
+        "predicted_tds_band": (1.20, 1.45),   # 無實測 → 維持寬 sanity band
+        "predicted_ey_band": (13.0, 18.0),    # 2026-05-21 TDS-anchor 校準後 EY≈15.7%（sanity band）
         "score_min": 55.0,
     },
 }
@@ -81,7 +87,8 @@ BAD_RECIPES = {
     "Over-extraction": {
         "roast": "medium_light", "brewer": "standard",
         "temp": 99.0, "dial": 3.5, "dose": 11.0, "steep": 240.0, "water": 200.0,
-        "ey_must": (">", 22.0),
+        "ey_must": (">", 21.0),          # 2026-05-21：base_ey 校準後整體 EY 下移 ~2.8pp，
+                                         # over-extract EY≈22% vs Hoffman 20%（相對過萃 +2pp 不變）
         "tds_must": (">", 1.20),
         "score_max": 50.0,
     },
@@ -153,9 +160,15 @@ def check_anchor(name: str, verbose: bool = True) -> bool:
                                      dial=spec["dial"], steep=spec["steep"],
                                      label=other)
 
-    tds_lo, tds_hi = spec["predicted_tds_band"]
     ey_lo, ey_hi = spec["predicted_ey_band"]
-    tds_ok = tds_lo <= tds <= tds_hi
+    measured = spec["measured_tds"]
+    if measured is not None:
+        # TDS 是 Layer 1 硬錨點：predicted 必須對上 measured ± TOL
+        tds_ok = abs(tds - measured) <= TDS_ANCHOR_TOL
+    else:
+        # 無實測 → 退回寬 sanity band
+        tds_lo, tds_hi = spec["predicted_tds_band"]
+        tds_ok = tds_lo <= tds <= tds_hi
     ey_ok = ey_lo <= ey <= ey_hi
     score_ok = score_on_label >= spec["score_min"]
 
@@ -170,7 +183,11 @@ def check_anchor(name: str, verbose: bool = True) -> bool:
         print(f"  score on '{spec['label']}': {score_on_label}")
         cs = "  ".join(f"{lbl}={sc}" for lbl, sc in cross_scores.items())
         print(f"  cross-label: {cs}")
-        print(f"  {_fmt(tds_ok)}  TDS {tds:.3f}% in [{tds_lo}, {tds_hi}]")
+        if measured is not None:
+            print(f"  {_fmt(tds_ok)}  TDS {tds:.3f}% vs measured {measured:.2f}% "
+                  f"(|diff|={abs(tds - measured):.3f} <= {TDS_ANCHOR_TOL})")
+        else:
+            print(f"  {_fmt(tds_ok)}  TDS {tds:.3f}% in [{tds_lo}, {tds_hi}] (no measurement)")
         print(f"  {_fmt(ey_ok)}  EY {ey:.2f}% in [{ey_lo}, {ey_hi}]")
         print(f"  {_fmt(score_ok)}  score {score_on_label} >= {spec['score_min']}")
         print()

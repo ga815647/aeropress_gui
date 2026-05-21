@@ -1,8 +1,10 @@
 """Layer 1 — physics calibration only. No scoring, no labels.
 
-Each anchor's measured / target EY + TDS must fall inside the model's predicted
-band. Splitting from test_label_scoring keeps Layer 1 (compound model) and
-Layer 2 (sensory labels) independently verifiable — CLAUDE.md principle #5.
+Each anchor with a published TDS must predict within ±TDS_TOL of it — TDS is the
+Layer 1 calibration anchor (2026-05-21: switched from self-referential predicted
+bands to measured-TDS assertions). EY is a derived sanity band. Splitting from
+test_label_scoring keeps Layer 1 (compound model) and Layer 2 (sensory labels)
+independently verifiable — CLAUDE.md principle #5.
 """
 from __future__ import annotations
 
@@ -15,11 +17,15 @@ from models.ey_model import calc_ey
 from models.tds_model import calc_press_time, calc_tds
 
 
+# predicted TDS must land within this of the measured anchor value
+TDS_TOL = 0.05
+
+
 ANCHOR_RECIPES = {
     "Hoffman": dict(
         roast="medium_light", brewer="standard",
         temp=98.0, dial=4.3, dose=11.0, steep=120.0, water=200.0,
-        tds_band=(1.25, 1.45), ey_band=(20.0, 24.0),
+        measured_tds=1.23, ey_band=(17.0, 22.0),
     ),
     "April": dict(
         roast="medium_light", brewer="standard",
@@ -28,7 +34,7 @@ ANCHOR_RECIPES = {
         extra_ey={"pre_pour_ml": 50.0, "pre_pour_sec": 30.0,
                   "partial_seal_sec": 25.0, "partial_seal_water_ml": 50.0},
         extra_cpd={"partial_seal_sec": 25.0, "partial_seal_water_ml": 50.0},
-        tds_band=(1.05, 1.30), ey_band=(14.0, 18.0),
+        measured_tds=1.17, ey_band=(14.0, 18.0),
     ),
     "Championship": dict(
         roast="medium_light", brewer="standard",
@@ -36,12 +42,12 @@ ANCHOR_RECIPES = {
         press_s=20.0,
         extra_ey={"inverted": True, "n_swirls": 2},
         extra_cpd={"inverted": True, "n_swirls": 2},
-        tds_band=(1.40, 1.70), ey_band=(13.0, 18.0),
+        measured_tds=1.56, ey_band=(13.0, 18.0),
     ),
     "Hedrick": dict(
         roast="medium_light", brewer="standard",
         temp=95.0, dial=6.0, dose=14.0, steep=240.0, water=200.0,
-        tds_band=(1.25, 1.60), ey_band=(16.0, 20.0),
+        measured_tds=None, tds_band=(1.20, 1.45), ey_band=(13.0, 18.0),
     ),
 }
 
@@ -76,9 +82,14 @@ def _brew(spec):
 def test_anchor_physics_within_band(name):
     spec = ANCHOR_RECIPES[name]
     ey, tds, _ = _brew(spec)
-    tds_lo, tds_hi = spec["tds_band"]
     ey_lo, ey_hi = spec["ey_band"]
-    assert tds_lo <= tds <= tds_hi, f"{name}: predicted TDS {tds:.3f} outside [{tds_lo}, {tds_hi}]"
+    measured = spec.get("measured_tds")
+    if measured is not None:
+        assert abs(tds - measured) <= TDS_TOL, \
+            f"{name}: predicted TDS {tds:.3f} vs measured {measured} exceeds tol {TDS_TOL}"
+    else:
+        tds_lo, tds_hi = spec["tds_band"]
+        assert tds_lo <= tds <= tds_hi, f"{name}: predicted TDS {tds:.3f} outside [{tds_lo}, {tds_hi}]"
     assert ey_lo <= ey <= ey_hi, f"{name}: predicted EY {ey:.2f} outside [{ey_lo}, {ey_hi}]"
 
 
