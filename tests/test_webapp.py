@@ -8,7 +8,9 @@ def test_webapp_routes() -> None:
     index_response = client.get("/")
     assert index_response.status_code == 200
     assert b"AeroPress" in index_response.data
-    assert b"data-controls-toggle" in index_response.data
+    # controls panel renders (the mobile collapse toggle was removed by
+    # design — webapp.js: "controls panel is always visible")
+    assert b"data-controls-panel" in index_response.data
 
     # single-label mode (label specified)
     api_response = client.post(
