@@ -83,8 +83,8 @@
     },
     label: {
       title: "口感方向",
-      body: "Phase 8 感官 label 島：每個 label 是一份「想喝什麼」的目標（compound profile + TDS_PREFER），optimizer 會找出最接近該目標的配方。選擇「全部並列」會同時跑 4 個 label，每個 label 各印 Top 1，方便 cupping 對照。",
-      meta: "balanced=Hoffman / acid-forward=April / sweet-body=Championship / coarse-modern=Hedrick。",
+      body: "Phase 8 感官 label 島：每個 label 是一份「想喝什麼」的目標（compound profile + TDS_PREFER），optimizer 會找出最接近該目標的配方。選擇「全部並列」會同時跑可用 label，每個各印 Top 1，方便 cupping 對照。",
+      meta: "balanced=Hoffman / acid-forward=April / coarse-modern=Hedrick / tim=Tim Wendelboe Nordic。",
     },
   };
 
