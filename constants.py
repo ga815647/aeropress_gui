@@ -265,13 +265,11 @@ GRIND_KINETICS_COEFF = 0.40
 CGA_CEILING_COEFF = 0.25      # 強：CGA Hedrick (dial 6.0) ceiling = exp(-0.375) = 0.687
 MEL_CEILING_COEFF = 0.25      # 強：同 CGA — 粗磨明顯壓低 MEL plateau
 
-# Grind-dependent EY 欠萃懲罰（Phase 5 lite）
-# 細磨（dial < DIAL_BASE）目標 Hoffman 風格，EY 不足要扣分；
-# 粗磨（dial > DIAL_BASE）刻意低 EY 是 April/Hedrick 風格，EY 不足不扣分。
-# 公式：factor = exp(-EY_DEMAND_WEIGHT × sigmoid(GRIND_EY_DEMAND_K × (DIAL_BASE - dial)) × ey_z²)
-# 其中 ey_z = max(0, (EY_PREFER - EY) / EY_SIGMA_LO[roast])（單側、softplus 平滑）
-GRIND_EY_DEMAND_K = 10.0      # sigmoid 銳度（dial 4.5 為中心；±0.1 dial 差距即足以區分）
-EY_DEMAND_WEIGHT = 0.30       # 最大懲罰強度（細磨 + EY 差 1 個 sigma → ~25% 扣分）
+# GRIND_EY_DEMAND 已移除（2026-05-21）：原按 EY×dial（皆過程變數）扣分，撞紅線
+# 「EY 是過程變數，不得作為主要扣分依據」。錨點探針證實移除後真欠萃（TDS~1.0）仍只
+# 拿 10–14 分 —— 化合物模型 + TDS floor 自我鑑別承載好壞（原則 #3）。它本是 Phase 5
+# lite 的代償補丁，且校準後 EY 整體下移使其誤傷低於 98°C 的細磨好 brew。
+# 移除常數：GRIND_EY_DEMAND_K / EY_DEMAND_WEIGHT。
 
 # TDS-EY mismatch 懲罰（Phase 5 lite+）：「低 TDS + 高 EY」=「under-concentrated 過萃」象限
 # 兩條件同時觸發才扣分（自我 gating）：dose 過瘦 → 必須過萃補 TDS → 酸感集中、澀鹹、無香

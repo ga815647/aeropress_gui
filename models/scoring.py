@@ -125,17 +125,7 @@ def flavor_score(
     # ── 6. TDS floor (太淡無口感) ─────────────────────────────────────
     tds_floor_factor = _sigmoid(constants.TDS_FLOOR_K * (tds - constants.TDS_FLOOR_MID))
 
-    # ── 7. Grind-dependent EY deficit (細磨欠萃單側懲罰) ───────────────
-    grind_ey_demand = _sigmoid(
-        constants.GRIND_EY_DEMAND_K * (constants.DIAL_BASE - dial)
-    )
-    ey_deficit = _softplus(ey_prefer - ey, k=5.0)
-    ey_z = ey_deficit / ey_s_lo
-    grind_ey_factor = math.exp(
-        -constants.EY_DEMAND_WEIGHT * grind_ey_demand * ey_z * ey_z
-    )
-
-    # ── 8. TDS-EY mismatch (低 TDS + 高 EY 過萃補濃) ──────────────────
+    # ── 7. TDS-EY mismatch (低 TDS + 高 EY 過萃補濃) ──────────────────
     ey_surplus = _softplus(ey - ey_prefer, k=constants.TDS_EY_MISMATCH_K)
     tds_deficit = _softplus(tds_prefer - tds, k=constants.TDS_EY_MISMATCH_K)
     mismatch = ey_surplus * tds_deficit
@@ -146,7 +136,6 @@ def flavor_score(
         * tds_factor
         * ey_factor
         * tds_floor_factor
-        * grind_ey_factor
         * mismatch_factor
     )
 

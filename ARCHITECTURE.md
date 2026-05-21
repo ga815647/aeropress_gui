@@ -127,10 +127,12 @@ flavor_score(actual, tds, roast, label, ...) =
 - `1 / (1 + exp(-TDS_FLOOR_K × (tds - TDS_FLOOR_MID)))`
 - `MID=0.50`、`K=8.0`（全域連續可導，取代舊 `min(tds/0.80, 1)²`）
 
-### grind_ey_factor（Phase 5 lite）
-- 細磨象限（dial < DIAL_BASE）對 EY 不足嚴懲、粗磨豁免
-- `GRIND_EY_DEMAND_K=10.0` sigmoid 銳轉換
-- `EY_DEMAND_WEIGHT=0.30`，softplus(k=5) 單側平滑
+### grind_ey_factor — REMOVED (2026-05-21)
+細磨欠萃 EY-floor 懲罰（舊 `GRIND_EY_DEMAND_K` / `EY_DEMAND_WEIGHT`）已移除：它按
+EY×dial（皆過程變數）扣分，撞紅線「EY 不得作為主要扣分依據」。錨點探針證實移除後
+真欠萃（TDS~1.0）仍只拿 10–14 分 —— `compound_reward` + `tds_floor_factor` 自我鑑別
+承載好壞（原則 #3）。它本是 base_ey 17.0 時代的 Phase 5 lite 補丁，TDS 校準後 EY 整體
+下移使其誤傷低於 98°C 的細磨好 brew。
 
 ### mismatch_factor（Phase 5 lite+）
 - 低 TDS + 高 EY 雙條件 AND-gated（SCA under-concentrated 象限）
