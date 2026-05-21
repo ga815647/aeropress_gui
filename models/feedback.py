@@ -140,8 +140,17 @@ def recompute_entry(entry: dict) -> dict | None:
     if not recipe:
         return None
     water = entry.get("water") or {}
+
+    import constants
+    import runtime
+    from optimizer import score_logged_recipe  # lazy: keeps append/read light
+
+    # feedback.jsonl stores no t_env — pin ambient to module defaults so the
+    # recompute is deterministic (T_ENV is global mutable state) and matches how
+    # the recipe was first scored. Save/restore so a history read has no side effect.
+    saved_env = (constants.T_ENV, constants.TEMP_BOILING_POINT)
     try:
-        from optimizer import score_logged_recipe  # lazy: keeps append/read light
+        runtime.apply_environment_settings(25.0, 0.0)
         scored = score_logged_recipe(
             roast_code=str(entry["roast"]),
             brewer_size=str(entry["brewer"]),
@@ -156,6 +165,8 @@ def recompute_entry(entry: dict) -> dict | None:
         )
     except (KeyError, TypeError, ValueError):
         return None
+    finally:
+        constants.T_ENV, constants.TEMP_BOILING_POINT = saved_env
     return {
         "ey": round(scored["ey"], 3),
         "tds": round(scored["tds"], 4),
