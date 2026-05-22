@@ -140,7 +140,7 @@ moderately_dark 1.09 · dark 1.12 · very_dark 1.14
 
 ### 5.3 `brewer` 幾何（XL）
 
-`BREWER_TAU_MULT = {standard 1.0, xl 1.05}` —— XL 深床萃取略慢。**未校準先驗**（無 XL 折射儀資料），藍圖 §6「容器進一個小 offset 項」。XL 主效應（水量 400ml）走 `water_ml` 直接輸入。
+> **更新 2026-05-22：`BREWER_TAU_MULT` 已移除（使用者裁決）。** 原 `{standard 1.0, xl 1.05}`（XL 深床萃取略慢）是未校準先驗,且物理上站不住 —— 「深床 → 萃取慢」是**滲濾**直覺(流經粉層的路徑),本 Layer 1 模的是**素浸泡**(擴散主導、與床深幾乎無關)。移除後 Layer 1 **brewer-agnostic**:只吃 `water_ml` + `dose`,同沖煮比下 XL 與 standard 給出**完全相同**的 TDS/EY。`constants.BREWER_PRESETS` 一併砍到只剩 `{name, water_ml, dose_min, dose_max}`（`area_cm2`/`dial_offset`/`press`/`swirl` 等舊技法欄退役）。`brew()` / `predict_ey()` 不再有 `brewer` 參數。
 
 ### 5.4 `light` IDEAL 重推（Step 3 §9.1 交接項）
 

@@ -1,36 +1,14 @@
+# Phase 10 Step 5 — XL is just "standard scaled up": it differs ONLY in water_ml
+# (and dose capacity). The old per-brewer extraction terms — bed area, dial
+# offset, press/swirl timing, and layer1's BREWER_TAU_MULT — were uncalibrated
+# and physically dubious for a plain-immersion model (bed geometry drives
+# percolation, not immersion). Removed. Layer 1 is brewer-agnostic: it sees
+# water_ml + dose, never a brewer category. At the same brew ratio, XL and
+# standard now give identical TDS/EY by construction.
 BREWER_PRESETS = {
-    "standard": {
-        "name": "AeroPress 標準版",
-        "water_ml": 200,
-        "dose_min": 7.0,
-        "dose_max": 21.0,
-        "fixed_press_sec": 30,
-        "swirl_wait_sec": 30,  # 旋轉後靜置等沉粉（容器固定，不依 dial）
-        "area_cm2": 43.0,   # 內徑 ~74mm → π×37²≈43 cm²
-        "dial_offset": 0.0,
-    },
-    "xl": {
-        "name": "AeroPress XL",
-        "water_ml": 400,
-        "dose_min": 15.0,
-        "dose_max": 36.0,
-        "fixed_press_sec": 40,
-        "swirl_wait_sec": 40,  # XL 深床（22g/400ml）沉降較慢，比 standard 多 10s
-        "area_cm2": 63.6,   # 內徑 ~90mm → π×45²≈63.6 cm²
-        # XL 床深 ~0.35 g/cm² vs std ~0.26 g/cm²（深 30%），實務 EK43 給 XL 多 ~0.25 格
-        # （4.0→4.25），對應 ZP6 dial +0.10 偏好。
-        # ⚠️ 經驗 patch：化合物模型目前不區分 brewer 幾何（XL/4.3 ≈ std/4.3 in cup），
-        # 此偏好只是 optimizer Gaussian 軟偏向（影響 ~0.2% 排名），未真正修化合物。
-        # 化合物層若要正確反映 XL 深床（channeling/bed compaction/thermal gradient）
-        # 屬未來 phase，會涉及 _predict_closed_compounds 加 brewer-aware 參數，
-        # 需重跑六錨點。本 patch 不違反「不為 anchor 反推化合物」原則。
-        "dial_offset": 0.10,
-    },
+    "standard": {"name": "AeroPress 標準版", "water_ml": 200, "dose_min": 7.0, "dose_max": 21.0},
+    "xl":       {"name": "AeroPress XL",     "water_ml": 400, "dose_min": 15.0, "dose_max": 36.0},
 }
-
-# 達西定律截面積修正基準（standard 機型）
-# XL 截面積較大 → 同等研磨/豆量下流量正比於截面積
-DRIP_AREA_REF_CM2 = 43.0
 
 DOSE_STEP = 0.5
 POUR_RATE = 12
@@ -327,6 +305,23 @@ PRESS_PERC_MEL_DIFF = 0.03   # MEL：大分子聚合物需壓力輔助溶出，+
 PRESS_PERC_CA_DIFF  = 0.02   # CA ：碳水化合物輕微受惠，+2% / 30s
 PRESS_PERC_SW_LOSS  = 0.03   # SW ：揮發性香氣在下壓時逸散，-3% / 30s
 PRESS_PERC_REF_SEC  = 30.0   # 基準下壓時間（Hoffman 標準版 30s；XL ~47s）
+
+# Phase 10 Step 5 — per-roast default brew temperature (°C).
+# Temperature is an OPTIMIZER INPUT, not a searched dimension: it acts on flavor
+# only through Layer 1's EY/TDS (Layer 2 has b_temp=0), and for any (tds,ey,dial)
+# target a different temp is offset by a different steep — so optimizing it would
+# only yield tie-break noise (docs/PHASE10_STEP4_LAYER1.md §8). These defaults are
+# CONVENTION + SAFETY, not a derived optimum — lighter roasts hotter, darker cooler,
+# with headroom below the boiling point. The user adjusts by taste.
+DEFAULT_TEMP = {
+    "very_light": 99.0,
+    "light": 98.0,
+    "medium_light": 95.0,
+    "medium": 92.0,
+    "moderately_dark": 89.0,
+    "dark": 86.0,
+    "very_dark": 84.0,
+}
 
 # Roast: SCA/SCAA official classification + Agtron (ground) range.
 # Reference: SCA roast color standards. Keys = SCA level names.

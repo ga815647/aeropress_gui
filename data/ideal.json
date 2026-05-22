@@ -1,0 +1,36 @@
+{
+  "_schema": {
+    "version": 6,
+    "note": "Phase 10 per-roast sensory IDEAL. Schema v6 (Step 5.5, 2026-05-22): the representation is the 10 cotter CATA attributes with a real (TDS,EY) relationship — see models.sensory.ATTRIBUTES — NOT the v5 six averaged axes. Step 5.5 dropped axis-averaging because cotter attribute values are already consumer-perceived (cross-attribute masking baked in) and averaging destroyed signal; the 7 un-fittable attributes (R²<=0.32) were dropped, each a weak twin of a kept one. LABEL CONCEPT REMOVED (blueprint §0): one 10-attribute IDEAL per roast, not N label islands. Each IDEAL = predict_attributes(**anchor_brew). anchor_brew recomputed 2026-05-22 after the brewer simplification (Layer 1 no longer has a BREWER_TAU_MULT term — XL = standard scaled by water only). Confidence tiers: medium_light = user ⭐5 feedback cup (Tier A); light = user tim feedback (provisional — tim is not a Layer 1 calibration anchor); medium / moderately_dark = deterministic placeholders (predict_attributes at medium_light's reference brew point + roast offset). Loaded by models/ideal.py:roast_ideal(); scored by models/distance.py:attribute_distance(). Detail: docs/PHASE10_STEP5_5_ALL_ATTRIBUTES.md, docs/PHASE10_STEP3_LABELS.md.",
+    "fields": {
+      "ideal": "10 sensory attribute target intensities (cotter CATA attributes, models.sensory.ATTRIBUTES order). Scale = CATA detection frequency, nominally [0,1]; independent intensities, do NOT sum to 1. Bullseye for the Step 5 attribute-distance.",
+      "anchor_brew": "the Layer 1 point {tds,ey,roast,dial} the IDEAL was derived from via predict_attributes(). TDS/EY are coarse internal latents (no refractometer); their absolute value barely matters — the system is anchored, so it cancels. Traceability only, NOT a scoring field.",
+      "seed": "provenance + confidence tier of this roast's IDEAL.",
+      "description": "human-readable summary."
+    }
+  },
+  "light": {
+    "ideal": {"Sour": 0.4359, "Citrus": 0.2742, "Tea.floral": 0.2744, "Sweet": 0.2263, "Cereal": 0.1413, "Thick.viscous": 0.0436, "Bitter": 0.2310, "Astringent": 0.1113, "Burnt": 0.0429, "Dark.chocolate": 0.0884},
+    "anchor_brew": {"tds": 1.2081, "ey": 17.0592, "roast": "light", "dial": 3.7},
+    "seed": "user tim ⭐4 feedback recipe (Tim Wendelboe Nordic light-roast style) — tim ⭐4 recipe (light, 100°C, dial 3.7, 60s, 25g, XL 400ml) → TDS 1.208 / EY 17.06 through the Phase 10 thin Layer 1 (models/layer1.py). IDEAL re-derived through the 10-attribute predict_attributes(). STILL PROVISIONAL: tim is not a Layer 1 calibration anchor (Layer 1 is anchored only on the medium_light Hoffman plain-immersion recipe), so light's recipe→(TDS,EY) mapping carries the uncalibrated E_MAX_ROAST_FACTOR['light'] prior. The n=3 tim bracket still ranks correctly by attribute distance (⭐4 nearest).",
+    "description": "淺焙（Nordic 真淺焙 / Tim Wendelboe 風）。Burnt/Dark.chocolate 為各焙度最低、Sour/Tea.floral 最高（明亮）。模型尚無『淺焙明亮 vs 悶』訊號 → feedback 第一精修對象。"
+  },
+  "medium_light": {
+    "ideal": {"Sour": 0.4223, "Citrus": 0.2274, "Tea.floral": 0.2085, "Sweet": 0.1775, "Cereal": 0.1133, "Thick.viscous": 0.0729, "Bitter": 0.3319, "Astringent": 0.1181, "Burnt": 0.1522, "Dark.chocolate": 0.1881},
+    "anchor_brew": {"tds": 1.3662, "ey": 20.1069, "roast": "medium_light", "dial": 4.4},
+    "seed": "user ⭐5 feedback cup. Source = the user's logged 'impeccable' (無可挑剔) medium_light brew: 94°C / dial 4.4 / 24g / 150s / XL 400ml, recomputed through the Phase 10 thin Layer 1 → TDS 1.366 / EY 20.11; IDEAL re-derived through the 10-attribute predict_attributes(). Rationale: Hoffman's 'Brewing for Balance' recipe is a respected reference, not an objective optimum — cotter hedonic-liking data shows no single 'best' exists. For a single-user system the authoritative target is the user's own ⭐5 cup. Confidence: Tier A — n=2 mutually consistent ⭐5 cups.",
+    "description": "中淺焙。校準在使用者實測 ⭐5 杯（94°C/4.4/24g/150s，使用者評『無可挑剔』）。相對 Hoffman 文獻杯更酸、更苦、body 略厚 —— 此為使用者偏好，非文獻平均。"
+  },
+  "medium": {
+    "ideal": {"Sour": 0.3873, "Citrus": 0.1924, "Tea.floral": 0.1735, "Sweet": 0.1575, "Cereal": 0.0983, "Thick.viscous": 0.0829, "Bitter": 0.3669, "Astringent": 0.1281, "Burnt": 0.2122, "Dark.chocolate": 0.2481},
+    "anchor_brew": {"tds": 1.3662, "ey": 20.1069, "roast": "medium", "dial": 4.4},
+    "seed": "PLACEHOLDER — deterministic: predict_attributes at medium_light's reference brew point (1.3662/20.11/dial 4.4 — the user's ⭐5 cup) with the `medium` roast offset. No anchor, no feedback. Refine when a medium-roast cup is logged.",
+    "description": "中焙。佔位用 —— 無錨點、無 feedback，沿 _ROAST_OFFSET 自 medium_light 推得。"
+  },
+  "moderately_dark": {
+    "ideal": {"Sour": 0.3373, "Citrus": 0.1424, "Tea.floral": 0.1235, "Sweet": 0.1275, "Cereal": 0.0783, "Thick.viscous": 0.1029, "Bitter": 0.4169, "Astringent": 0.1431, "Burnt": 0.2922, "Dark.chocolate": 0.3281},
+    "anchor_brew": {"tds": 1.3662, "ey": 20.1069, "roast": "moderately_dark", "dial": 4.4},
+    "seed": "PLACEHOLDER — deterministic: predict_attributes at medium_light's reference brew point (1.3662/20.11/dial 4.4 — the user's ⭐5 cup) with the `moderately_dark` roast offset. No anchor, no feedback.",
+    "description": "中深焙。佔位用 —— 無錨點、無 feedback，沿 _ROAST_OFFSET 自 medium_light 推得。"
+  }
+}
