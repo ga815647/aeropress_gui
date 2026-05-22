@@ -9,8 +9,8 @@
 ## 1. 交付物摘要
 
 - `models/layer1.py` —— `brew(roast, temp, dial, steep_sec, dose, water_ml, brewer) → {ey, tds}`。取代 `ey_model.py` + `tds_model.py` + `compounds.py` 全套。
-- 模型 = **單一一階逼近平衡上限**（equilibrium-desorption 粗形）：`EY = E_MAX·(1−exp(−t_eff/τ))·f_ratio`。純 `exp()` 結構、全域單調、飽和、無閾值。
-- **5 個自由參數**，校準到 3 個有實測 TDS 的 medium_light 錨點（Hoffman/April/Champion）：3 個用錨點解出（`E_MAX`/`TAU_REF`/`ALPHA`）、2 個物理先驗（`GAMMA`/`K_RATIO`）。3 錨點 TDS **重現誤差 ≤ 0.001%**。
+- 模型 = **單一一階逼近平衡上限**（equilibrium-desorption 粗形）：`EY = E_MAX·(1−exp(−t_eff/τ))·f_ratio`。純 `exp()` 結構、全域單調、飽和、無閾值（CLAUDE.md 原則 #1）。
+- **5 個參數，只校準 1 個錨點：** `E_MAX` 由 Hoffman（唯一的素浸泡錨點）解出;`TAU_REF`/`ALPHA`/`GAMMA`/`K_RATIO` 4 個是物理先驗。**April/Champion 因「技法 confound」剔除**（§3.1）—— 此為對藍圖 §6（原訂 Hoffman/April/Champion/Hedrick 多錨點校準）的**刻意修正**，使用者裁決 2026-05-22。
 - `data/labels.json` 的 `light` IDEAL 依 Step 3 §9.1 用新 Layer 1 重推（§5.4）。
 - 舊三模組未刪除（`runtime.py`/`optimizer.py` 等仍 import 它們）—— Step 5 改接線後一併刪。本步驟為**純加法**：新增 `models/layer1.py`，不動既有檔（除 `labels.json` 的 light 重推）。
 
@@ -43,70 +43,83 @@ TDS% = extracted / cup_mass · 100
 
 ---
 
-## 3. 校準
+## 3. 校準（單一 Hoffman 錨點）
 
-### 3.1 錨點（3 個有實測 TDS 的 medium_light 物理校準錨點）
+### 3.1 為什麼只用 Hoffman —— April/Champion 是「不同黑箱」
 
-來源：Hoffmann《Brewing for Balance, Acidity, or Sweetness》(El Tambo 水洗)。
+薄 Layer 1 建模的是**素浸泡**：旋鈕只有 溫度/研磨/dose/水量/時間/容器，**沒有技法旋鈕**。
 
-| 錨點 | temp / dial / steep / dose / water | 實測 TDS |
+3 個有實測 TDS 的文獻錨點裡，**只有 Hoffman 是素浸泡**（直立、單次旋轉、無花招）。另兩個是技法沖煮：
+
+| 錨點 | 技法 | 與薄 Layer 1 的關係 |
 |---|---|---|
-| Hoffman | 98°C / 4.3 / 120s / 11g / 200ml | 1.23 |
-| April | 85°C / 5.0 / 90s / 13g / 200ml | 1.17 |
-| Championship | 80°C / 5.0 / 100s / 17g / 200ml | 1.56 |
+| **Hoffman** | 直立浸泡、swirl、壓 | ✅ 素浸泡 —— in-distribution，可校準 |
+| April | 半密封 + 二段注水 | ❌ 技法沖煮 —— 不同流程 |
+| Championship | 倒置 + 高劑量攪動 | ❌ 技法沖煮 —— 不同流程 |
 
-> Hedrick 在 `diagnose_anchor.py` 標記 `measured_tds: None`（無實測 TDS）—— 藍圖 §6 誤以為 Hedrick 有「已知 TDS」。Hedrick 因此只當 sanity 點，不進校準。
+April/Champion 在 80–85°C 仍萃出 TDS 1.17 / 1.56，靠的是**技法**。薄 Layer 1 看不到技法 → 若硬把它們當錨點，模型只能用手上的旋鈕去解釋「低溫卻萃得好」，結果把**技法的功勞錯誤折進一個過小的溫度係數**。Step 4 早先版本的 3-錨點擬合就證實了這點：`ALPHA` 被擠到 0.0194（Q10≈1.2，太溫和）—— 那是 April/Champion 技法污染出來的假象，不是物理。
 
-實測量到的是 **TDS**；EY 由 `TDS = EY·dose÷出杯重` 反解（retention 2.15 g/g）：Hoffman ≈ 19.96%、April ≈ 15.67%、Champion ≈ 15.24%。
+> **原則：被污染的錨點比沒有錨點更糟。** April/Champion 與薄 Layer 1 是**不同的黑箱**（不同流程），混進校準只會讓參數失真。故剔除；只留 Hoffman。
 
-### 3.2 參數（5 個）
+### 3.2 參數（1 解出 + 4 物理先驗）
 
 | 參數 | 值 | 角色 | 來源 |
 |---|---|---|---|
-| `E_MAX_REF` | 22.84 % | medium_light 平衡上限 | **錨點解出** |
-| `TAU_REF` | 44.4 s | 速率常數（98°C / dial 4.3 / standard）| **錨點解出** |
-| `ALPHA` | 0.0194 /°C | 溫度 → 速率 | **錨點解出** |
+| `E_MAX_REF` | 23.346 % | medium_light 平衡上限 | **由 Hoffman 解出**（唯一擬合數）|
+| `TAU_REF` | 50.0 s | 速率常數（98°C / dial 4.3 / standard）| 物理先驗 —— 愛樂壓浸泡 120s 達平衡 ~93% |
+| `ALPHA` | 0.026 /°C | 溫度 → 速率 | 物理先驗 —— Arrhenius Ea≈30 kJ/mol 線性化 |
 | `GAMMA` | 0.32 /dial | 研磨 → 速率 | 物理先驗 |
 | `K_RATIO` | 1.5 | 沖煮比容量係數 | 物理先驗 |
 
 固定偏移：`T_REF=98`、`DIAL_REF=4.3`、`T_PRESS_OFFSET=10s`。
 
-**解法（結構替代缺的資料）：** 家裡無折射儀 → 除 3 個文獻錨點外產不出任何 (旋鈕→實測 TDS) 配對（藍圖 §6）。6 input × 自由黑箱必 overfit。故先以物理先驗釘住 `GAMMA`（研磨速率效應，中等）與 `K_RATIO`（沖煮比效應，溫和、~2% EY 跨度）；其餘 3 個 `E_MAX`/`TAU_REF`/`ALPHA` 由 3 錨點**精確解出**（3 方程 3 未知）。受「單調 + 飽和」約束，5 參數曲線被 3 錨點 + sanity 邊界釘死。
+**解法：** `E_MAX` 解到讓模型重現 Hoffman 實測 TDS 1.23（→ EY 19.96%）。其餘 4 個參數是物理先驗 —— 家裡無折射儀 → 除 Hoffman 外產不出任何 (旋鈕→實測 TDS) 配對（藍圖 §6）。受「單調 + 飽和」結構約束，1 個素浸泡錨點 + 4 個物理先驗就釘出一條合理的粗估曲線（**結構替代缺的資料**）。
 
-**溫度是溫和的槓桿（重要發現）：** `ALPHA` 解出 ≈ 0.019/°C —— τ 在 80–98°C 間只變化約 40%。這對上藍圖 §13「平衡脫附論文發現溫度對 TDS/EY 幾乎無感」。April/Champion 的低 EY 主要來自**較粗研磨 + 較高沖煮比 + 較短浸泡**，**不是**它們的低水溫。技法（April 半密封/二段注水、Champion 倒置）不進薄 Layer 1（藍圖 §6）—— 其效應被吸收進這組粗校準。
+**`ALPHA` 是物理先驗,不是擬合值。** Arrhenius：萃取速率 ∝ exp(−Ea/RT)。取 Ea≈30 kJ/mol（擴散主導的萃取活化能量級），在 98°C 線性化 → `ALPHA = Ea/(R·T²) = 30000/(8.314·371.15²) = 0.0262/°C`，Q10≈1.3。這讓**溫度成為一個物理上站得住、適度的槓桿**（88→98°C 約動 1.4pp EY，§4.4）—— 取代早先被 April/Champion 污染擠出的 0.0194。
+
+> Layer 2（`models/sensory.py`）的 `b_temp=0`：固定 TDS/EY 下溫度對 6 感官軸**無直接項**（Batali 2020）。所以溫度對風味的影響**完全經由 EY/TDS 傳遞** —— 溫度是萃取旋鈕、不是風味軸。Layer 1 的 `ALPHA` 是溫度唯一的入口，因此它的量級要誠實。
 
 ---
 
 ## 4. 驗證
 
-### 4.1 錨點重現（誤差 ≤ 0.001% TDS）
+### 4.1 Hoffman 錨點重現（精確）
 
-| 錨點 | predicted EY | predicted TDS | 實測 TDS | 誤差 |
-|---|---|---|---|---|
-| Hoffman | 19.97% | 1.230% | 1.23 | +0.000 |
-| April | 15.67% | 1.170% | 1.17 | +0.000 |
-| Championship | 15.24% | 1.561% | 1.56 | +0.001 |
+| | predicted EY | predicted TDS | 實測 TDS |
+|---|---|---|---|
+| Hoffman（98°C / 4.3 / 120s / 11g / 200ml）| 19.96% | 1.2300% | 1.23 |
+
+**April/Champion —— 不是錨點，只作「技法落差」示意：** 用技法盲的薄 Layer 1 跑它們的食譜 → April 預測 TDS 1.08（實測 1.17）、Champion 預測 TDS 1.42（實測 1.56）。預測低於實測的那段落差 ≈ **技法的貢獻**（半密封 / 倒置攪動補出的額外萃取）。模型誠實地少算 —— 因為它本來就沒有技法旋鈕。
 
 ### 4.2 單調性掃描（medium_light XL，base 95°C / 4.3 / 120s / 24g）
 
 | 掃描 | 值 | EY |
 |---|---|---|
-| 溫度 | 82 / 88 / 94 / 100°C | 18.24 → 18.85 → 19.37 → 19.80 ↑ 飽和 |
-| 研磨 | dial 3.0 / 4.3 / 5.5 / 7.0 | 20.57 → 19.45 → 17.46 → 14.04 ↓（越粗越少）|
-| 浸泡 | 30 / 90 / 180 / 360s | 11.63 → 18.18 → 20.51 → 20.94 ↑ 飽和 |
-| 劑量 | 16 / 22 / 28 / 34g | 20.00 → 19.58 → 19.18 → 18.80 ↓（溫和）|
+| 溫度 | 82 / 88 / 94 / 100°C | 17.24 → 18.24 → 19.12 → 19.84 ↑ 飽和 |
+| 研磨 | dial 3.0 / 4.3 / 5.5 / 7.0 | 20.75 → 19.25 → 16.92 → 13.26 ↓（越粗越少）|
+| 浸泡 | 30 / 90 / 180 / 360s | 10.83 → 17.74 → 20.67 → 21.39 ↑ 飽和 |
+| 劑量 | 16 / 22 / 28 / 34g | 19.80 → 19.38 → 18.99 → 18.61 ↓（溫和）|
 
 全部單調、飽和、無斷點、無 blow-up。
 
-### 4.3 Sanity 點（非校準，標準 200ml）
+### 4.3 Sanity 點（素浸泡，標準 200ml，無實測 TDS）
 
 | 配方 | EY | TDS | 期望 |
 |---|---|---|---|
-| Hedrick（95°C / 6.0 / 240s / 14g）| 19.72% | 1.599% | 無實測 → 寬 sanity band [1.30,1.65] ✓ |
-| Under-extract（93°C / 6.5 / 60s / 11g）| 10.70% | 0.663% | EY < 15、TDS < 0.85 ✓ |
-| Over-extract（99°C / 3.5 / 240s / 11g）| 21.09% | 1.298% | EY > 21、TDS > 1.20 ✓ |
+| Hedrick（95°C / 6.0 / 240s / 14g）| 19.69% | 1.596% | 寬 sanity band ✓（素浸泡長浸泡）|
+| Under-extract（93°C / 6.5 / 60s / 11g）| 9.83% | 0.609% | EY < 15、TDS < 0.85 ✓ |
+| Over-extract（99°C / 3.5 / 240s / 11g）| 21.54% | 1.326% | EY > 21、TDS > 1.20 ✓ |
 
-> Hedrick TDS 1.60（舊化合物模型給 ~1.44）—— Hedrick 無實測，薄 Layer 1 對「粗磨 + 長浸泡（240s）」給較高萃取。屬粗估容忍範圍，非錨點。
+### 4.4 溫度槓桿（medium_light XL，4.3 / 120s / 24g）
+
+| 溫度 | EY | TDS |
+|---|---|---|
+| 88°C | 18.24% | 1.241% |
+| 90°C | 18.55% | 1.262% |
+| 94°C | 19.12% | 1.300% |
+| 98°C | 19.62% | 1.333% |
+
+88→98°C ≈ +1.4pp EY / +0.09 TDS —— 在使用者實際範圍（93–100°C）內溫度是個**看得見、但溫和**的槓桿。極端（80°C）效應更大；技法沖煮（April/Champion）能在低溫補回的那段，本模型不涵蓋。
 
 ---
 
@@ -133,18 +146,18 @@ moderately_dark 1.09 · dark 1.12 · very_dark 1.14
 
 Step 3 的 `light` IDEAL 是用**舊 Layer 1** 重算 tim ⭐4 食譜得到（TDS 1.413 / EY 19.88）。Step 3 §9.1 明示「Layer 1 完成後須重推」。本步驟用新 Layer 1 重算：
 
-tim ⭐4 食譜（light，100°C / dial 3.7 / 60s / 25g / XL 400ml）→ **TDS 1.2055 / EY 17.02**。
+tim ⭐4 食譜（light，100°C / dial 3.7 / 60s / 25g / XL 400ml）→ **TDS 1.1868 / EY 16.75**（60s 是短浸泡 → 僅達平衡 ~75%）。
 
 | 軸 | Step 3 (舊 Layer 1) | Step 4 (新 Layer 1) |
 |---|---|---|
-| acidity | 0.3770 | 0.3559 |
-| sweetness | 0.1774 | 0.1929 |
-| body | 0.0771 | 0.0444 |
-| bitterness | 0.3096 | 0.2311 |
-| astringency | 0.1613 | 0.1602 |
-| roast | 0.2283 | 0.1869 |
+| acidity | 0.3770 | 0.3541 |
+| sweetness | 0.1774 | 0.1960 |
+| body | 0.0771 | 0.0418 |
+| bitterness | 0.3096 | 0.2220 |
+| astringency | 0.1613 | 0.1599 |
+| roast | 0.2283 | 0.1811 |
 
-新 Layer 1 把同一支 tim ⭐4 食譜讀得**較低 TDS**（1.21 vs 1.41）→ acidity/bitterness/roast 軸隨之下降。tim n=3 bracket **仍正確排序**（感官距離 ⭐4 0.000 < ⭐3 0.032 < ⭐2 0.060）。`light` 仍是 **provisional**：tim 不是 Layer 1 校準錨點，其 (TDS,EY) 帶著未校準的 `E_MAX_ROAST_FACTOR['light']` 先驗 → 仍是 feedback 第一精修對象。
+tim n=3 bracket **仍正確排序**（感官距離 ⭐4 0.000 < ⭐3 0.033 < ⭐2 0.055）。`light` 仍是 **provisional**：tim 不是 Layer 1 校準錨點（Layer 1 只錨在 Hoffman 素浸泡），其 (TDS,EY) 帶著未校準的 `E_MAX_ROAST_FACTOR['light']` 先驗 → 仍是 feedback 第一精修對象。
 
 ---
 
@@ -152,9 +165,9 @@ tim ⭐4 食譜（light，100°C / dial 3.7 / 60s / 25g / XL 400ml）→ **TDS 1
 
 Step 4 **不動** `labels.json` 的 medium_light / medium / moderately_dark（Step 3 將 medium_light 定為 Tier A frozen）。但新 Layer 1 暴露兩個 medium_light 相關事實，需 Step 5 處理：
 
-1. **Hoffman EY ≈ 19.97%，非 21。** `labels.json` 的 `medium_light.anchor_brew.ey = 21.0`。「21」是文章「EY 20–22%」區間的鬆散中點，與實測 TDS 1.23 + 真實 retention **不自洽**（EY 21 對應 TDS ≈ 1.29）。自洽值是 EY ≈ 20。`labels.json` 本身內部一致（`ideal = predict_axes(1.23, 21)` 仍成立），故未動；但若 Step 5 要 anchor_brew 反映 Layer 1 實際輸出，應改 ey 21→19.97 並重推 medium_light IDEAL（影響：acidity 0.274→~0.288，其餘 < 0.01）。
+1. **Hoffman EY ≈ 19.96%，非 21。** `labels.json` 的 `medium_light.anchor_brew.ey = 21.0`。「21」是文章「EY 20–22%」區間的鬆散中點，與實測 TDS 1.23 + 真實 retention **不自洽**（EY 21 對應 TDS ≈ 1.29）。自洽值是 EY ≈ 20。`labels.json` 本身內部一致（`ideal = predict_axes(1.23, 21)` 仍成立），故未動；若 Step 5 要 anchor_brew 反映 Layer 1 實際輸出，應改 ey 21→19.96 並重推 medium_light IDEAL（影響：acidity 0.274→~0.288，其餘 < 0.01）。
 
-2. **使用者 ⭐5 medium_light 杯落在 TDS ≈ 1.36，非 1.23。** 新 Layer 1 重算兩杯 ⭐5（24g/400ml XL）→ EY ≈ 20.0%、**TDS ≈ 1.36**。Step 3 §4 曾稱「⭐5 重算落 ~1.23/18、距 medium_light IDEAL 僅 dist 0.043」—— 那是**舊 Layer 1**（舊 `brew_capacity` 把高劑量 EY 壓到 18）。新 Layer 1 溫度溫和、dose 效應溫和 → ⭐5（24g/400ml = 1:16.7，比 Hoffman 11g/200ml = 1:18.2 更濃）自然得較高 TDS。**這是濃度算術，非模型錯誤。** 後果：使用者實際偏好的杯比 Hoffman 錨點更濃 → medium_light IDEAL（錨在 Hoffman 1.23）可能需往使用者 ⭐5 偏好校準。屬 Step 5 + feedback-refine 議題（藍圖 §8 預期 feedback 驅動精修）。
+2. **使用者 ⭐5 medium_light 杯落在 TDS ≈ 1.36，非 1.23。** 新 Layer 1 重算兩杯 ⭐5（24g/400ml XL）→ EY ≈ 19.9%、**TDS ≈ 1.36**。Step 3 §4 曾稱「⭐5 重算落 ~1.23/18、距 medium_light IDEAL 僅 dist 0.043」—— 那是**舊 Layer 1**。新 Layer 1 下 ⭐5（24g/400ml = 1:16.7，比 Hoffman 11g/200ml = 1:18.2 更濃）自然得較高 TDS。**這是濃度算術，非模型錯誤。** 後果：使用者實際偏好的杯比 Hoffman 錨點更濃 → medium_light IDEAL（錨在 Hoffman 1.23）可能需往使用者 ⭐5 偏好校準。屬 Step 5 + feedback-refine 議題（藍圖 §8 預期 feedback 驅動精修）。
 
 ---
 
@@ -176,14 +189,16 @@ Step 4 **不動** `labels.json` 的 medium_light / medium / moderately_dark（St
 2. **`brew()` 簽名：** `(roast, temp, dial, steep_sec, dose, water_ml, brewer="standard")`。`water_ml` 由呼叫端傳（`constants.BREWER_PRESETS[brewer]["water_ml"]`）。
 3. **medium_light 兩個發現（§6）** —— Step 5 重寫評分時一併處理：anchor_brew.ey 21→20、以及 ⭐5 偏好 vs Hoffman IDEAL 的落差。
 4. **評分移除 `tds_factor`**（藍圖 §7.2）：TDS 對風味的影響已完全經 6 軸表達。
-5. **溫度是弱槓桿：** Layer 1 `ALPHA`≈0.019、Layer 2 `b_temp`=0 → Phase 10 整體對溫度近乎不敏感（藍圖 §13 的既定後果）。Step 5 的 optimizer 對溫度幾乎無梯度 —— UI/說明需同步（若要保留溫度建議，靠 `SCORCH` 類感官閾值或 feedback）。
+5. **溫度是適度槓桿、且只經 EY/TDS 作用：** Layer 1 `ALPHA=0.026`（Arrhenius Ea≈30，Q10≈1.3）→ 溫度真實地推動 EY/TDS；Layer 2 `b_temp=0` → 溫度無直接感官項。所以溫度的風味效應**完全經 EY/TDS 中介**（Batali 2020：固定 TDS/EY 下溫度無感官效應）—— 這是正確架構（溫度是萃取旋鈕、非風味軸），不是「溫度無感」。Step 5 的 optimizer 對溫度會有真實（適度）梯度。
+6. **April/Champion 不再是 Layer 1 錨點。** Step 7 重寫 `diagnose_anchor.py` 時，它們應改為「技法落差示意」或移除，不可當素浸泡物理錨點檢查。
 
 ---
 
 ## 9. 參考資料
 
-- 藍圖 [`PHASE10_SENSORY_REFOUNDING.md`](PHASE10_SENSORY_REFOUNDING.md) §6（薄 Layer 1 規格）、§13（溫度/研磨對 TDS/EY 幾乎無感）。
+- 藍圖 [`PHASE10_SENSORY_REFOUNDING.md`](PHASE10_SENSORY_REFOUNDING.md) §6（薄 Layer 1 規格）、§13。
 - [`PHASE10_STEP3_LABELS.md`](PHASE10_STEP3_LABELS.md) §9.1（light IDEAL 重推交接）、§4（信心分層）。
 - Sci Rep 2021 — *An equilibrium desorption model for the strength and extraction yield of full immersion brewed coffee*（PMC7994670）。
-- Hoffmann《Brewing for Balance, Acidity, or Sweetness》—— 3 錨點實測 TDS。
-- 校準重現：`models/layer1.py` 內嵌全部 5 參數 + 先驗；§3.1 錨點代入即重現 §4.1。
+- Batali et al. 2020 — *Brew temperature, at fixed brew strength and extraction, has little impact on the sensory profile of drip brew coffee*（→ 溫度經 EY/TDS 中介、Layer 2 `b_temp=0`）。
+- Hoffmann《Brewing for Balance, Acidity, or Sweetness》—— Hoffman 錨點實測 TDS 1.23（April/Champion 同文，但為技法沖煮 → 不作本 Layer 1 錨點）。
+- 校準重現：`models/layer1.py` 內嵌 5 參數 + 先驗；§3.2 Hoffman 代入即重現 §4.1。

@@ -10,9 +10,9 @@
     }
   },
   "light": {
-    "ideal": {"acidity": 0.3559, "sweetness": 0.1929, "body": 0.0444, "bitterness": 0.2311, "astringency": 0.1602, "roast": 0.1869},
-    "anchor_brew": {"tds": 1.2055, "ey": 17.0224, "roast": "light", "dial": 3.7},
-    "seed": "user tim ⭐4 feedback recipe (Tim Wendelboe Nordic light-roast style), RE-DERIVED at Phase 10 Step 4 through the new thin Layer 1 (models/layer1.py) — tim ⭐4 recipe (light, 100°C, dial 3.7, 60s, 25g, XL 400ml) → TDS 1.2055 / EY 17.02. This replaces the Step 3 value (TDS 1.413 / EY 19.88, old Layer 1); the new thin Layer 1 reads the same recipe lower because temperature is a gentle lever and the brew-ratio term is mild. STILL PROVISIONAL: tim is not a Layer 1 calibration anchor (Layer 1 is anchored only on medium_light Hoffman/April/Champion), so light's recipe→(TDS,EY) mapping carries the uncalibrated E_MAX_ROAST_FACTOR['light'] prior. The n=3 tim bracket still ranks correctly by sensory distance (⭐4 0.000 < ⭐3 0.032 < ⭐2 0.060).",
+    "ideal": {"acidity": 0.3541, "sweetness": 0.1960, "body": 0.0418, "bitterness": 0.2220, "astringency": 0.1599, "roast": 0.1811},
+    "anchor_brew": {"tds": 1.1868, "ey": 16.7544, "roast": "light", "dial": 3.7},
+    "seed": "user tim ⭐4 feedback recipe (Tim Wendelboe Nordic light-roast style), RE-DERIVED at Phase 10 Step 4 through the new thin Layer 1 (models/layer1.py) — tim ⭐4 recipe (light, 100°C, dial 3.7, 60s, 25g, XL 400ml) → TDS 1.1868 / EY 16.75. This replaces the Step 3 value (TDS 1.413 / EY 19.88, old Layer 1); the new thin Layer 1 reads the same recipe lower (60s is a short immersion → only ~75% of equilibrium). STILL PROVISIONAL: tim is not a Layer 1 calibration anchor (Layer 1 is anchored only on the medium_light Hoffman plain-immersion recipe), so light's recipe→(TDS,EY) mapping carries the uncalibrated E_MAX_ROAST_FACTOR['light'] prior. The n=3 tim bracket still ranks correctly by sensory distance (⭐4 0.000 < ⭐3 0.033 < ⭐2 0.055).",
     "description": "淺焙（Nordic 真淺焙 / Tim Wendelboe 風）。roast 軸為各焙度最低、酸質為各焙度最高（明亮）。模型尚無『淺焙明亮 vs 悶』訊號 → feedback 第一精修對象。"
   },
   "medium_light": {

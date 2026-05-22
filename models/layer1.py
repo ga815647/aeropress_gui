@@ -34,26 +34,38 @@ exactly the "monotone + saturating" black box the blueprint §6 asks for.
 
 --- where the numbers come from ---
 
-5 free parameters, calibrated to the three medium_light Layer 1 anchors whose
-TDS is published (Hoffmann "Brewing for Balance" article, El Tambo washed):
+This thin Layer 1 models PLAIN IMMERSION — its only knobs are temp / grind /
+dose / water / time / brewer. It has no technique knobs.
 
-    Hoffman   98C / dial 4.3 / 120s / 11g / 200ml  -> measured TDS 1.23
-    April     85C / dial 5.0 /  90s / 13g / 200ml  -> measured TDS 1.17
-    Champion  80C / dial 5.0 / 100s / 17g / 200ml  -> measured TDS 1.56
+It is calibrated to exactly ONE anchor: Hoffmann's "balanced" recipe
+(98C / dial 4.3 / 120s / 11g / 200ml -> measured TDS 1.23, El Tambo washed) —
+the one plain-immersion brew among the literature anchors. `E_MAX` is solved so
+the model reproduces that TDS exactly; it is the single fitted number.
 
-K_RATIO and GAMMA are fixed by physical prior (a gentle brew-ratio effect, a
-moderate grind effect); E_MAX, TAU_REF and ALPHA are then solved so the model
-reproduces all three measured TDS exactly. The structure (monotone + saturating)
-substitutes for the data the system cannot collect — the user has no
-refractometer, so there are no (knob -> measured TDS) training pairs beyond the
-literature anchors (blueprint §6). The fit is sanity-checked against Hedrick,
-under- and over-extraction recipes; derivation detail: docs/PHASE10_STEP4_LAYER1.md.
+The other published-TDS anchors, April (1.17) and Champion (1.56), are
+deliberately NOT used. April is a partial-seal + two-stage pour; Champion is
+inverted + agitated — technique brews, a different process than this
+technique-blind model. They extract well at 80-85C *because of that technique*;
+a technique-blind fit cannot see the technique, so it would mis-explain their
+good low-temperature extraction as "temperature barely matters" and collapse
+ALPHA. A contaminated anchor is worse than no anchor — so they are dropped.
+(This is a deliberate deviation from blueprint §6, which expected ~5 anchors;
+rationale in docs/PHASE10_STEP4_LAYER1.md.)
 
-ALPHA fits to ~0.019/degC — temperature is a gentle lever, not a strong one
-(tau varies ~40% across 80-98C). This matches the blueprint §13 expectation that
-the equilibrium-desorption literature finds temperature only weakly tied to
-TDS/EY; the April/Champion EY deficit is mostly grind + brew-ratio + steep time,
-not their low brew temperature.
+The remaining four parameters are therefore PHYSICAL PRIORS, not fitted:
+
+  TAU_REF  AeroPress immersion reaches ~93% of equilibrium by 120s.
+  ALPHA    temperature -> rate, an Arrhenius linearization of Ea~30 kJ/mol
+           (diffusion-controlled extraction) around 98C -> 0.026/degC, Q10~1.3.
+           A real but modest lever: ~1.4 pp EY across 88-98C.
+  GAMMA    grind -> rate (finer = faster).
+  K_RATIO  brew-ratio capacity (a gentle dose term).
+
+The structure (monotone + saturating) substitutes for the data the system
+cannot collect — the user has no refractometer, so there are no
+(knob -> measured TDS) training pairs (blueprint §6). The model is
+sanity-checked against Hedrick and under/over-extraction recipes — all
+plain-immersion, none with a measured TDS; see docs/PHASE10_STEP4_LAYER1.md.
 
 Only `medium_light` is anchored. Per-roast `E_MAX` (via E_MAX_ROAST_FACTOR) and
 `RETENTION` are literature-direction priors — darker roasts are more soluble
@@ -71,14 +83,17 @@ from __future__ import annotations
 
 import math
 
-# ── calibrated parameters ───────────────────────────────────────────────────
-# Solved so the model reproduces the 3 measured medium_light anchor TDS exactly
-# (Hoffman/April/Champion); see module doc + docs/PHASE10_STEP4_LAYER1.md.
-E_MAX_REF = 22.84      # %  — medium_light equilibrium ceiling
-TAU_REF = 44.4         # s  — rate constant at T_REF / DIAL_REF / standard brewer
-ALPHA = 0.0194         # /degC      — temperature -> rate (gentle; see doc)
+# ── calibrated parameter (the single fitted number) ─────────────────────────
+# E_MAX is solved so the model reproduces the one plain-immersion anchor with a
+# published TDS — Hoffman (98C / 4.3 / 120s / 11g / 200ml -> measured TDS 1.23).
+E_MAX_REF = 23.346     # %  — medium_light equilibrium ceiling
 
 # ── prior parameters (fixed by physical reasoning, not fitted) ───────────────
+TAU_REF = 50.0         # s  — rate constant at T_REF / DIAL_REF / standard brewer.
+                       #      AeroPress immersion reaches ~93% of equilibrium by 120s.
+ALPHA = 0.026          # /degC — temperature -> rate. Arrhenius linearization of
+                       #      Ea~30 kJ/mol (diffusion-controlled extraction) at 98C:
+                       #      Ea/(R·T^2) = 30000/(8.314·371.15^2) = 0.0262; Q10~1.3.
 GAMMA = 0.32           # /dial-unit — grind -> rate (finer = faster)
 K_RATIO = 1.5          # brew-ratio (dose) capacity coefficient — gentle dose term
 
