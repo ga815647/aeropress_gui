@@ -1,9 +1,11 @@
 # Phase 10 — Step 6 + Phase 11：Feedback 迴圈設計
 
-> **狀態：設計定稿（2026-05-22）。尚未實作。**
+> **狀態：Step 6 已實作（2026-05-22）。Phase 11 迴圈引擎尚未實作。**
 > 本文件是 **Step 6**（feedback schema + webapp）與後續 **Phase 11**（迴圈引擎）的設計依據。
 > Step 5 / 5.5 完成後，與使用者在對話中逐步議定的設計 —— 寫成此文件以免遺失於對話 context。
 > 上游：[`PHASE10_SENSORY_REFOUNDING.md`](PHASE10_SENSORY_REFOUNDING.md) §10–§11、[`PHASE10_STEP5_SCORING.md`](PHASE10_STEP5_SCORING.md)、[`PHASE10_STEP5_5_ALL_ATTRIBUTES.md`](PHASE10_STEP5_5_ALL_ATTRIBUTES.md)、[`FEEDBACK_FORMAT.md`](FEEDBACK_FORMAT.md)。
+>
+> **Step 6 落地紀錄（2026-05-22）：** §9 的 Step 6a + 6b 完成 —— `docs/FEEDBACK_FORMAT.md` 改 pairwise+ordinal schema、`models/feedback.py` 重寫、`webapp.py`/`templates/index.html`/`static/js/webapp.js` 重寫 + 新增 `static/css/phase10.css`。`absolute` 錨點問項目前在問卷中常駐選填（「偶爾填」提示）；§4 設想的「偶發排程」屬 Phase 11。Phase 11（三杯循環狀態機、flag 偵測、changelog）未動。
 
 ---
 
@@ -130,9 +132,9 @@
 
 ## 9. 給執行者的交接（順序）
 
-1. **Step 6a** —— feedback schema 重寫（`FEEDBACK_FORMAT.md` 先定稿，照 §4：成對 + ordinal）。
-2. **Step 6b** —— webapp 改（label / 水質下架、溫度控制、10 屬性 + distance 顯示、沖煮回饋表單改成 §4 的問卷）。
-3. **Step 7** —— `diagnose_anchor.py` + `tests/` 重寫（獨立於本文件；見 [`PHASE10_STEP5_SCORING.md`](PHASE10_STEP5_SCORING.md) §7）。
+1. ~~**Step 6a** —— feedback schema 重寫（`FEEDBACK_FORMAT.md` 先定稿，照 §4：成對 + ordinal）。~~ **完成 2026-05-22。**
+2. ~~**Step 6b** —— webapp 改（label / 水質下架、溫度控制、10 屬性 + distance 顯示、沖煮回饋表單改成 §4 的問卷）。~~ **完成 2026-05-22。**
+3. **Step 7** —— `diagnose_anchor.py` + `tests/` 重寫（獨立於本文件；見 [`PHASE10_STEP5_SCORING.md`](PHASE10_STEP5_SCORING.md) §7）。**← 下一步**
 4. **Phase 11** —— 三杯循環引擎 + flag 偵測 + changelog。
 
 **依賴:** Step 6 的 schema 必須先照 §4 設計（成對 + ordinal），否則 Phase 11 沒有正確的訓練訊號。

@@ -1,0 +1,250 @@
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 10 STEP 6 — sensory distance · 10 attributes · §4 questionnaire
+   Loaded after webapp.css; overrides + new components for the Phase 10 UI.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* distance is a small decimal, not a /100 score */
+.score-display::after { content: none; }
+.sample .score-display { font-size: var(--t-2xl); }
+.score-hint {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+}
+.master-card-score { font-size: var(--t-lg); margin-bottom: var(--s-1); }
+.master-card-scorelabel {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: var(--s-3);
+}
+
+/* left-ledger note under a field */
+.field-note {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin: var(--s-2) 0 0;
+}
+
+/* brew-meta — de-emphasized TDS/EY latent line */
+.brew-meta {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  line-height: 1.7;
+  margin-bottom: var(--s-6);
+}
+.brew-meta-latent {
+  display: block;
+  color: var(--ink-faint);
+  font-size: var(--t-2xs);
+  margin-top: 2px;
+}
+
+/* ── 10-attribute sensory profile ───────────────────────────── */
+.attr-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--s-7); }
+.attr-row {
+  display: grid;
+  grid-template-columns: 116px 1fr 56px 56px;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px dotted var(--rule);
+}
+.attr-row:last-child { border-bottom: none; }
+.attr-name {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+.attr-name-en {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  font-weight: 400;
+}
+.attr-bar-track {
+  position: relative;
+  height: 10px;
+  background: var(--paper-shade);
+  border: 1px solid var(--rule);
+}
+.attr-bar-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--cobalt);
+  min-width: 1px;
+}
+.attr-bar-ideal {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  width: 0;
+  border-left: 2px solid var(--ink);
+  transform: translateX(-1px);
+}
+.attr-pred, .attr-delta {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.attr-pred { color: var(--ink); }
+.attr-delta { color: var(--ink-mute); }
+.attr-row-off .attr-delta { color: var(--amber); font-weight: 600; }
+.attr-row-off .attr-name { color: var(--amber-deep); }
+
+/* ── §4 feedback questionnaire ───────────────────────────────── */
+.q-row { margin-bottom: var(--s-5); }
+.q-row-inline { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; }
+.q-row-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin-bottom: var(--s-2);
+}
+.q-hint {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin: var(--s-2) 0 0;
+}
+.q-compared {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+.q-pairwise {
+  padding: var(--s-4);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  margin-bottom: var(--s-5);
+}
+.q-pairwise[hidden] { display: none; }
+.q-choices { display: inline-flex; gap: 0; border: 1px solid var(--rule); }
+.q-choice {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper);
+  border: none;
+  border-right: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.q-choice:last-child { border-right: none; }
+.q-choice:hover { background: var(--paper-shade); }
+.q-choice.is-on { background: var(--cobalt); color: var(--paper); }
+.q-attrs { display: flex; flex-direction: column; gap: var(--s-1); }
+.q-attr-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px dotted var(--rule);
+}
+.q-attr-row:last-child { border-bottom: none; }
+.q-attr-name { font-family: var(--font-body); font-size: var(--t-sm); font-weight: 500; color: var(--ink); }
+.q-attr-model { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--ink-faint); margin-left: var(--s-2); }
+.q-comment {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  padding: var(--s-3);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  resize: vertical;
+  line-height: 1.6;
+}
+.q-comment:focus { border-color: var(--cobalt); outline: none; }
+.q-stars { display: inline-flex; gap: 2px; }
+.q-star { font-size: var(--t-md); background: none; border: none; color: var(--ink-faint); cursor: pointer; padding: 0 1px; }
+.q-star.is-on { color: var(--amber); }
+.q-actions { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-3); }
+.q-save {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-wide);
+  padding: var(--s-3) var(--s-5);
+  background: var(--cobalt);
+  border: 1px solid var(--cobalt);
+  color: var(--paper);
+  cursor: pointer;
+}
+.q-save:hover { background: var(--cobalt-deep); border-color: var(--cobalt-deep); }
+.q-save:disabled { opacity: 0.5; cursor: wait; }
+.q-msg { font-family: var(--font-mono); font-size: var(--t-xs); }
+.q-history { margin-top: var(--s-4); }
+
+/* feedback-history entries under a result card */
+.fb-entry { padding: var(--s-3) 0; border-top: 1px dotted var(--rule); }
+.fb-meta { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--ink-mute); letter-spacing: var(--track-wide); }
+.fb-comment { font-family: var(--font-body); font-size: var(--t-sm); color: var(--ink-soft); line-height: 1.6; margin-top: 4px; }
+
+/* ── logbook — pairwise comparison summary ──────────────────── */
+.hist-cmp { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-2) 0; }
+.hist-cmp-ref { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--ink-mute); }
+.hist-cmp-overall, .hist-cmp-attr {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  padding: 1px var(--s-2);
+  border: 1px solid var(--rule);
+}
+.hist-cmp-overall { font-weight: 600; }
+.hist-cmp-up { color: var(--moss); border-color: var(--moss); }
+.hist-cmp-down { color: var(--amber); border-color: var(--amber); }
+.hist-cmp-eq { color: var(--ink-mute); }
+.hist-cmp-attr { color: var(--ink-soft); }
+.hist-cmp-conflict { border-color: var(--amber); background: var(--amber-soft); color: var(--amber-deep); }
+.hist-absolute {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  font-weight: 600;
+  padding: 1px var(--s-2);
+  margin-top: var(--s-1);
+}
+.hist-absolute-good { color: var(--moss); }
+.hist-absolute-ok { color: var(--ink-mute); }
+.hist-absolute-bad { color: var(--amber); }
+
+/* logbook edit — absolute-anchor buttons */
+.history-edit-abs-group { display: inline-flex; gap: 0; border: 1px solid var(--rule); }
+.history-edit-abs {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  padding: var(--s-1) var(--s-3);
+  background: var(--paper);
+  border: none;
+  border-right: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.history-edit-abs:last-child { border-right: none; }
+.history-edit-abs[data-edit-active="1"] { background: var(--cobalt); color: var(--paper); }
+
+@media (max-width: 640px) {
+  .attr-row { grid-template-columns: 92px 1fr 48px 48px; gap: var(--s-2); }
+  .q-attr-row { flex-direction: column; align-items: flex-start; gap: var(--s-2); }
+}

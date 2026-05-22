@@ -2,154 +2,81 @@
   const form = document.getElementById("optimize-form");
   if (!form) return;
 
-  const presetSelect = document.getElementById("preset");
-  const ghInput = document.getElementById("gh");
-  const khInput = document.getElementById("kh");
-  const mgInput = document.getElementById("mg_frac");
   const submitButton = document.getElementById("submit-button");
   const resultsNode = document.getElementById("results");
-
-  const radarModal = document.getElementById("radar-modal");
-  const radarClose = document.getElementById("radar-close");
-  const radarNode = document.getElementById("radar");
-  const radarLegend = document.getElementById("radar-legend");
   const tooltipTitle = document.getElementById("tooltip-title");
   const tooltipBody = document.getElementById("tooltip-body");
   const tooltipMeta = document.getElementById("tooltip-meta");
-  const controlsPanel = document.querySelector("[data-controls-panel]");
-  const controlsBody = document.querySelector("[data-controls-body]");
+  const roastSelect = document.getElementById("roast");
+  const tempInput = document.getElementById("temp");
+  const brewerSelect = document.getElementById("brewer");
+  const doseMinInput = document.getElementById("dose_min");
+  const doseMaxInput = document.getElementById("dose_max");
 
-  const presets = window.APP_PRESETS || {};
-  const keys = ["AC", "SW", "PS", "CA", "CGA", "MEL"];
+  const ATTRIBUTES = window.APP_ATTRIBUTES || [];
+  const AXIS_VIEW = window.APP_AXIS_VIEW || {};
+  const DEADBAND = window.APP_ORDINAL_DEADBAND || 0.01;
   const mobileControlsQuery = window.matchMedia("(max-width: 640px)");
+  const mobileLayoutQuery = window.matchMedia("(max-width: 880px)");
 
   let currentDetailIndex = 0;
   let latestPayload = null;
-  let latestRadarResults = [];
-  let brewTimerInterval = null;
-  let activeTimers = {};
+  let steepTimer = null;        // { index, elapsedMs, running, lastTick, target }
+  let steepInterval = null;
+  // fb form state, keyed by slot — prefill + comparison context
+  const fbState = {};
+
+  // ── attribute / group display labels ────────────────────────────────
+  const ATTR_ZH = {
+    "Sour": "酸", "Citrus": "柑橘", "Tea.floral": "花茶香", "Sweet": "甜",
+    "Cereal": "穀物", "Thick.viscous": "醇厚", "Bitter": "苦",
+    "Astringent": "澀", "Burnt": "焦香", "Dark.chocolate": "黑巧克力",
+  };
+  const GROUP_ZH = {
+    "acidity": "酸質", "sweetness": "甜感", "body": "醇厚度",
+    "bitterness": "苦味", "astringency": "澀感", "roast": "焙烤調",
+    "character": "個性香氣",
+  };
+  const ROAST_COLOR = {
+    "light": "#b45309", "medium_light": "#1d4ed8",
+    "medium": "#3f6b3a", "moderately_dark": "#5b3a2e",
+  };
 
   const fieldHelp = {
     brewer: {
       title: "器材尺寸",
-      body: "切換不同 AeroPress 容量，會影響搜尋範圍中的粉量與萃取條件。",
-      meta: "一般版本與 XL 的配方尺度不同，建議先選對器材再開始比較。",
+      body: "AeroPress 標準版（200ml）或 XL（400ml）。Layer 1 只看水量與粉量比例 —— 同沖煮比例下兩者 TDS/EY 相同。",
+      meta: "XL 豆量步進 1g、標準版 0.5g。",
     },
     roast: {
       title: "焙度",
-      body: "焙度依 SCA/SCAA 分類與 Agtron 色值對應，會改變理想風味向量與苦甜平衡。",
-      meta: "可依豆袋上的 Agtron 或 SCA 等級選擇；無測量時可從 Medium (M) 開始。",
+      body: "每個焙度有一份 per-roast 的 10 屬性感官 IDEAL（data/ideal.json）。系統會搜尋最接近該 IDEAL 的配方。",
+      meta: "medium_light = 使用者 ⭐5 校準；其餘焙度多為佔位，待 feedback 校準。",
     },
-    preset: {
-      title: "水質預設",
-      body: "選擇常見水配方後，會自動回填 GH、KH 與 Mg 比例。",
-      meta: "若想微調，可先套用預設再手動修改數值。",
-    },
-    gh: {
-      title: "GH",
-      body: "總硬度代表鈣鎂離子含量，會影響萃取效率、甜感與結構。",
-      meta: "常見起手值可先放在 40 到 100 ppm 附近。",
-    },
-    kh: {
-      title: "KH",
-      body: "碳酸鹽硬度代表緩衝能力，會影響酸感是否被壓掉或過度尖銳。",
-      meta: "KH 過高常讓酸質變鈍，過低則可能讓杯感失去穩定性。",
-    },
-    mg_frac: {
-      title: "Mg 比例",
-      body: "用來描述 GH 中鎂占比，會牽動酸甜表現與口感輪廓。",
-      meta: "常見可從 0.30 到 0.50 開始試。",
+    temp: {
+      title: "沖煮水溫",
+      body: "水溫是最佳化的『輸入』，不是被搜尋的維度 —— 它只透過 Layer 1 的 EY/TDS 影響風味。切換焙度時會自動帶入該焙度的慣例預設。",
+      meta: "預設僅為慣例（淺焙熱、深焙涼）+ 安全，非推導最佳值；可依口味自行調整。",
     },
     top: {
       title: "Top N",
-      body: "控制回傳幾組最佳結果，方便你看多一點組合或只專注最前面的排序。",
-      meta: "若主要是比較前三名，維持 3 就足夠。",
+      body: "回傳幾組最接近 IDEAL 的配方，依距離由近到遠排序。",
+      meta: "比較前幾名通常 3 就夠。",
     },
     dose_range: {
       title: "豆量區間",
-      body: "手動限制搜尋的豆量範圍（克）。留空則使用該焙度的預設區間。只填一端也可以：只填 min 表示下限，只填 max 表示上限。",
-      meta: "例如手上只剩 18g 豆子，填 max=18 就能確保推薦不超量。",
-    },
-    t_env: {
-      title: "環境溫度",
-      body: "環境溫度會影響實際 slurry 溫度，進而影響模型中的萃取預估。",
-      meta: "冬天與夏天差異明顯時，這個值值得調整。",
-    },
-
-    altitude: {
-      title: "海拔",
-      body: "海拔會影響沸點與實際水溫上限，因此會改變可行的沖煮溫度範圍。",
-      meta: "平地可維持 0，高海拔地區再補入實際數值。",
-    },
-    label: {
-      title: "口感方向",
-      body: "Phase 8 感官 label 島：每個 label 是一份「想喝什麼」的目標（compound profile + TDS_PREFER），optimizer 會找出最接近該目標的配方。選擇「全部並列」會同時跑可用 label，每個各印 Top 1，方便 cupping 對照。",
-      meta: "balanced=Hoffman / acid-forward=April / coarse-modern=Hedrick / tim=Tim Wendelboe Nordic。",
-    },
-  };
-
-  const compoundHelp = {
-    AC: {
-      label: "明亮酸質",
-      body: "代表杯中的活潑酸感與前段亮度，越高通常越有清晰、立體的果酸表現。",
-    },
-    SW: {
-      label: "甜感厚度",
-      body: "代表甜味與圓潤度，影響口感是否飽滿、滑順，能平衡過尖的酸質。",
-    },
-    PS: {
-      label: "正向香氣",
-      body: "代表花香、果香與乾淨香氣的強度，通常越高越能拉出愉悅的香氣層次。",
-    },
-    CA: {
-      label: "木質苦感",
-      body: "代表偏木質、乾感的苦味來源，過高時容易讓尾韻變硬、變澀。",
-    },
-    CGA: {
-      label: "綠感刺激",
-      body: "代表生澀、草本與尖銳刺激感，通常在萃取失衡時會更明顯。",
-    },
-    MEL: {
-      label: "焙烤厚苦",
-      body: "代表焙烤、焦糖化後的厚重苦甜感，適量能增加深度，過高則容易壓味。",
+      body: "手動限制搜尋的豆量範圍（克）。留空則用該焙度的預設區間。只填一端也可以。",
+      meta: "例如手上只剩 18g，填 max=18 就不會超量。",
     },
   };
 
   function showHelp(key) {
-    if (key === "preset") {
-      const selected = presetSelect.value;
-      const preset = presets[selected];
-      if (selected && preset) {
-        tooltipTitle.textContent = "水質預設";
-        tooltipBody.textContent = preset.note || "自動填入 GH、KH 與 Mg 比例。";
-        tooltipMeta.textContent = "已套用預設。若想微調，可手動修改下方數值。";
-        return;
-      }
-    }
     if (key === "roast") {
-      const selected = document.getElementById("roast").value;
-      const roastOption = window.APP_ROAST_OPTIONS.find(opt => opt.code === selected);
-      if (roastOption) {
+      const opt = (window.APP_ROAST_OPTIONS || []).find(o => o.code === roastSelect.value);
+      if (opt) {
         tooltipTitle.textContent = "焙度";
-        tooltipBody.textContent = roastOption.note;
-        tooltipMeta.textContent = "可依豆袋上的 Agtron 或 SCA 等級選擇；無測量時可從 Medium (M) 開始。";
-        return;
-      }
-    }
-    if (key === "label") {
-      const selected = document.getElementById("label").value;
-      if (selected === "") {
-        tooltipTitle.textContent = "口感方向：全部並列 (cupping)";
-        tooltipBody.textContent = "同時跑 4 個 label，每個 label 各回 Top 1 配方並列展示，方便 cupping 對照。";
-        tooltipMeta.textContent = "選定單一 label 後切回單目標 Top N 模式。";
-        return;
-      }
-      const labelOption = (window.APP_LABELS || []).find(l => l.name === selected);
-      if (labelOption) {
-        tooltipTitle.textContent = `口感方向：${labelOption.name}`;
-        tooltipBody.textContent = labelOption.description;
-        const anchor = labelOption.bullseye_anchor ? `源自 ${labelOption.bullseye_anchor} 食譜。` : "假想 label（無對應實測食譜）。";
-        tooltipMeta.textContent = `${anchor} TDS 目標 ${labelOption.tds_prefer}%。`;
+        tooltipBody.textContent = opt.note;
+        tooltipMeta.textContent = fieldHelp.roast.meta;
         return;
       }
     }
@@ -160,49 +87,50 @@
     tooltipMeta.textContent = entry.meta;
   }
 
-  // Mobile collapse toggle removed — controls panel is always visible.
-  // After a submit on mobile we just smooth-scroll to results.
-  function scrollMobileToResults() {
-    if (!mobileControlsQuery.matches || !resultsNode) return;
-    requestAnimationFrame(() => {
-      resultsNode.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
-
-  function formatTime(seconds) {
-    const total = Math.round(seconds);
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
-  }
-
-  // Helper to format remaining time
-  function formatInlineClock(ms) {
-    const totalSeconds = Math.ceil(Math.max(0, ms) / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  }
-
-  // ── 回饋區塊（Phase 10 — webapp 是唯一寫入 channel） ────────────────
   function escapeHtml(text) {
-    return String(text || "").replace(/[&<>"']/g, (ch) => ({
+    return String(text == null ? "" : text).replace(/[&<>"']/g, (ch) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     })[ch]);
   }
 
-  // ── 沖煮歷史 / Brewing Lab Logbook modal ─────────────────────────
-  // All styling lives in webapp.css under .history-* classes — keep JS
-  // free of inline hex colors so palette tweaks happen in one place.
+  function formatTime(seconds) {
+    const total = Math.round(seconds || 0);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
 
-  const HISTORY_LABEL_COLORS = {
-    "balanced":      "#1d4ed8",
-    "acid-forward":  "#b45309",
-    "sweet-body":    "#7c2d12",
-    "coarse-modern": "#3f6b3a",
-    "tim":           "#5b6770",
-  };
+  // ── sensory-group arithmetic (model prefill of the questionnaire) ────
+  function groupValue(attrs, group) {
+    const members = AXIS_VIEW[group] || [];
+    if (!attrs || !members.length) return null;
+    let sum = 0, n = 0;
+    for (const a of members) {
+      if (typeof attrs[a] === "number") { sum += attrs[a]; n += 1; }
+    }
+    return n ? sum / n : null;
+  }
 
+  function ordinalSign(delta) {
+    if (delta > DEADBAND) return ">";
+    if (delta < -DEADBAND) return "<";
+    return "=";
+  }
+
+  // model's predicted >/=/< per questionnaire group, comparing two attr sets
+  function computePrefill(thisAttrs, comparedAttrs) {
+    if (!thisAttrs || !comparedAttrs) return null;
+    const out = {};
+    for (const group of Object.keys(AXIS_VIEW)) {
+      const a = groupValue(thisAttrs, group);
+      const b = groupValue(comparedAttrs, group);
+      if (a == null || b == null) continue;
+      out[group] = ordinalSign(a - b);
+    }
+    return Object.keys(out).length ? out : null;
+  }
+
+  // ════════════════ LOGBOOK / history modal ════════════════
   let historyCache = { entries: [], fetchedAt: 0 };
-  let historyFilters = { label: "__all__", minStars: 0 };
+  let historyFilters = { roast: "__all__", minStars: 0 };
   let editingTimestamp = null;
   const HISTORY_EDIT_WINDOW_HOURS = 1;
 
@@ -210,8 +138,7 @@
     if (!entry.timestamp) return null;
     const created = new Date(entry.timestamp).getTime();
     if (isNaN(created)) return null;
-    const ageH = (Date.now() - created) / 3_600_000;
-    const remain = HISTORY_EDIT_WINDOW_HOURS - ageH;
+    const remain = HISTORY_EDIT_WINDOW_HOURS - (Date.now() - created) / 3_600_000;
     return remain > 0 ? remain : null;
   }
 
@@ -224,68 +151,88 @@
     if (diffDays < 0) return ymd;
     if (diffDays === 0) return `今天 · ${ymd}`;
     if (diffDays === 1) return `昨天 · ${ymd}`;
-    if (diffDays < 7)   return `${diffDays} 天前 · ${ymd}`;
+    if (diffDays < 7) return `${diffDays} 天前 · ${ymd}`;
     return ymd;
   }
 
-  function formatSteepShort(sec) {
-    if (sec == null) return "—";
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${String(s).padStart(2, "0")}`;
+  function ordinalGlyph(sign) {
+    return sign === ">" ? "▲" : sign === "<" ? "▼" : "=";
   }
 
   function applyHistoryFilters(entries) {
     return entries.filter((e) => {
-      if (historyFilters.label !== "__all__" && e.label !== historyFilters.label) return false;
+      if (historyFilters.roast !== "__all__" && e.roast !== historyFilters.roast) return false;
       if (historyFilters.minStars > 0 && (!e.stars || e.stars < historyFilters.minStars)) return false;
       return true;
     });
   }
 
-  function findBestBrewTimestamp(entries) {
+  // best = highest stars; tie-break by smallest recomputed distance
+  function findBestTimestamp(entries) {
     let best = null;
     for (const e of entries) {
-      if (e.stars !== 5) continue;
-      const s = e.recipe && typeof e.recipe.score === "number" ? e.recipe.score : -Infinity;
-      if (!best || s > (best.recipe?.score ?? -Infinity)) best = e;
+      if (!e.stars) continue;
+      if (!best) { best = e; continue; }
+      const d = (e.recipe && e.recipe.distance != null) ? e.recipe.distance : Infinity;
+      const bd = (best.recipe && best.recipe.distance != null) ? best.recipe.distance : Infinity;
+      if (e.stars > best.stars || (e.stars === best.stars && d < bd)) best = e;
     }
     return best ? best.timestamp : null;
   }
 
-  function renderHistoryEntry(entry, isBest) {
-    const accent = HISTORY_LABEL_COLORS[entry.label] || "#1d4ed8";
-    const time = formatHistoryTime(entry.timestamp);
+  function timestampShort(iso) {
+    if (!iso) return "—";
+    return iso.slice(5, 16).replace("T", " ");
+  }
 
+  function renderComparisonSummary(entry) {
+    if (!entry.overall && !entry.attributes_vs) return "";
+    const ref = entry.compared_to
+      ? `對照 ${timestampShort(entry.compared_to)}`
+      : "對照上一杯";
+    const overall = entry.overall
+      ? `<span class="hist-cmp-overall hist-cmp-${entry.overall === ">" ? "up" : entry.overall === "<" ? "down" : "eq"}">整體 ${ordinalGlyph(entry.overall)}</span>`
+      : "";
+    let attrs = "";
+    if (entry.attributes_vs) {
+      attrs = Object.entries(entry.attributes_vs).map(([g, s]) => {
+        const model = entry.model_attributes_vs && entry.model_attributes_vs[g];
+        const conflict = model && model !== s ? " hist-cmp-conflict" : "";
+        return `<span class="hist-cmp-attr${conflict}">${escapeHtml(GROUP_ZH[g] || g)} ${ordinalGlyph(s)}</span>`;
+      }).join("");
+    }
+    return `
+      <div class="hist-cmp">
+        <span class="hist-cmp-ref">${escapeHtml(ref)}</span>
+        ${overall}${attrs}
+      </div>`;
+  }
+
+  function renderHistoryEntry(entry, isBest) {
+    const accent = ROAST_COLOR[entry.roast] || "#5b6770";
+    const time = formatHistoryTime(entry.timestamp);
     const starsHtml = entry.stars
-      ? `<span class="history-entry-stars">` +
-        `<span class="history-entry-stars-on">${"★".repeat(entry.stars)}</span>` +
-        `<span class="history-entry-stars-off">${"★".repeat(5 - entry.stars)}</span></span>`
+      ? `<span class="history-entry-stars"><span class="history-entry-stars-on">${"★".repeat(entry.stars)}</span><span class="history-entry-stars-off">${"★".repeat(5 - entry.stars)}</span></span>`
       : `<span class="history-entry-stars-empty">— 未評星 —</span>`;
 
     const r = entry.recipe;
     const recipeLine = r
-      ? `${r.temp}°C · dial ${r.dial} · ${r.dose}g · steep ${formatSteepShort(r.steep_sec)}`
+      ? `${r.temp}°C · dial ${r.dial} · ${r.dose}g · steep ${formatTime(r.steep_sec)}`
       : `<span class="history-entry-recipe-missing">舊紀錄無 brew 快照</span>`;
-    const metricsLine = r && r.tds != null && r.ey != null && r.score != null
-      ? `TDS ${r.tds.toFixed(2)}% · EY ${r.ey.toFixed(1)}% · score ${r.score.toFixed(1)}`
+    const metricsLine = r && r.distance != null
+      ? `距 IDEAL ${Number(r.distance).toFixed(4)}${r.tds != null ? ` · TDS ${Number(r.tds).toFixed(2)}% · EY ${Number(r.ey).toFixed(1)}%` : ""}`
       : "";
 
+    const absoluteHtml = entry.absolute
+      ? `<span class="hist-absolute hist-absolute-${entry.absolute}">單獨喝：${entry.absolute === "good" ? "好喝" : entry.absolute === "ok" ? "普通" : "不行"}</span>`
+      : "";
     const tagsHtml = (entry.tags || []).length
-      ? `<div class="history-entry-tags">
-           ${entry.tags.map(t => `<span>${escapeHtml(t)}</span>`).join(
-             '<span class="history-entry-tag-sep">·</span>'
-           )}
-         </div>`
+      ? `<div class="history-entry-tags">${entry.tags.map(t => `<span>${escapeHtml(t)}</span>`).join('<span class="history-entry-tag-sep">·</span>')}</div>`
       : "";
-
     const commentHtml = entry.comment
       ? `<div class="history-entry-comment">${escapeHtml(entry.comment)}</div>`
-      : `<div class="history-entry-comment-empty">（無感想文字 — 只有快速評分）</div>`;
-
-    const bestRibbon = isBest
-      ? `<div class="history-entry-best">✦ 目前最佳沖煮</div>`
-      : "";
+      : `<div class="history-entry-comment-empty">（無感想文字）</div>`;
+    const bestRibbon = isBest ? `<div class="history-entry-best">✦ 目前最佳沖煮</div>` : "";
 
     const isEditing = editingTimestamp === entry.timestamp;
     const remainH = historyEditRemainingHours(entry);
@@ -293,17 +240,12 @@
       ? (remainH >= 1 ? `${Math.floor(remainH)}h` : `${Math.max(1, Math.ceil(remainH * 60))}m`)
       : "";
     const editTriggerHtml = (!isEditing && remainH !== null)
-      ? `<div class="history-entry-edit-trigger">
-           <button type="button" class="history-edit-open" data-edit-open="${entry.timestamp}">
-             ✎ 編輯 <span class="history-edit-remain">· 剩 ${remainLabel}</span>
-           </button>
-         </div>`
+      ? `<div class="history-entry-edit-trigger"><button type="button" class="history-edit-open" data-edit-open="${entry.timestamp}">✎ 編輯 <span class="history-edit-remain">· 剩 ${remainLabel}</span></button></div>`
       : "";
     const editFormHtml = isEditing ? renderHistoryEditFields(entry) : "";
 
     return `
-      <article class="history-entry" data-label="${entry.label}" data-stars="${entry.stars || 0}"
-               style="--accent:${accent};">
+      <article class="history-entry" data-roast="${escapeHtml(entry.roast || "")}" data-stars="${entry.stars || 0}" style="--accent:${accent};">
         <div aria-hidden="true" class="history-entry-bar"></div>
         <div class="history-entry-body">
           <header class="history-entry-head">
@@ -314,47 +256,41 @@
             </div>
             <div class="history-entry-id">
               <span aria-hidden="true" class="history-entry-id-dot"></span>
-              <span class="history-entry-label-text">${escapeHtml(entry.label)}</span>
-              <span class="history-entry-divider">·</span>
-              <span>${escapeHtml(entry.roast || "")}</span>
+              <span class="history-entry-label-text">${escapeHtml(entry.roast || "")}</span>
               <span class="history-entry-divider">·</span>
               <span>${escapeHtml(entry.brewer || "")}</span>
             </div>
           </header>
+          ${renderComparisonSummary(entry)}
           ${commentHtml}
-          <div class="history-entry-recipe">
-            ${recipeLine}${metricsLine ? `<span class="history-entry-metrics">${metricsLine}</span>` : ""}
-          </div>
+          <div class="history-entry-recipe">${recipeLine}${metricsLine ? `<span class="history-entry-metrics">${metricsLine}</span>` : ""}</div>
+          ${absoluteHtml}
           ${tagsHtml}
           ${bestRibbon}
           ${editTriggerHtml}
           ${editFormHtml}
         </div>
-      </article>
-    `;
+      </article>`;
   }
 
   function renderHistoryEditFields(entry) {
     const stars = entry.stars || 0;
     const starButtons = [1, 2, 3, 4, 5].map((n) =>
-      `<button type="button" class="history-edit-star history-edit-star-btn"
-        data-edit-star="${n}" aria-pressed="${stars >= n}">★</button>`
+      `<button type="button" class="history-edit-star history-edit-star-btn" data-edit-star="${n}" aria-pressed="${stars >= n}">★</button>`
     ).join("");
-    const tagSet = new Set(entry.tags || []);
-    const tagButtons = (window.APP_FEEDBACK_TAGS || []).map((t) => {
-      const on = tagSet.has(t);
-      return `<button type="button" class="history-edit-tag history-edit-tag-btn"
-        data-edit-tag="${t}" data-edit-active="${on ? '1' : '0'}">${t}</button>`;
-    }).join("");
+    const absVal = entry.absolute || "";
+    const absButtons = [["good", "好喝"], ["ok", "普通"], ["bad", "不行"]].map(([v, l]) =>
+      `<button type="button" class="history-edit-abs" data-edit-abs="${v}" data-edit-active="${absVal === v ? "1" : "0"}">${l}</button>`
+    ).join("");
     return `
       <div class="history-edit-form" data-edit-ts="${entry.timestamp}">
         <div class="history-edit-row">
           <span class="history-edit-key">星等</span>
           <div class="history-edit-stars">${starButtons}</div>
         </div>
-        <div class="history-edit-block">
-          <div class="history-edit-key">標籤</div>
-          <div class="history-edit-tags">${tagButtons}</div>
+        <div class="history-edit-row">
+          <span class="history-edit-key">單獨喝</span>
+          <div class="history-edit-abs-group">${absButtons}</div>
         </div>
         <div class="history-edit-block">
           <div class="history-edit-key">感想</div>
@@ -365,65 +301,32 @@
           <button type="button" class="history-edit-cancel" data-edit-cancel>取消</button>
           <span class="history-edit-msg"></span>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
   function renderHistoryModal(entries) {
     const filtered = applyHistoryFilters(entries);
-    const bestTs = findBestBrewTimestamp(entries);
+    const bestTs = findBestTimestamp(entries);
+    const roastsSeen = Array.from(new Set(entries.map(e => e.roast).filter(Boolean)));
 
-    const labelBtn = (name, accent) => {
-      const active = historyFilters.label === name;
-      const cls = `history-filter-btn${active ? " is-active" : ""}`;
-      const swatch = accent
-        ? `<span aria-hidden="true" class="history-filter-swatch" style="color:${accent};"></span>`
-        : "";
-      return `<button type="button" class="${cls}" data-history-label="${name}">
-        ${swatch}${name === "__all__" ? "全部" : escapeHtml(name)}
-      </button>`;
+    const roastBtn = (name) => {
+      const active = historyFilters.roast === name;
+      const accent = ROAST_COLOR[name];
+      const swatch = accent ? `<span aria-hidden="true" class="history-filter-swatch" style="color:${accent};"></span>` : "";
+      return `<button type="button" class="history-filter-btn${active ? " is-active" : ""}" data-history-roast="${name}">${swatch}${name === "__all__" ? "全部" : escapeHtml(name)}</button>`;
     };
-
     const starBtn = (n) => {
       const active = historyFilters.minStars === n;
-      const cls = `history-filter-btn${active ? " is-active" : ""}`;
-      return `<button type="button" class="${cls}" data-history-stars="${n}">
-        ${n === 0 ? "全部" : `★ ${n}+`}
-      </button>`;
+      return `<button type="button" class="history-filter-btn${active ? " is-active" : ""}" data-history-stars="${n}">${n === 0 ? "全部" : `★ ${n}+`}</button>`;
     };
-
     const dot = `<span class="history-filter-dot">·</span>`;
-    const labels = Object.keys(HISTORY_LABEL_COLORS);
-    const labelFilter = [labelBtn("__all__", null)]
-      .concat(labels.map(l => labelBtn(l, HISTORY_LABEL_COLORS[l])))
-      .join(dot);
+    const roastFilter = [roastBtn("__all__")].concat(roastsSeen.map(roastBtn)).join(dot);
     const starFilter = [0, 1, 2, 3, 4, 5].map(starBtn).join(dot);
 
     const body = filtered.length
-      ? filtered
-          .slice()
-          .sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""))
-          .map(e => renderHistoryEntry(e, bestTs && e.timestamp === bestTs))
-          .join("")
-      : `<div class="history-empty">
-           <div class="history-empty-mark" aria-hidden="true">⌬</div>
-           <div class="history-empty-text">
-             ${entries.length ? "此條件下無紀錄。" : "尚無紀錄。下一杯就是第一筆。"}
-           </div>
-         </div>`;
-
-    const filterStrip = `
-      <div class="history-filter-strip">
-        <div class="history-filter-row">
-          <span class="history-filter-key">標籤</span>
-          <div class="history-filter-options">${labelFilter}</div>
-        </div>
-        <div class="history-filter-row">
-          <span class="history-filter-key">星等</span>
-          <div class="history-filter-options">${starFilter}</div>
-        </div>
-      </div>
-    `;
+      ? filtered.slice().sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""))
+          .map(e => renderHistoryEntry(e, bestTs && e.timestamp === bestTs)).join("")
+      : `<div class="history-empty"><div class="history-empty-mark" aria-hidden="true">⌬</div><div class="history-empty-text">${entries.length ? "此條件下無紀錄。" : "尚無紀錄。下一杯就是第一筆。"}</div></div>`;
 
     return `
       <div id="history-modal" class="history-modal">
@@ -432,44 +335,31 @@
             <div>
               <span class="history-eyebrow">§ LOGBOOK · 沖煮歷史</span>
               <h2 id="history-modal-title" class="history-title">Brewing Lab Logbook</h2>
-              <p class="history-subtitle">
-                共 ${entries.length} 筆紀錄${filtered.length !== entries.length ? `（過濾後 ${filtered.length} 筆）` : ""}
-              </p>
+              <p class="history-subtitle">共 ${entries.length} 筆紀錄${filtered.length !== entries.length ? `（過濾後 ${filtered.length} 筆）` : ""}</p>
             </div>
             <button id="history-modal-close" class="history-close" type="button" aria-label="關閉">×</button>
           </div>
-          ${filterStrip}
-          <div id="history-modal-body" class="history-modal-body">
-            ${body}
+          <div class="history-filter-strip">
+            <div class="history-filter-row"><span class="history-filter-key">焙度</span><div class="history-filter-options">${roastFilter}</div></div>
+            <div class="history-filter-row"><span class="history-filter-key">星等</span><div class="history-filter-options">${starFilter}</div></div>
           </div>
+          <div id="history-modal-body" class="history-modal-body">${body}</div>
         </div>
-      </div>
-    `;
+      </div>`;
   }
 
   function attachHistoryHandlers() {
     const modal = document.getElementById("history-modal");
     if (!modal) return;
+    modal.querySelector("#history-modal-close")?.addEventListener("click", closeHistoryModal);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeHistoryModal(); });
 
-    modal.querySelector("#history-modal-close")
-      ?.addEventListener("click", closeHistoryModal);
-    modal.addEventListener("click", (e) => {
-      if (e.target === modal) closeHistoryModal();
-    });
-
-    modal.querySelectorAll("[data-history-label]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        historyFilters.label = btn.dataset.historyLabel;
-        rerenderHistoryModal();
-      });
+    modal.querySelectorAll("[data-history-roast]").forEach((btn) => {
+      btn.addEventListener("click", () => { historyFilters.roast = btn.dataset.historyRoast; rerenderHistoryModal(); });
     });
     modal.querySelectorAll("[data-history-stars]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        historyFilters.minStars = Number(btn.dataset.historyStars);
-        rerenderHistoryModal();
-      });
+      btn.addEventListener("click", () => { historyFilters.minStars = Number(btn.dataset.historyStars); rerenderHistoryModal(); });
     });
-
     modal.querySelectorAll("[data-edit-open]").forEach((btn) => {
       btn.addEventListener("click", () => {
         editingTimestamp = btn.dataset.editOpen;
@@ -478,28 +368,25 @@
       });
     });
     modal.querySelectorAll("[data-edit-cancel]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        editingTimestamp = null;
-        rerenderHistoryModal();
-      });
+      btn.addEventListener("click", () => { editingTimestamp = null; rerenderHistoryModal(); });
     });
     modal.querySelectorAll(".history-edit-star").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const form = btn.closest(".history-edit-form");
-        if (!form) return;
+        const f = btn.closest(".history-edit-form");
+        if (!f) return;
         const current = Number(btn.dataset.editStar);
-        const allOn = form.querySelectorAll('.history-edit-star[aria-pressed="true"]');
-        const isOnlyClickedAtCurrent = allOn.length === current && btn.getAttribute("aria-pressed") === "true";
-        const target = isOnlyClickedAtCurrent ? 0 : current;
-        form.querySelectorAll(".history-edit-star").forEach((b) => {
-          const n = Number(b.dataset.editStar);
-          b.setAttribute("aria-pressed", n <= target ? "true" : "false");
+        const allOn = f.querySelectorAll('.history-edit-star[aria-pressed="true"]');
+        const target = (allOn.length === current && btn.getAttribute("aria-pressed") === "true") ? 0 : current;
+        f.querySelectorAll(".history-edit-star").forEach((b) => {
+          b.setAttribute("aria-pressed", Number(b.dataset.editStar) <= target ? "true" : "false");
         });
       });
     });
-    modal.querySelectorAll(".history-edit-tag").forEach((btn) => {
+    modal.querySelectorAll(".history-edit-abs").forEach((btn) => {
       btn.addEventListener("click", () => {
         const on = btn.dataset.editActive === "1";
+        btn.closest(".history-edit-abs-group").querySelectorAll(".history-edit-abs")
+          .forEach((b) => { b.dataset.editActive = "0"; });
         btn.dataset.editActive = on ? "0" : "1";
       });
     });
@@ -509,30 +396,28 @@
   }
 
   async function submitHistoryEdit(btn) {
-    const form = btn.closest(".history-edit-form");
-    if (!form) return;
-    const ts = form.dataset.editTs;
-    const msg = form.querySelector(".history-edit-msg");
-    const starCount = form.querySelectorAll('.history-edit-star[aria-pressed="true"]').length;
+    const f = btn.closest(".history-edit-form");
+    if (!f) return;
+    const ts = f.dataset.editTs;
+    const msg = f.querySelector(".history-edit-msg");
+    const starCount = f.querySelectorAll('.history-edit-star[aria-pressed="true"]').length;
     const stars = starCount > 0 ? starCount : null;
-    const tags = Array.from(form.querySelectorAll('.history-edit-tag[data-edit-active="1"]'))
-      .map((b) => b.dataset.editTag);
-    const comment = (form.querySelector(".history-edit-comment").value || "").trim();
+    const absBtn = f.querySelector('.history-edit-abs[data-edit-active="1"]');
+    const absolute = absBtn ? absBtn.dataset.editAbs : null;
+    const comment = (f.querySelector(".history-edit-comment").value || "").trim();
 
-    if (!comment && stars === null && !tags.length) {
-      msg.textContent = "至少填一項（星等 / 標籤 / 感想）";
+    if (!comment && stars === null && !absolute) {
+      msg.textContent = "至少填一項（星等 / 單獨喝 / 感想）";
       msg.style.color = "var(--amber)";
       return;
     }
     btn.disabled = true;
     msg.textContent = "儲存中…";
     msg.style.color = "var(--ink-mute)";
-
     try {
       const resp = await fetch("/api/feedback/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timestamp: ts, stars, tags, comment }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timestamp: ts, stars, absolute, comment }),
       });
       const data = await resp.json();
       if (!resp.ok || !data.ok) throw new Error(data.error || "save failed");
@@ -555,8 +440,8 @@
     wrap.innerHTML = renderHistoryModal(historyCache.entries);
     existing.replaceWith(wrap.firstElementChild);
     attachHistoryHandlers();
-    const body = document.querySelector("#history-modal-body");
-    if (body) body.scrollTop = scrollTop;
+    const b = document.querySelector("#history-modal-body");
+    if (b) b.scrollTop = scrollTop;
   }
 
   async function fetchHistory() {
@@ -594,902 +479,554 @@
   }
 
   function mountHistoryTrigger() {
-    // Phase-10 redesign: the button now lives in the masthead HTML —
-    // we just attach the click handler to whatever's there.
     const btn = document.getElementById("history-trigger");
     if (!btn || btn.dataset.bound === "1") return;
     btn.dataset.bound = "1";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openHistoryModal();
-    });
+    btn.addEventListener("click", (e) => { e.stopPropagation(); openHistoryModal(); });
   }
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && document.getElementById("history-modal")) {
-      closeHistoryModal();
-    }
+    if (e.key === "Escape" && document.getElementById("history-modal")) closeHistoryModal();
   });
-  // ──────────────────────────────────────────────────────────────────
 
-
-  function renderFeedbackList(feedback) {
-    if (!feedback || !feedback.length) return "";
-    const items = feedback.map((f) => {
-      const stars = f.stars
-        ? `<span style="letter-spacing:1px;color:var(--cinnabar);">${"★".repeat(f.stars)}<span style="color:var(--rule);">${"★".repeat(5 - f.stars)}</span></span>`
-        : "—";
-      const tags = (f.tags || []).map((t) => `<span class="fb-tag">${escapeHtml(t)}</span>`).join("");
-      const date = (f.timestamp || "").slice(0, 10);
-      const comment = f.comment ? `<div class="fb-comment">「${escapeHtml(f.comment)}」</div>` : "";
-      return `
-        <div class="fb-entry">
-          <div class="fb-meta">${date} · ${stars}</div>
-          ${comment}
-          ${tags ? `<div style="margin-top: 6px;">${tags}</div>` : ""}
+  // ════════════════ STEEP TIMER ════════════════
+  function renderSteepTimer(result, index) {
+    return `
+      <div class="specimen-section">
+        <span class="specimen-section-title">STEEP TIMER · 浸泡計時</span>
+        <span class="specimen-section-aside">目標浸泡 ${formatTime(result.steep_sec)}</span>
+      </div>
+      <div class="timer">
+        <div class="timer-display" id="timer-display-${index}">0:00</div>
+        <div class="timer-status" id="timer-status-${index}">注水 → 插活塞 1cm → 按下開始</div>
+        <div class="timer-controls">
+          <button class="timer-btn timer-btn-primary" type="button" data-timer-toggle="${index}">▶ 開始</button>
+          <button class="timer-btn" type="button" data-timer-reset="${index}">↻ 重置</button>
         </div>
-      `;
+      </div>`;
+  }
+
+  function syncSteepTimerUI() {
+    if (!steepTimer) return;
+    const { index, target } = steepTimer;
+    const display = document.getElementById(`timer-display-${index}`);
+    const status = document.getElementById(`timer-status-${index}`);
+    if (!display || !status) return;
+    const elapsedSec = steepTimer.elapsedMs / 1000;
+    display.textContent = formatTime(elapsedSec);
+    status.classList.toggle("is-running", steepTimer.running);
+    if (elapsedSec >= target) {
+      display.textContent = formatTime(target);
+      status.textContent = "浸泡完成 — 旋轉後穩定下壓";
+      status.classList.add("is-done");
+    } else {
+      status.classList.remove("is-done");
+      const left = Math.ceil(target - elapsedSec);
+      status.textContent = steepTimer.running ? `浸泡中 · 剩餘 ${left}s` : `已暫停 · 剩餘 ${left}s`;
+    }
+  }
+
+  function tickSteep() {
+    if (!steepTimer || !steepTimer.running) return;
+    const now = Date.now();
+    steepTimer.elapsedMs += now - steepTimer.lastTick;
+    steepTimer.lastTick = now;
+    if (steepTimer.elapsedMs >= steepTimer.target * 1000) {
+      steepTimer.elapsedMs = steepTimer.target * 1000;
+      steepTimer.running = false;
+      const btn = document.querySelector(`[data-timer-toggle="${steepTimer.index}"]`);
+      if (btn) btn.textContent = "↻ 重新開始";
+      clearInterval(steepInterval);
+      steepInterval = null;
+    }
+    syncSteepTimerUI();
+  }
+
+  function toggleSteepTimer(index, result) {
+    if (!steepTimer || steepTimer.index !== index) {
+      steepTimer = { index, elapsedMs: 0, running: false, lastTick: 0, target: result.steep_sec };
+    }
+    const btn = document.querySelector(`[data-timer-toggle="${index}"]`);
+    if (steepTimer.running) {
+      steepTimer.running = false;
+      if (btn) btn.textContent = "▶ 繼續";
+      clearInterval(steepInterval);
+      steepInterval = null;
+    } else {
+      if (steepTimer.elapsedMs >= steepTimer.target * 1000) steepTimer.elapsedMs = 0;
+      steepTimer.running = true;
+      steepTimer.lastTick = Date.now();
+      if (btn) btn.textContent = "‖ 暫停";
+      steepInterval = setInterval(tickSteep, 100);
+    }
+    syncSteepTimerUI();
+  }
+
+  function resetSteepTimer(index, result) {
+    clearInterval(steepInterval);
+    steepInterval = null;
+    steepTimer = { index, elapsedMs: 0, running: false, lastTick: 0, target: result.steep_sec };
+    const btn = document.querySelector(`[data-timer-toggle="${index}"]`);
+    if (btn) btn.textContent = "▶ 開始";
+    syncSteepTimerUI();
+  }
+
+  // ════════════════ RESULT CARDS ════════════════
+  function renderMasterCards(results) {
+    if (!results || results.length <= 1) return "";
+    const cards = results.map((r, i) => {
+      const sel = i === currentDetailIndex ? " is-selected" : "";
+      const tag = i === currentDetailIndex ? " · 顯示中" : "";
+      return `
+        <div class="master-card${sel}" data-select-recipe="${i}">
+          <div class="master-card-rank">Rank ${i + 1}${tag}</div>
+          <div class="master-card-score">${r.distance.toFixed(4)}</div>
+          <div class="master-card-scorelabel">距 IDEAL</div>
+          <div class="master-card-meta">${r.temp}°C · dial ${r.dial} · ${r.dose}g<br>steep ${formatTime(r.steep_sec)}</div>
+        </div>`;
     }).join("");
-    return items;
+    return `<div class="master-strip">${cards}</div>`;
+  }
+
+  function attributeRows(result) {
+    const attrs = result.attributes, ideal = result.ideal;
+    let scaleMax = 0.1;
+    for (const a of ATTRIBUTES) scaleMax = Math.max(scaleMax, attrs[a], ideal[a]);
+    scaleMax = Math.ceil(scaleMax * 20) / 20;  // round up to 0.05
+
+    return ATTRIBUTES.map((a) => {
+      const pred = attrs[a], idl = ideal[a], delta = result.deltas[a];
+      const predPct = Math.max(0, Math.min(100, (pred / scaleMax) * 100));
+      const idealPct = Math.max(0, Math.min(100, (idl / scaleMax) * 100));
+      const offClass = Math.abs(delta) >= 0.03 ? " attr-row-off" : "";
+      const sign = delta > 0 ? "+" : "";
+      return `
+        <div class="attr-row${offClass}">
+          <span class="attr-name">${escapeHtml(ATTR_ZH[a] || a)}<span class="attr-name-en">${escapeHtml(a)}</span></span>
+          <span class="attr-bar-track">
+            <span class="attr-bar-fill" style="width:${predPct}%;"></span>
+            <span class="attr-bar-ideal" style="left:${idealPct}%;" title="IDEAL ${idl.toFixed(3)}"></span>
+          </span>
+          <span class="attr-pred">${pred.toFixed(3)}</span>
+          <span class="attr-delta">${sign}${delta.toFixed(3)}</span>
+        </div>`;
+    }).join("");
+  }
+
+  function renderSingleDetail(result, meta, index) {
+    if (!result) return "";
+    const accent = ROAST_COLOR[result.roast] || "#1d4ed8";
+    return `
+      <article class="sample" id="recipe-card-${index}" style="--accent:${accent};">
+        <header class="sample-head">
+          <div class="sample-no"><span>SAMPLE</span><span class="sample-no-num">№ ${String(index + 1).padStart(2, "0")}</span></div>
+          <div class="sample-label">${escapeHtml(meta.roast_name || result.roast)} · ${escapeHtml(result.brewer || "")}</div>
+        </header>
+
+        <div class="score-block">
+          <div class="score-display">${result.distance.toFixed(4)}</div>
+          <div class="score-meta">
+            <div class="score-label">距該焙度感官 IDEAL · DISTANCE</div>
+            <div class="score-hint">10 屬性與目標的 RMS 距離 — 越小越接近你的理想杯。非 0–100 評分。</div>
+          </div>
+        </div>
+
+        <div class="vector-grid">
+          <div class="vector-cell"><span class="vector-label">TEMP · 水溫</span><span class="vector-value">${result.temp}<span class="vector-unit">°C</span></span></div>
+          <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${result.dial}</span></div>
+          <div class="vector-cell"><span class="vector-label">DOSE · 粉量</span><span class="vector-value">${result.dose}<span class="vector-unit">g</span></span></div>
+          <div class="vector-cell"><span class="vector-label">STEEP · 浸泡</span><span class="vector-value">${formatTime(result.steep_sec)}</span></div>
+        </div>
+
+        <div class="brew-meta">
+          注水 ${result.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(result.steep_sec)} → 旋轉 → 穩定下壓
+          <span class="brew-meta-latent">內部估值 TDS ${result.tds.toFixed(2)}% · EY ${result.ey.toFixed(1)}%（粗估，非評分依據）</span>
+        </div>
+
+        ${renderSteepTimer(result, index)}
+
+        <div class="specimen-section">
+          <span class="specimen-section-title">SENSORY PROFILE · 10 感官屬性</span>
+          <span class="specimen-section-aside">實線=預測 · ◆=IDEAL</span>
+        </div>
+        <div class="attr-list">${attributeRows(result)}</div>
+
+        ${renderFeedbackForm(result, `detail-${index}`)}
+      </article>`;
+  }
+
+  function renderResultContent(results, meta) {
+    resultsNode.innerHTML = `
+      <div id="master-view">${renderMasterCards(results)}</div>
+      <div id="detail-view">${results[currentDetailIndex] ? renderSingleDetail(results[currentDetailIndex], meta, currentDetailIndex) : ""}</div>`;
+    if (results[currentDetailIndex]) {
+      resetSteepTimer(currentDetailIndex, results[currentDetailIndex]);
+    }
+    attachFeedbackHandlers();
+  }
+
+  function renderResults(payload) {
+    latestPayload = payload;
+    clearInterval(steepInterval);
+    steepInterval = null;
+    steepTimer = null;
+    const { meta, results } = payload || {};
+    if (payload && payload.error) {
+      resultsNode.innerHTML = `<div class="empty-state"><div class="empty-title">計算失敗</div><p class="empty-instructions">${escapeHtml(payload.error)}</p></div>`;
+      return;
+    }
+    if (!results || !results.length) {
+      resultsNode.innerHTML = `<div class="empty-state"><div class="empty-title">沒有可用結果</div></div>`;
+      return;
+    }
+    currentDetailIndex = 0;
+    renderResultContent(results, meta);
+  }
+
+  // ════════════════ §4 FEEDBACK QUESTIONNAIRE ════════════════
+  function comparedToOptions(currentRecipeId) {
+    const entries = (historyCache.entries || [])
+      .slice()
+      .sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""))
+      .slice(0, 12);
+    const opts = entries.map((e) => {
+      const r = e.recipe;
+      const desc = r ? `${r.temp}°C/dial ${r.dial}/${r.dose}g/${formatTime(r.steep_sec)}` : "無快照";
+      return `<option value="${escapeHtml(e.timestamp)}">${timestampShort(e.timestamp)} · ${escapeHtml(e.roast || "")} · ${escapeHtml(desc)}</option>`;
+    }).join("");
+    return `<option value="">（無 — 第一杯 / 不比較）</option>${opts}`;
+  }
+
+  function choiceGroup(slot, key, choices, selected) {
+    return `<div class="q-choices" data-q-slot="${slot}" data-q-key="${key}">` +
+      choices.map(([v, l]) => `<button type="button" class="q-choice${v === selected ? " is-on" : ""}" data-q-value="${v}">${l}</button>`).join("") +
+      `</div>`;
+  }
+
+  function attrGroupRows(slot) {
+    return Object.keys(AXIS_VIEW).map((g) => `
+      <div class="q-attr-row" data-q-group="${g}">
+        <span class="q-attr-name">${escapeHtml(GROUP_ZH[g] || g)}
+          <span class="q-attr-model" data-q-model="${g}"></span></span>
+        ${choiceGroup(slot, `attr-${g}`, [[">", "更多"], ["=", "一樣"], ["<", "更少"]], null)}
+      </div>`).join("");
   }
 
   function renderFeedbackForm(result, slot) {
     const rid = result.recipe_id;
     if (!rid) return "";
-    const tagButtons = (window.APP_FEEDBACK_TAGS || []).map((t) =>
-      `<button type="button" class="feedback-tag" data-fb-tag="${t}" data-fb-slot="${slot}">${t}</button>`
-    ).join("");
-    const starButtons = [1, 2, 3, 4, 5].map((n) =>
-      `<button type="button" class="feedback-star" data-fb-star="${n}" data-fb-slot="${slot}">★</button>`
-    ).join("");
     return `
-      <details class="feedback fb-section" data-fb-slot="${slot}" data-fb-recipe="${rid}" data-fb-label="${result.label}">
-        <summary class="feedback-summary">TASTING NOTES · 我泡過了</summary>
+      <details class="feedback fb-section" data-fb-slot="${slot}" data-fb-recipe="${rid}">
+        <summary class="feedback-summary">TASTING · 我泡過了 — 對照問卷</summary>
         <div class="feedback-form">
-          <div class="feedback-row">
-            <span class="feedback-row-label">STARS · 星等（選填）</span>
-            <div class="feedback-stars" data-fb-slot="${slot}">${starButtons}</div>
-            <input type="hidden" class="fb-stars-input" data-fb-slot="${slot}" value="">
+          <div class="q-row">
+            <span class="q-row-label">對照哪一杯 · COMPARED TO</span>
+            <select class="q-compared" data-q-slot="${slot}">${comparedToOptions(rid)}</select>
+            <p class="q-hint">挑你『上一杯』的紀錄；逐屬性會由模型先預填，你只改不準的。</p>
           </div>
-          <div class="feedback-row">
-            <span class="feedback-row-label">TAGS · 標籤（多選）</span>
-            <div class="feedback-tags" data-fb-slot="${slot}">${tagButtons}</div>
+
+          <div class="q-pairwise" data-q-slot="${slot}" hidden>
+            <div class="q-row">
+              <span class="q-row-label">整體偏好 · 這杯 vs 上一杯</span>
+              ${choiceGroup(slot, "overall", [[">", "較好 ▲"], ["=", "差不多"], ["<", "較差 ▼"]], null)}
+            </div>
+            <div class="q-row">
+              <span class="q-row-label">逐屬性 · 這杯比上一杯…（模型已預填）</span>
+              <div class="q-attrs">${attrGroupRows(slot)}</div>
+            </div>
           </div>
-          <div class="feedback-row">
-            <span class="feedback-row-label">COMMENT · 感想（主要 input）</span>
-            <textarea class="feedback-comment fb-comment-input" data-fb-slot="${slot}" rows="3"
-              placeholder="例：「偏酸但喝得到甜尾」、「body 不夠」、「下次想試 dial 5.5」..."></textarea>
+
+          <div class="q-row">
+            <span class="q-row-label">單獨喝這杯如何 · ABSOLUTE（偶爾填）</span>
+            ${choiceGroup(slot, "absolute", [["good", "好喝"], ["ok", "普通"], ["bad", "不行"]], null)}
           </div>
-          <div>
-            <button type="button" class="feedback-save fb-save-btn" data-fb-slot="${slot}">儲存 · SAVE</button>
-            <span class="feedback-msg fb-save-msg" data-fb-slot="${slot}"></span>
+          <div class="q-row">
+            <span class="q-row-label">感想 · COMMENT（主要 input）</span>
+            <textarea class="q-comment" data-q-slot="${slot}" rows="3" placeholder="例：「body 比上一杯扎實，但花香被壓掉」、「尾韻乾」、「下次想試 dial 高一點」…"></textarea>
           </div>
-          <div class="fb-history-mount" data-fb-slot="${slot}">${renderFeedbackList(result.feedback)}</div>
+          <div class="q-row q-row-inline">
+            <span class="q-row-label">星等 · STARS（選填、非搜尋訊號）</span>
+            <div class="q-stars" data-q-slot="${slot}">
+              ${[1, 2, 3, 4, 5].map(n => `<button type="button" class="q-star" data-q-star="${n}">★</button>`).join("")}
+            </div>
+          </div>
+          <div class="q-actions">
+            <button type="button" class="q-save" data-q-slot="${slot}">儲存 · SAVE</button>
+            <span class="q-msg" data-q-slot="${slot}"></span>
+          </div>
+          <div class="q-history" data-q-slot="${slot}">${renderFeedbackList(result.feedback)}</div>
         </div>
-      </details>
-    `;
+      </details>`;
+  }
+
+  function renderFeedbackList(feedback) {
+    if (!feedback || !feedback.length) return "";
+    return feedback.slice().reverse().map((f) => {
+      const date = (f.timestamp || "").slice(0, 10);
+      const stars = f.stars ? ` · ${"★".repeat(f.stars)}` : "";
+      const overall = f.overall ? ` · 整體 ${ordinalGlyph(f.overall)}` : "";
+      const absolute = f.absolute ? ` · ${f.absolute}` : "";
+      const comment = f.comment ? `<div class="fb-comment">「${escapeHtml(f.comment)}」</div>` : "";
+      return `<div class="fb-entry"><div class="fb-meta">${date}${stars}${overall}${absolute}</div>${comment}</div>`;
+    }).join("");
+  }
+
+  // recompute the model prefill for a slot from the chosen compared cup
+  function refreshPrefill(slot) {
+    const section = document.querySelector(`.fb-section[data-fb-slot="${slot}"]`);
+    if (!section) return;
+    const recipeId = section.dataset.fbRecipe;
+    const result = findResultByRecipeId(recipeId);
+    const select = section.querySelector(`.q-compared[data-q-slot="${slot}"]`);
+    const pairwise = section.querySelector(`.q-pairwise[data-q-slot="${slot}"]`);
+    const comparedTs = select ? select.value : "";
+
+    fbState[slot] = fbState[slot] || {};
+    fbState[slot].comparedTo = comparedTs || null;
+
+    if (!comparedTs) {
+      fbState[slot].prefill = null;
+      if (pairwise) pairwise.hidden = true;
+      return;
+    }
+    if (pairwise) pairwise.hidden = false;
+
+    const comparedEntry = (historyCache.entries || []).find(e => e.timestamp === comparedTs);
+    const comparedAttrs = comparedEntry && comparedEntry.recipe ? comparedEntry.recipe.attributes : null;
+    const prefill = (result && comparedAttrs) ? computePrefill(result.attributes, comparedAttrs) : null;
+    fbState[slot].prefill = prefill;
+
+    // apply prefill to the per-group choice buttons + the "model said" tag
+    Object.keys(AXIS_VIEW).forEach((g) => {
+      const sign = prefill ? prefill[g] : null;
+      const groupBox = section.querySelector(`.q-choices[data-q-key="attr-${g}"]`);
+      if (groupBox) {
+        groupBox.querySelectorAll(".q-choice").forEach((b) => {
+          b.classList.toggle("is-on", sign != null && b.dataset.qValue === sign);
+        });
+      }
+      const modelTag = section.querySelector(`[data-q-model="${g}"]`);
+      if (modelTag) modelTag.textContent = sign ? `模型：${ordinalGlyph(sign)}` : (comparedAttrs ? "" : "無快照");
+    });
   }
 
   function attachFeedbackHandlers() {
-    document.querySelectorAll(".feedback-star").forEach((btn) => {
-      if (btn.dataset.fbBound === "1") return;
-      btn.dataset.fbBound = "1";
+    document.querySelectorAll(".q-compared").forEach((sel) => {
+      if (sel.dataset.bound === "1") return;
+      sel.dataset.bound = "1";
+      sel.addEventListener("change", () => refreshPrefill(sel.dataset.qSlot));
+    });
+    document.querySelectorAll(".q-choice").forEach((btn) => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
       btn.addEventListener("click", () => {
-        const slot = btn.dataset.fbSlot;
-        const n = Number(btn.dataset.fbStar);
-        const input = document.querySelector(`.fb-stars-input[data-fb-slot="${slot}"]`);
-        if (input) input.value = String(n);
-        document.querySelectorAll(`.feedback-stars[data-fb-slot="${slot}"] .feedback-star`).forEach((b) => {
-          b.classList.toggle("is-on", Number(b.dataset.fbStar) <= n);
+        const box = btn.closest(".q-choices");
+        const wasOn = btn.classList.contains("is-on");
+        box.querySelectorAll(".q-choice").forEach((b) => b.classList.remove("is-on"));
+        if (!wasOn) btn.classList.add("is-on");
+      });
+    });
+    document.querySelectorAll(".q-star").forEach((btn) => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", () => {
+        const box = btn.closest(".q-stars");
+        const n = Number(btn.dataset.qStar);
+        const currentOn = box.querySelectorAll(".q-star.is-on").length;
+        const target = (currentOn === n) ? 0 : n;
+        box.querySelectorAll(".q-star").forEach((b) => {
+          b.classList.toggle("is-on", Number(b.dataset.qStar) <= target);
         });
       });
     });
-    document.querySelectorAll(".feedback-tag").forEach((btn) => {
-      if (btn.dataset.fbBound === "1") return;
-      btn.dataset.fbBound = "1";
-      btn.addEventListener("click", () => {
-        const on = btn.dataset.fbActive === "1";
-        btn.dataset.fbActive = on ? "0" : "1";
-        btn.classList.toggle("is-on", !on);
-      });
+    document.querySelectorAll(".q-save").forEach((btn) => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", () => submitFeedback(btn.dataset.qSlot, btn));
     });
-    document.querySelectorAll(".fb-save-btn").forEach((btn) => {
-      if (btn.dataset.fbBound === "1") return;
-      btn.dataset.fbBound = "1";
-      btn.addEventListener("click", () => submitFeedback(btn.dataset.fbSlot, btn));
-    });
+    // initialise prefill / pairwise visibility for every freshly-rendered form
+    document.querySelectorAll(".fb-section").forEach((s) => refreshPrefill(s.dataset.fbSlot));
+  }
+
+  function readChoice(slot, key) {
+    const box = document.querySelector(`.q-choices[data-q-slot="${slot}"][data-q-key="${key}"]`);
+    if (!box) return null;
+    const on = box.querySelector(".q-choice.is-on");
+    return on ? on.dataset.qValue : null;
   }
 
   async function submitFeedback(slot, btn) {
     const section = document.querySelector(`.fb-section[data-fb-slot="${slot}"]`);
     if (!section) return;
-    const msg = document.querySelector(`.fb-save-msg[data-fb-slot="${slot}"]`);
-    const starsInput = document.querySelector(`.fb-stars-input[data-fb-slot="${slot}"]`);
-    const commentInput = document.querySelector(`.fb-comment-input[data-fb-slot="${slot}"]`);
-    const tags = Array.from(document.querySelectorAll(`.feedback-tags[data-fb-slot="${slot}"] [data-fb-active="1"]`))
-      .map((b) => b.dataset.fbTag);
-    const stars = starsInput.value ? Number(starsInput.value) : null;
-    const comment = (commentInput.value || "").trim();
-    if (!comment && !stars && !tags.length) {
-      msg.textContent = "請至少填一項";
-      msg.style.color = "var(--cinnabar)";
+    const msg = document.querySelector(`.q-msg[data-q-slot="${slot}"]`);
+    const recipeId = section.dataset.fbRecipe;
+    const result = findResultByRecipeId(recipeId);
+    if (!result) { msg.textContent = "找不到配方"; msg.style.color = "var(--amber)"; return; }
+
+    const comparedTo = (fbState[slot] && fbState[slot].comparedTo) || null;
+    const overall = comparedTo ? readChoice(slot, "overall") : null;
+    const absolute = readChoice(slot, "absolute");
+    const comment = (section.querySelector(`.q-comment[data-q-slot="${slot}"]`).value || "").trim();
+    const starsOn = section.querySelectorAll(`.q-stars[data-q-slot="${slot}"] .q-star.is-on`).length;
+    const stars = starsOn > 0 ? starsOn : null;
+
+    let attributesVs = null;
+    if (comparedTo) {
+      attributesVs = {};
+      Object.keys(AXIS_VIEW).forEach((g) => {
+        const v = readChoice(slot, `attr-${g}`);
+        if (v) attributesVs[g] = v;
+      });
+      if (!Object.keys(attributesVs).length) attributesVs = null;
+    }
+    const modelAttributesVs = comparedTo ? (fbState[slot] && fbState[slot].prefill) || null : null;
+
+    if (!comment && !overall && !attributesVs && !absolute && !stars) {
+      msg.textContent = "請至少填一項（整體 / 逐屬性 / 單獨喝 / 感想 / 星等）";
+      msg.style.color = "var(--amber)";
       return;
     }
     btn.disabled = true;
     msg.textContent = "儲存中…";
     msg.style.color = "var(--ink-mute)";
 
-    const meta = latestPayload?.meta || {};
-    const result = findResultByRecipeId(section.dataset.fbRecipe);
     const body = {
-      recipe_id: section.dataset.fbRecipe,
-      label: section.dataset.fbLabel,
-      stars,
-      comment,
-      tags,
-      roast: meta.roast_code,
-      brewer: getRecipeBrewer(section.dataset.fbRecipe),
-      water: { gh: meta.water_gh, kh: meta.water_kh, mg_frac: meta.water_mg_frac },
-      recipe: result ? {
-        temp: result.temp,
-        dial: result.dial,
-        dose: result.dose,
-        steep_sec: result.steep_sec,
-        tds: result.tds,
-        ey: result.ey,
-        score: result.score,
-      } : null,
+      recipe_id: recipeId,
+      roast: result.roast,
+      brewer: result.brewer_size,
+      recipe: {
+        temp: result.temp, dial: result.dial, dose: result.dose,
+        steep_sec: result.steep_sec, tds: result.tds, ey: result.ey,
+        distance: result.distance,
+      },
+      compared_to: comparedTo,
+      overall, attributes_vs: attributesVs, model_attributes_vs: modelAttributesVs,
+      absolute, comment, stars,
     };
     try {
       const resp = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await resp.json();
-      if (!resp.ok || !data.ok) {
-        throw new Error(data.error || "save failed");
-      }
-      // Prepend the new entry locally so the user sees it without refetching.
-      const mount = document.querySelector(`.fb-history-mount[data-fb-slot="${slot}"]`);
-      mount.insertAdjacentHTML("afterbegin", renderFeedbackList([data.entry]));
-      commentInput.value = "";
-      starsInput.value = "";
-      document.querySelectorAll(`.feedback-stars[data-fb-slot="${slot}"] .feedback-star`).forEach((b) => {
-        b.classList.remove("is-on");
-      });
-      document.querySelectorAll(`.feedback-tags[data-fb-slot="${slot}"] .feedback-tag`).forEach((b) => {
-        b.dataset.fbActive = "0";
-        b.classList.remove("is-on");
-      });
+      if (!resp.ok || !data.ok) throw new Error(data.error || "save failed");
+      const mount = section.querySelector(`.q-history[data-q-slot="${slot}"]`);
+      if (mount) mount.insertAdjacentHTML("afterbegin", renderFeedbackList([data.entry]));
+      section.querySelector(`.q-comment[data-q-slot="${slot}"]`).value = "";
+      section.querySelectorAll(`.q-choice.is-on, .q-star.is-on`).forEach((b) => b.classList.remove("is-on"));
       msg.textContent = "✓ 已儲存";
       msg.style.color = "var(--lichen)";
-      fetchHistory();  // refresh history count + cache
+      await fetchHistory();
+      // refresh the compared-to dropdowns now that a new entry exists
+      document.querySelectorAll(".q-compared").forEach((sel) => {
+        const keep = sel.value;
+        const owner = sel.dataset.qSlot;
+        const ownerSection = document.querySelector(`.fb-section[data-fb-slot="${owner}"]`);
+        sel.innerHTML = comparedToOptions(ownerSection ? ownerSection.dataset.fbRecipe : "");
+        sel.value = keep;
+      });
     } catch (err) {
-      msg.textContent = `失敗：${err}`;
-      msg.style.color = "var(--cinnabar)";
+      msg.textContent = `失敗：${err.message || err}`;
+      msg.style.color = "var(--amber)";
     } finally {
       btn.disabled = false;
     }
   }
 
   function findResultByRecipeId(recipeId) {
-    if (!latestPayload?.results) return null;
-    const seq = Array.isArray(latestPayload.results)
-      ? latestPayload.results
-      : Object.values(latestPayload.results).flat();
-    return seq.find((r) => r.recipe_id === recipeId) || null;
+    if (!latestPayload || !latestPayload.results) return null;
+    return latestPayload.results.find((r) => r.recipe_id === recipeId) || null;
   }
 
-  function getRecipeBrewer(recipeId) {
-    const hit = findResultByRecipeId(recipeId);
-    if (!hit) return "standard";
-    return hit.brewer && hit.brewer.includes("XL") ? "xl" : "standard";
-  }
-  // ─────────────────────────────────────────────────────────────
-
-  function renderInlineTimer(result, index) {
-    return `
-      <div class="specimen-section">
-        <span class="specimen-section-title">BREW TIMER · 沖煮計時</span>
-        <span class="specimen-section-aside">總長 ${formatTime(result.total_contact_sec)}</span>
-      </div>
-      <div class="timer">
-        <div class="timer-display" id="timer-display-${index}">0:00</div>
-        <div class="timer-status" id="timer-current-action-${index}">準備注水</div>
-        <div class="timer-controls">
-          <button class="timer-btn timer-btn-primary" type="button" data-inline-timer-toggle="${index}">▶ 開始</button>
-          <button class="timer-btn" type="button" data-inline-timer-reset="${index}">↻ 重置</button>
-        </div>
-      </div>
-    `;
-  }
-
-  function startOrPauseInlineTimer(index, result) {
-    if (!activeTimers[index]) {
-      const milestones = [
-        { time: 0, 
-          action: "準備注水", 
-          rowId: `timeline-row-${index}-0` 
-        },
-        { 
-          time: 0, 
-          action: "注水與封閉：注水後塞入活塞建立負壓", 
-          rowId: `timeline-row-${index}-1` 
-        },
-        { 
-          time: result.steep_sec, 
-          action: `旋轉與靜置：輕柔搖晃 ${result.swirl_sec} 秒後靜置`,
-          rowId: `timeline-row-${index}-2` 
-        },
-        { 
-          time: result.steep_sec + result.swirl_sec + result.swirl_wait_sec,
-          action: "開始下壓：穩定平均地向下壓", 
-          rowId: `timeline-row-${index}-3` 
-        },
-        { 
-          time: result.steep_sec + result.swirl_sec + result.swirl_wait_sec + result.press_sec, 
-          action: "萃取完成", 
-          rowId: `timeline-row-${index}-4` 
-        }
-      ];
-
-      activeTimers[index] = {
-        isRunning: false,
-        elapsedMs: 0,
-        lastTickMs: 0,
-        milestones: milestones,
-        totalTimeSec: milestones[milestones.length - 1].time
-      };
-    }
-
-    const timer = activeTimers[index];
-    const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${index}"]`);
-
-    if (timer.isRunning) {
-      timer.isRunning = false;
-      toggleBtn.textContent = "▶ 繼續";
-    } else {
-      if (timer.elapsedMs >= timer.totalTimeSec * 1000) {
-        timer.elapsedMs = 0;
-      }
-      timer.isRunning = true;
-      timer.lastTickMs = Date.now();
-      toggleBtn.textContent = "‖ 暫停";
-
-      if (!brewTimerInterval) {
-        brewTimerInterval = setInterval(tickAllTimers, 100);
-      }
-    }
-    syncInlineTimerUI(index);
-  }
-
-  function resetInlineTimer(index) {
-    if (activeTimers[index]) {
-      activeTimers[index].isRunning = false;
-      activeTimers[index].elapsedMs = 0;
-    }
-    const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${index}"]`);
-    if (toggleBtn) toggleBtn.textContent = "▶ 開始";
-    syncInlineTimerUI(index);
-  }
-
-  function tickAllTimers() {
-    const now = Date.now();
-    let anyRunning = false;
-    
-    for (const [indexStr, timer] of Object.entries(activeTimers)) {
-      if (timer.isRunning) {
-        anyRunning = true;
-        const delta = now - timer.lastTickMs;
-        timer.elapsedMs += delta;
-        timer.lastTickMs = now;
-        
-        if (timer.elapsedMs >= timer.totalTimeSec * 1000) {
-          timer.elapsedMs = timer.totalTimeSec * 1000;
-          timer.isRunning = false;
-          const toggleBtn = document.querySelector(`[data-inline-timer-toggle="${indexStr}"]`);
-          if (toggleBtn) toggleBtn.textContent = "↻ 重新開始";
-        }
-        
-        syncInlineTimerUI(Number(indexStr));
-      }
-    }
-
-    if (!anyRunning && brewTimerInterval) {
-      clearInterval(brewTimerInterval);
-      brewTimerInterval = null;
+  // ════════════════ WIRING ════════════════
+  function syncRoastDefaults() {
+    const temps = window.APP_DEFAULT_TEMPS || {};
+    const def = temps[roastSelect.value];
+    if (def != null && tempInput) {
+      tempInput.value = def;
+      const note = document.getElementById("temp-note");
+      if (note) note.textContent = `已帶入 ${roastSelect.value} 慣例預設 ${def}°C — 可自行微調。`;
     }
   }
 
-  function syncInlineTimerUI(index) {
-    const timer = activeTimers[index];
-    if (!timer) return;
-
-    const display = document.getElementById(`timer-display-${index}`);
-    const actionText = document.getElementById(`timer-current-action-${index}`);
-    if (!display || !actionText) return;
-
-    display.textContent = formatInlineClock(timer.elapsedMs);
-
-    // Signature detail — Fraunces weight axis interpolates with progress.
-    const progress = timer.totalTimeSec > 0
-      ? Math.min(1, timer.elapsedMs / 1000 / timer.totalTimeSec)
-      : 0;
-    display.style.setProperty("--t-progress", progress.toFixed(3));
-
-    const elapsedSec = timer.elapsedMs / 1000;
-    let currentMilestone = timer.milestones[0];
-    let nextMilestone = null;
-
-    for (let i = timer.milestones.length - 1; i >= 0; i--) {
-      if (elapsedSec >= timer.milestones[i].time) {
-        currentMilestone = timer.milestones[i];
-        nextMilestone = timer.milestones[i + 1] || null;
-        break;
-      }
-    }
-
-    actionText.classList.remove("is-running", "is-done");
-    if (elapsedSec >= timer.totalTimeSec) {
-      actionText.textContent = "EXTRACTION COMPLETE · 萃取完成";
-      actionText.classList.add("is-done");
-    } else if (nextMilestone && nextMilestone.time > elapsedSec) {
-      const timeLeft = Math.ceil(nextMilestone.time - elapsedSec);
-      actionText.textContent = `${currentMilestone.action} · 剩餘 ${timeLeft}s`;
-      if (timer.isRunning) actionText.classList.add("is-running");
-    } else {
-      actionText.textContent = currentMilestone.action;
-      if (timer.isRunning) actionText.classList.add("is-running");
-    }
-
-    // Highlight active timeline row
-    for (let i = 1; i < timer.milestones.length; i++) {
-      const rowId = timer.milestones[i].rowId;
-      const row = document.getElementById(rowId);
-      if (row) {
-        row.classList.toggle(
-          "is-active",
-          timer.milestones[i] === currentMilestone && elapsedSec < timer.totalTimeSec
-        );
-      }
-    }
-  }
-
-  function metricCard(label, value) {
-    return `<div class="chip"><strong>${label}</strong><div>${value}</div></div>`;
-  }
-
-  function compoundCard(key, value, maxValue, idealAbs) {
-    const help = compoundHelp[key];
-    const maxVal = maxValue || 0.6;
-    const fillPct = Math.min(100, (value / maxVal) * 100);
-    const idealPct = idealAbs != null ? Math.min(100, (idealAbs / maxVal) * 100) : null;
-
-    return `
-      <div class="compound-col" title="${help.label}: ${help.body}">
-        <div class="compound-code">${key}</div>
-        <div class="compound-bar-track">
-          <div class="compound-bar-fill" style="height: ${fillPct}%;"></div>
-          ${idealPct != null ? `<div class="compound-bar-ideal" style="bottom: ${idealPct}%;"></div>` : ""}
-        </div>
-        <div class="compound-value">${value.toFixed(3)}</div>
-        <div class="compound-name">${help.label}</div>
-      </div>
-    `;
-  }
-
-  function radarLegendCard(key) {
-    const help = compoundHelp[key];
-    return `
-      <div class="legend-item">
-        <strong>${key} - ${help.label}</strong>
-        <div class="muted">${help.body}</div>
-      </div>
-    `;
-  }
-
-  function compareValueCell(result, primary, secondary = "", cellClass = "", valueClass = "") {
-    const tdClass = cellClass ? ` class="${cellClass}"` : "";
-    const rankClass = valueClass ? `compare-rank ${valueClass}` : "compare-rank";
-    if (!result) {
-      return `<td${tdClass}><span class="compare-rank">-</span></td>`;
-    }
-    return `
-      <td${tdClass}>
-        <span class="${rankClass}">${primary}</span>
-        ${secondary ? `<span class="compare-sub">${secondary}</span>` : ""}
-      </td>
-    `;
-  }
-
-  function compareSection(title) {
-    const radarLink = title === "六維向量"
-      ? `<a href="#radar-modal" class="compare-section-link" data-open-radar>查看風味雷達圖</a>`
-      : "";
-    return `
-      <tr class="compare-section-row">
-        <td colspan="4">
-          <div class="compare-section-cell">
-            <span>${title}</span>
-            ${radarLink}
-          </div>
-        </td>
-      </tr>
-    `;
-  }
-
-  function compareLabelCell(label, sublabel = "") {
-    return `
-      <span class="compare-label">${label}</span>
-      ${sublabel ? `<span class="compare-label-sub">${sublabel}</span>` : ""}
-    `;
-  }
-
-  function renderRankHeader(result, index) {
-    const scoreLine = result ? `<span class="compare-sub">Score ${result.score.toFixed(1)}</span>` : "";
-    return `
-      <th>
-        <div class="compare-rank-head">
-          <span>Rank ${index + 1}</span>
-          ${scoreLine}
-          <div style="margin-top: 8px;">
-             <button class="btn btn-sm btn-outline-primary" type="button" data-scroll-to-recipe="${index}">👉 選擇此配方</button>
-          </div>
-        </div>
-      </th>
-    `;
-  }
-
-  function buildRadarSvg(results) {
-    if (!results.length) return "";
-
-    const size = 420;
-    const center = size / 2;
-    const radius = 142;
-    const rings = [0.25, 0.5, 0.75, 1.0];
-    const maxByKey = Object.fromEntries(
-      keys.map((key) => [key, Math.max(...results.map((item) => item.compounds_abs[key]), 1e-8)]),
-    );
-
-    const ringSvg = rings.map((ring) => {
-      const points = keys.map((_, idx) => {
-        const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
-        const x = center + Math.cos(angle) * radius * ring;
-        const y = center + Math.sin(angle) * radius * ring;
-        return `${x},${y}`;
-      }).join(" ");
-      return `<polygon points="${points}" fill="none" stroke="#dadce1"></polygon>`;
-    }).join("");
-
-    const spokes = keys.map((key, idx) => {
-      const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
-      const x = center + Math.cos(angle) * radius;
-      const y = center + Math.sin(angle) * radius;
-      const lx = center + Math.cos(angle) * (radius + 28);
-      const ly = center + Math.sin(angle) * (radius + 28);
-      return `
-        <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#a3a7af"></line>
-        <text x="${lx}" y="${ly}" text-anchor="middle" font-size="12" fill="#3f434b" font-family="JetBrains Mono, monospace" font-weight="600" letter-spacing="0.06em">${key}</text>
-      `;
-    }).join("");
-
-    const series = results.slice(0, 3).map((result, index) => {
-      const color = ["#1d4ed8", "#b45309", "#3f6b3a"][index] || "#3f434b";
-      const points = keys.map((key, idx) => {
-        const angle = (Math.PI * 2 * idx) / keys.length - Math.PI / 2;
-        const normalized = result.compounds_abs[key] / maxByKey[key];
-        const x = center + Math.cos(angle) * radius * normalized;
-        const y = center + Math.sin(angle) * radius * normalized;
-        return `${x},${y}`;
-      }).join(" ");
-      return `<polygon points="${points}" fill="${color}22" stroke="${color}" stroke-width="2"></polygon>`;
-    }).join("");
-
-    return `<svg viewBox="0 0 ${size} ${size}">${ringSvg}${spokes}${series}</svg>`;
-  }
-
-  function closeRadarModal() {
-    radarModal.hidden = true;
-    document.body.style.overflow = "";
-  }
-
-  function openRadarModal() {
-    if (!latestRadarResults.length) return;
-    radarNode.innerHTML = buildRadarSvg(latestRadarResults);
-    radarLegend.innerHTML = keys.map((key) => radarLegendCard(key)).join("");
-    radarModal.hidden = false;
-    document.body.style.overflow = "hidden";
-  }
-
-  function updateRadarTrigger(results) {
-    latestRadarResults = results.slice(0, 3);
-    if (!latestRadarResults.length) {
-      closeRadarModal();
-      return;
-    }
-    if (!radarModal.hidden) {
-      openRadarModal();
-    }
-  }
-
-  function renderMasterCards(results) {
-    if (!results || results.length <= 1) return "";
-    const cards = results.map((r, index) => {
-      const sel = index === currentDetailIndex ? " is-selected" : "";
-      const indicator = index === currentDetailIndex ? " · 顯示中" : "";
-      return `
-        <div class="master-card${sel}" data-select-recipe="${index}">
-          <div class="master-card-rank">Rank ${index + 1}${indicator}</div>
-          <div class="master-card-score">${r.score.toFixed(1)}</div>
-          <div class="master-card-meta">
-            ${r.temp}°C · dial ${r.dial} · ${r.dose}g<br>
-            steep ${formatTime(r.steep_sec)} · TDS ${r.tds.toFixed(2)}%
-          </div>
-        </div>
-      `;
-    }).join("");
-    return `<div class="master-strip">${cards}</div>`;
-  }
-
-  function renderSingleDetail(result, meta, index) {
-    if (!result) return "";
-    const labelName = result.label || "balanced";
-    const labelClass = `label-${labelName}`;
-    const lbl = (window.APP_LABELS || []).find(l => l.name === labelName);
-    const idealFor = (key) => (lbl && lbl.ideal && lbl.ideal[key] != null) ? lbl.ideal[key] * result.tds : null;
-    const v_drip = result.v_drip || result.pre_seal_drip_ml || 0;
-
-    // Timeline milestones — accumulating clock
-    let t = 0;
-    const rows = [];
-    rows.push({
-      n: 1, time: t,
-      title: "注水與封閉 · POUR & SEAL",
-      detail: `注水至 ${result.water_ml} ml（水溫 ${result.temp}°C），隨後塞入活塞建立負壓（預估初期漏水約 ${v_drip.toFixed(1)} ml）。`,
-    });
-    t = result.steep_sec;
-    rows.push({
-      n: 2, time: t,
-      title: "旋轉與靜置 · SWIRL & SETTLE",
-      detail: `輕柔搖晃杯身 ${result.swirl_sec} 秒，靜置 ${result.swirl_wait_sec} 秒建立粉床。`,
-    });
-    t += result.swirl_sec + result.swirl_wait_sec;
-    const collapsed = (result.press_sec_internal && result.press_sec_internal > 60) || result.press_sec > 60;
-    rows.push({
-      n: 3, time: t,
-      title: "開始下壓 · PRESS",
-      detail: `穩定下壓，預計耗時 ${result.press_sec} 秒（水流通過時間，不含壓到底嗤聲）。${collapsed ? " 阻力崩潰折算。" : ""}`,
-    });
-    t += result.press_sec;
-    rows.push({
-      n: 4, time: t,
-      title: "萃取完成 · COMPLETE",
-      detail: "總接觸時間完成 — 享受咖啡。",
-    });
-
-    return `
-      <article class="sample ${labelClass}" id="recipe-card-${index}">
-        <header class="sample-head">
-          <div class="sample-no">
-            <span>SAMPLE</span>
-            <span class="sample-no-num">№ ${String(index + 1).padStart(2, "0")}</span>
-          </div>
-          <div class="sample-label">${escapeHtml(labelName)} · ${escapeHtml(meta.roast_name || "")}</div>
-        </header>
-
-        <div class="score-block">
-          <div class="score-display">${result.score.toFixed(1)}</div>
-          <div class="score-meta">
-            <div class="score-label">FLAVOR SCORE</div>
-            <div class="score-scale">
-              <span>0</span>
-              <div class="score-scale-track">
-                <div class="score-scale-tick" style="left: ${Math.max(0, Math.min(100, result.score))}%;"></div>
-              </div>
-              <span>100</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="vector-grid">
-          <div class="vector-cell">
-            <span class="vector-label">TEMP · 水溫</span>
-            <span class="vector-value">${result.temp}<span class="vector-unit">°C</span></span>
-          </div>
-          <div class="vector-cell">
-            <span class="vector-label">DIAL · 研磨</span>
-            <span class="vector-value">${result.dial}</span>
-          </div>
-          <div class="vector-cell">
-            <span class="vector-label">DOSE · 粉量</span>
-            <span class="vector-value">${result.dose}<span class="vector-unit">g</span></span>
-          </div>
-          <div class="vector-cell">
-            <span class="vector-label">STEEP · 浸泡</span>
-            <span class="vector-value">${formatTime(result.steep_sec)}</span>
-          </div>
-        </div>
-
-        <div class="specimen-section">
-          <span class="specimen-section-title">TIMELINE · Hoffman 沖煮指南</span>
-          <span class="specimen-section-aside">總接觸 ${formatTime(result.total_contact_sec)} · TDS ${result.tds.toFixed(2)}% · EY ${result.ey.toFixed(1)}%</span>
-        </div>
-        <div class="timeline-callout">
-          建議先「按馬錶」、隨即「注水」、完成後「塞塞子」 — 從水接觸咖啡的第一秒起計時。下壓秒數為水流通過時間；嗤聲後壓到底為空氣階段，不計入萃取。
-        </div>
-        <div class="timeline">
-          ${rows.map(r => `
-            <div class="timeline-row" id="timeline-row-${index}-${r.n}">
-              <span class="timeline-time">${formatTime(r.time)}</span>
-              <span class="timeline-action"><strong>${r.title}</strong><br>${r.detail}</span>
-            </div>
-          `).join("")}
-        </div>
-
-        ${renderInlineTimer(result, index)}
-
-        <div class="specimen-section">
-          <span class="specimen-section-title">COMPOUND VECTOR · 六向量化合物</span>
-          <a href="#radar" class="specimen-section-link" data-open-radar>查看風味雷達圖 →</a>
-        </div>
-        <div class="compounds">
-          ${keys.map(key => compoundCard(
-            key,
-            result.compounds_abs[key],
-            meta.flavor_max ? meta.flavor_max[key] : 0.6,
-            idealFor(key),
-          )).join("")}
-        </div>
-
-        <div class="ratios">
-          <div class="ratio-cell">
-            <span class="ratio-label">AC / SW</span>
-            <span>
-              <span class="ratio-actual">${result.ratios.ac_sw_actual}</span>
-              <span class="ratio-ideal"> · ideal ${result.ratios.ac_sw_ideal}</span>
-            </span>
-          </div>
-          <div class="ratio-cell">
-            <span class="ratio-label">PS / BITTER</span>
-            <span>
-              <span class="ratio-actual">${result.ratios.ps_bitter_actual}</span>
-              <span class="ratio-ideal"> · ideal ${result.ratios.ps_bitter_ideal}</span>
-            </span>
-          </div>
-        </div>
-
-        ${renderFeedbackForm(result, `detail-${index}`)}
-      </article>
-    `;
-  }
-
-  function renderResultContent(results, meta) {
-    resultsNode.innerHTML = `
-      <div id="master-view" style="min-width: 0;">
-        ${renderMasterCards(results)}
-      </div>
-      <div id="detail-view" style="margin-top: 2rem; min-width: 0; overflow-x: hidden;">
-        ${results[currentDetailIndex] ? renderSingleDetail(results[currentDetailIndex], meta, currentDetailIndex) : ''}
-      </div>
-    `;
-
-    syncInlineTimerUI(currentDetailIndex);
-    attachFeedbackHandlers();
-  }
-
-  function renderChannelB(meta, byLabel) {
-    // Flatten label → result list into one row per label (Top 1 each), side-by-side.
-    const labels = Object.keys(byLabel);
-    if (!labels.length) {
-      resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
-      return;
-    }
-    const cards = labels.map((lbl, idx) => {
-      const items = byLabel[lbl] || [];
-      const labelClass = `label-${lbl}`;
-      if (!items.length) {
-        return `
-          <div class="cup-card ${labelClass}">
-            <div class="cup-card-head">
-              <div class="cup-card-label">${escapeHtml(lbl)}</div>
-            </div>
-            <div class="cup-card-empty">（無候選配方）</div>
-          </div>
-        `;
-      }
-      const r = items[0];
-      return `
-        <div class="cup-card ${labelClass}">
-          <div class="cup-card-head">
-            <div class="cup-card-label">${escapeHtml(lbl)}</div>
-            <div class="cup-card-score">${r.score.toFixed(1)}</div>
-          </div>
-          <div class="cup-card-params">
-            ${r.temp}°C · dial ${r.dial} · ${r.dose}g · steep ${formatTime(r.steep_sec)}<br>
-            TDS ${r.tds.toFixed(2)}% · EY ${r.ey.toFixed(1)}%
-          </div>
-          <div class="cup-card-id">recipe_id ${r.recipe_id || "—"}</div>
-          ${renderFeedbackForm(r, `channelb-${idx}`)}
-        </div>
-      `;
-    }).join("");
-
-    resultsNode.innerHTML = `
-      <div class="channel-b-intro">CHANNEL B · 各 label 各自最佳化 Top 1（cupping 比對）</div>
-      <div class="channel-b-strip">${cards}</div>
-      <div class="channel-b-hint">切回單一 label 可看完整 timeline / timer</div>
-    `;
-    updateRadarTrigger([]);
-    attachFeedbackHandlers();
-  }
-
-  function renderResults(payload) {
-    const { meta, results } = payload;
-    latestPayload = payload;
-
-    // reset all timers
-    if (brewTimerInterval) {
-      clearInterval(brewTimerInterval);
-      brewTimerInterval = null;
-    }
-    activeTimers = {};
-
-    // Channel B: results is dict[label] → list. Render parallel cards.
-    if (results && !Array.isArray(results) && typeof results === "object") {
-      scrollMobileToResults();
-      renderChannelB(meta, results);
-      return;
-    }
-
-    if (!results || !results.length) {
-      resultsNode.innerHTML = `<div class="empty">沒有可用結果。</div>`;
-      updateRadarTrigger([]);
-      return;
-    }
-
-    currentDetailIndex = 0;
-    renderResultContent(results, meta);
-    updateRadarTrigger(results);
-  }
-
-  // ── 豆量步進依器材切換 ────────────────────────────────────────
-  const doseMinInput = document.getElementById("dose_min");
-  const doseMaxInput = document.getElementById("dose_max");
-  const brewerSelect = document.getElementById("brewer");
-
-  function syncDoseInputStep() {
-    if (!brewerSelect) return;
+  function syncDoseStep() {
     const stepG = brewerSelect.value === "xl" ? "1" : "0.5";
     if (doseMinInput) doseMinInput.step = stepG;
     if (doseMaxInput) doseMaxInput.step = stepG;
   }
-  syncDoseInputStep();
-  if (brewerSelect) brewerSelect.addEventListener("change", syncDoseInputStep);
-  // ─────────────────────────────────────────────────────────────
 
-  presetSelect.addEventListener("change", () => {
-    const selected = presetSelect.value;
-    if (selected && presets[selected]) {
-      ghInput.value = presets[selected].gh;
-      khInput.value = presets[selected].kh;
-      mgInput.value = presets[selected].mg_frac;
-    }
-    showHelp("preset");
+  roastSelect.addEventListener("change", () => { syncRoastDefaults(); showHelp("roast"); });
+  brewerSelect.addEventListener("change", syncDoseStep);
+  syncDoseStep();
+  syncRoastDefaults();
+
+  document.querySelectorAll("[data-help-key] input, [data-help-key] select").forEach((el) => {
+    const key = el.closest("[data-help-key]").dataset.helpKey;
+    el.addEventListener("focus", () => showHelp(key));
   });
-
-  document.querySelectorAll("[data-help-key] input, [data-help-key] select").forEach((element) => {
-    const key = element.closest("[data-help-key]").dataset.helpKey;
-    element.addEventListener("focus", () => showHelp(key));
-    element.addEventListener("change", () => showHelp(key));
-    element.addEventListener("click", () => showHelp(key));
-  });
-
-  document.querySelectorAll("[data-help-target]").forEach((button) => {
-    button.addEventListener("click", () => showHelp(button.dataset.helpTarget));
+  document.querySelectorAll("[data-help-target]").forEach((b) => {
+    b.addEventListener("click", () => showHelp(b.dataset.helpTarget));
   });
 
   resultsNode.addEventListener("click", (event) => {
-    const selectTrigger = event.target.closest("[data-select-recipe]");
-    if (selectTrigger) {
-      const newIndex = Number(selectTrigger.dataset.selectRecipe);
-      if (newIndex !== currentDetailIndex) {
-        // clear old timer if running
-        if (activeTimers[currentDetailIndex] && activeTimers[currentDetailIndex].isRunning) {
-          activeTimers[currentDetailIndex].isRunning = false;
-        }
-        // save scroll position before re-render
-        const scrollContainer = resultsNode.querySelector(".scroll-container");
-        const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
-        currentDetailIndex = newIndex;
-        if (latestPayload?.results?.length) {
-          renderResultContent(latestPayload.results, latestPayload.meta);
-          // restore scroll position after re-render
-          const newScrollContainer = resultsNode.querySelector(".scroll-container");
-          if (newScrollContainer) newScrollContainer.scrollLeft = savedScrollLeft;
-          setTimeout(() => {
-            const detailView = document.getElementById("detail-view");
-            if (detailView) {
-                const yOffset = -20; 
-                const y = detailView.getBoundingClientRect().top + window.scrollY + yOffset;
-                window.scrollTo({top: y, behavior: 'smooth'});
-            }
-          }, 50);
-        }
+    const sel = event.target.closest("[data-select-recipe]");
+    if (sel) {
+      const idx = Number(sel.dataset.selectRecipe);
+      if (idx !== currentDetailIndex && latestPayload && latestPayload.results) {
+        currentDetailIndex = idx;
+        renderResultContent(latestPayload.results, latestPayload.meta);
+        const dv = document.getElementById("detail-view");
+        if (dv) window.scrollTo({ top: dv.getBoundingClientRect().top + window.scrollY - 20, behavior: "smooth" });
       }
       return;
     }
-
-    const timerToggle = event.target.closest("[data-inline-timer-toggle]");
-    if (timerToggle) {
-        const index = Number(timerToggle.dataset.inlineTimerToggle);
-        const result = latestPayload?.results?.[index];
-        if (result) {
-            startOrPauseInlineTimer(index, result);
-        }
-        return;
-    }
-
-    const timerReset = event.target.closest("[data-inline-timer-reset]");
-    if (timerReset) {
-        const index = Number(timerReset.dataset.inlineTimerReset);
-        resetInlineTimer(index);
-        return;
-    }
-
-    const trigger = event.target.closest("[data-open-radar]");
-    if (!trigger) return;
-    event.preventDefault();
-    openRadarModal();
-  });
-  radarClose.addEventListener("click", closeRadarModal);
-  radarModal.addEventListener("click", (event) => {
-    if (event.target === radarModal) {
-      closeRadarModal();
-    }
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    if (!radarModal.hidden) {
-      closeRadarModal();
+    const toggle = event.target.closest("[data-timer-toggle]");
+    if (toggle) {
+      const idx = Number(toggle.dataset.timerToggle);
+      const r = latestPayload && latestPayload.results ? latestPayload.results[idx] : null;
+      if (r) toggleSteepTimer(idx, r);
       return;
+    }
+    const reset = event.target.closest("[data-timer-reset]");
+    if (reset) {
+      const idx = Number(reset.dataset.timerReset);
+      const r = latestPayload && latestPayload.results ? latestPayload.results[idx] : null;
+      if (r) resetSteepTimer(idx, r);
     }
   });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (mobileControlsQuery.matches) {
+      requestAnimationFrame(() => resultsNode.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
-    scrollMobileToResults();
     submitButton.disabled = true;
-    const submitLabelEl = submitButton.querySelector(".submit-label");
-    const submitArrowEl = submitButton.querySelector(".submit-arrow");
-    const originalLabel = submitLabelEl ? submitLabelEl.textContent : "";
-    const originalArrow = submitArrowEl ? submitArrowEl.textContent : "";
-    if (submitLabelEl) submitLabelEl.textContent = "COMPUTING · 計算中";
-    if (submitArrowEl) submitArrowEl.textContent = "…";
+    const labelEl = submitButton.querySelector(".submit-label");
+    const arrowEl = submitButton.querySelector(".submit-arrow");
+    const origLabel = labelEl ? labelEl.textContent : "";
+    const origArrow = arrowEl ? arrowEl.textContent : "";
+    if (labelEl) labelEl.textContent = "COMPUTING · 計算中";
+    if (arrowEl) arrowEl.textContent = "…";
 
     const payload = Object.fromEntries(new FormData(form).entries());
-    ["gh", "kh", "mg_frac", "top", "t_env", "altitude", "dose_min", "dose_max"].forEach((key) => {
-      payload[key] = payload[key] === "" ? null : Number(payload[key]);
+    ["top", "temp", "dose_min", "dose_max"].forEach((k) => {
+      payload[k] = payload[k] === "" || payload[k] == null ? null : Number(payload[k]);
     });
-
     try {
-      const response = await fetch("/api/optimize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      await fetchHistory();  // so the compared-to dropdowns are fresh
+      const resp = await fetch("/api/optimize", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const data = await resp.json();
       renderResults(data);
     } catch (error) {
-      resultsNode.innerHTML = `<div class="empty">計算失敗：${error}</div>`;
-      updateRadarTrigger([]);
+      resultsNode.innerHTML = `<div class="empty-state"><div class="empty-title">計算失敗</div><p class="empty-instructions">${escapeHtml(String(error))}</p></div>`;
     } finally {
       submitButton.disabled = false;
-      if (submitLabelEl) submitLabelEl.textContent = originalLabel;
-      if (submitArrowEl) submitArrowEl.textContent = originalArrow;
+      if (labelEl) labelEl.textContent = origLabel;
+      if (arrowEl) arrowEl.textContent = origArrow;
     }
   });
 

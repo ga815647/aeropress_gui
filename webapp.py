@@ -1,3 +1,11 @@
+"""Phase 10 Step 6b — web UI over the sensory pipeline.
+
+The optimizer searches dose x dial x steep at a fixed (roast, brewer, temp) and
+ranks recipes by attribute-distance to the roast's 10-attribute sensory IDEAL.
+There is no label and no water chemistry (Phase 10 §0 / Step 5). The feedback
+form is the §4 pairwise + ordinal questionnaire — every cup judged against the
+previous one. See docs/PHASE10_STEP6_FEEDBACK_LOOP.md.
+"""
 from __future__ import annotations
 
 import argparse
@@ -5,69 +13,58 @@ import argparse
 from flask import Flask, jsonify, render_template, request
 
 import constants
-from data.water_presets import WATER_PRESETS
 from models.feedback import (
-    ALLOWED_RATINGS,
+    ALLOWED_ABSOLUTE,
     ALLOWED_TAGS,
     EDIT_WINDOW_HOURS,
+    QUESTIONNAIRE_GROUPS,
     append_feedback,
     read_all as read_all_feedback,
     read_for_recipe,
     recompute_entry,
     update_feedback,
 )
-from models.labels import get_label, ideal_abs as label_ideal_abs, label_names
-from models.scoring import compute_actual_abs
-from optimizer import optimize, optimize_parallel
-from runtime import apply_environment_settings, resolve_water_profile
+from models.ideal import available_roasts, roast_ideal
+from models.sensory import ATTRIBUTES, AXIS_VIEW
+from optimizer import optimize
 
-UI_HIDDEN_LABELS = {"sweet-body"}
-
-
-def _ui_label_names() -> list[str]:
-    return [name for name in label_names() if name not in UI_HIDDEN_LABELS]
+# Group means with |delta| below this read as "=" in the model prefill of the
+# §4 questionnaire. CATA-frequency units; tunable. Mirrored to the client.
+ORDINAL_DEADBAND = 0.01
 
 
-def _serialize_result(result: dict, roast_code: str, feedback_index: dict[str, list[dict]] | None = None) -> dict:
-    label = result.get("label", "balanced")
-    actual_abs = compute_actual_abs(result["compounds"], result["tds"])
-    ideal_abs = label_ideal_abs(label, result["tds"], roast_code)
-    mel_coeff = constants.MEL_BITTER_COEFF[roast_code]
-    actual_ac_sw = actual_abs["AC"] / max(actual_abs["SW"], 1e-8)
-    ideal_ac_sw = ideal_abs["AC"] / max(ideal_abs["SW"], 1e-8)
-    actual_ps_bitter = actual_abs["PS"] / max(
-        actual_abs["CA"] + actual_abs["CGA"] + actual_abs["MEL"] * mel_coeff,
-        1e-8,
-    )
-    ideal_ps_bitter = ideal_abs["PS"] / max(
-        ideal_abs["CA"] + ideal_abs["CGA"] + ideal_abs["MEL"] * mel_coeff,
-        1e-8,
-    )
+def _serialize_result(result: dict, feedback_index: dict[str, list[dict]] | None = None) -> dict:
+    """One optimizer candidate -> the JSON the result card consumes."""
+    attrs = result["attributes"]
+    ideal = result["ideal"]
     rid = result.get("recipe_id")
     feedback = feedback_index.get(rid, []) if (feedback_index and rid) else []
     return {
-        **result,
-        "label": label,
-        "compounds_abs": {key: round(actual_abs[key], 4) for key in constants.KEYS},
-        "ratios": {
-            "ac_sw_actual": round(actual_ac_sw, 3),
-            "ac_sw_ideal": round(ideal_ac_sw, 3),
-            "ps_bitter_actual": round(actual_ps_bitter, 3),
-            "ps_bitter_ideal": round(ideal_ps_bitter, 3),
-        },
+        "recipe_id": rid,
+        "roast": result["roast"],
+        "brewer": result["brewer"],
+        "brewer_size": result["brewer_size"],
+        "water_ml": result["water_ml"],
+        "temp": result["temp"],
+        "dial": result["dial"],
+        "steep_sec": result["steep_sec"],
+        "dose": result["dose"],
+        "ey": round(result["ey"], 2),
+        "tds": round(result["tds"], 3),
+        "distance": round(result["distance"], 4),
+        "attributes": {a: round(attrs[a], 4) for a in ATTRIBUTES},
+        "ideal": {a: round(ideal[a], 4) for a in ATTRIBUTES},
+        "deltas": {a: round(attrs[a] - ideal[a], 4) for a in ATTRIBUTES},
         "feedback": feedback,
     }
 
 
 def _with_current_derived(entry: dict) -> dict:
-    """Feedback entry with recipe.tds/ey/score refreshed by the current model.
-
-    The recipe *inputs* (temp/dial/dose/steep) are durable; tds/ey/score are a
-    stale-able projection — after a model recalibration the stored snapshot no
-    longer matches the model. Recompute for display; the on-disk JSONL stays
-    append-only and is never mutated. `compounds` is added (never stored in the
-    JSONL). Falls back to the entry as-is when there is no recipe snapshot.
-    """
+    """Feedback entry with recipe.tds/ey/distance/attributes refreshed by the
+    current model. The recipe *inputs* (temp/dial/dose/steep) are durable;
+    tds/ey/distance/attributes are a stale-able projection. The on-disk JSONL
+    stays append-only — this is display-only. Falls back to the entry as-is
+    when there is no recipe snapshot (legacy entry)."""
     current = recompute_entry(entry)
     if current is None:
         return entry
@@ -75,14 +72,14 @@ def _with_current_derived(entry: dict) -> dict:
     recipe = dict(out.get("recipe") or {})
     recipe["tds"] = current["tds"]
     recipe["ey"] = current["ey"]
-    recipe["score"] = current["score"]
-    recipe["compounds"] = current["compounds"]
+    recipe["distance"] = current["distance"]
+    recipe["attributes"] = current["attributes"]
     out["recipe"] = recipe
     return out
 
 
 def _build_feedback_index() -> dict[str, list[dict]]:
-    """One JSONL scan per /api/optimize call → dict[recipe_id] → entries."""
+    """One JSONL scan per /api/optimize call -> dict[recipe_id] -> entries."""
     index: dict[str, list[dict]] = {}
     for entry in read_all_feedback():
         rid = entry.get("recipe_id")
@@ -91,135 +88,91 @@ def _build_feedback_index() -> dict[str, list[dict]]:
     return index
 
 
+def _axis_view_payload() -> dict[str, list[str]]:
+    """AXIS_VIEW as plain lists — the questionnaire grouping for the client."""
+    return {group: list(members) for group, members in AXIS_VIEW.items()}
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
 
     @app.get("/")
     def index():
         roast_options = [
-            {"code": k, "name": v["name"], "note": v["note"], "dose_per_100ml": list(v["dose_per_100ml"])}
-            for k, v in constants.ROAST_TABLE.items()
-        ]
-        labels = [
-            {"name": name, **get_label(name)} for name in _ui_label_names()
+            {"code": code, "name": constants.ROAST_TABLE[code]["name"],
+             "note": constants.ROAST_TABLE[code]["note"]}
+            for code in available_roasts()
         ]
         return render_template(
             "index.html",
-            roast_codes=list(constants.ROAST_TABLE.keys()),
             roast_options=roast_options,
             brewer_options=list(constants.BREWER_PRESETS.keys()),
             brewer_presets=constants.BREWER_PRESETS,
-            presets=WATER_PRESETS,
-            labels=labels,
+            default_temps=constants.DEFAULT_TEMP,
+            attributes=list(ATTRIBUTES),
+            axis_view=_axis_view_payload(),
+            ordinal_deadband=ORDINAL_DEADBAND,
         )
 
     @app.get("/api/config")
     def config():
-        return jsonify(
-            {
-                "roast_codes": list(constants.ROAST_TABLE.keys()),
-                "roast_options": [
-                    {"code": k, "name": v["name"]}
-                    for k, v in constants.ROAST_TABLE.items()
-                ],
-                "brewers": constants.BREWER_PRESETS,
-                "presets": WATER_PRESETS,
-                "labels": [
-                    {"name": name, **get_label(name)} for name in _ui_label_names()
-                ],
-                "defaults": {
-                    "brewer": "xl",
-                    "roast": "medium",
-                    "label": "balanced",
-                    "top": 3,
-                    "t_env": 25.0,
-                    "altitude": 0.0,
-                    "gh": 50.0,
-                    "kh": 30.0,
-                    "mg_frac": 0.40,
-                },
-            }
-        )
+        return jsonify({
+            "roast_options": [
+                {"code": code, "name": constants.ROAST_TABLE[code]["name"]}
+                for code in available_roasts()
+            ],
+            "brewers": constants.BREWER_PRESETS,
+            "default_temps": constants.DEFAULT_TEMP,
+            "attributes": list(ATTRIBUTES),
+            "axis_view": _axis_view_payload(),
+            "ordinal_deadband": ORDINAL_DEADBAND,
+            "defaults": {"brewer": "xl", "roast": "medium_light", "top": 3},
+        })
 
     @app.post("/api/optimize")
     def optimize_route():
         payload = request.get_json(silent=True) or {}
-        apply_environment_settings(
-            float(payload.get("t_env", 25.0)),
-            float(payload.get("altitude", 0.0)),
-        )
-        water_gh, water_kh, water_mg_frac, water_source = resolve_water_profile(
-            gh=payload.get("gh"),
-            kh=payload.get("kh"),
-            mg_frac=payload.get("mg_frac"),
-            preset=payload.get("preset"),
-        )
-        roast_code = str(payload.get("roast", "medium"))
-        dose_min = payload.get("dose_min")
-        dose_max = payload.get("dose_max")
-        dose_min = float(dose_min) if dose_min is not None else None
-        dose_max = float(dose_max) if dose_max is not None else None
+        roast_code = str(payload.get("roast", "medium_light"))
+        brewer_size = str(payload.get("brewer", "xl"))
 
-        requested_label = payload.get("label")
-        common = dict(
-            roast_code=roast_code,
-            brewer_size=payload.get("brewer", "xl"),
-            water_gh=water_gh,
-            water_kh=water_kh,
-            water_mg_frac=water_mg_frac,
-            dose_min_override=dose_min,
-            dose_max_override=dose_max,
-        )
+        def _num(key):
+            val = payload.get(key)
+            return float(val) if val not in (None, "") else None
+
+        temp = _num("temp")
+        dose_min = _num("dose_min")
+        dose_max = _num("dose_max")
+        top_n = int(payload.get("top") or 3)
+
+        try:
+            results = optimize(
+                roast_code=roast_code,
+                brewer_size=brewer_size,
+                temp=temp,
+                top_n=top_n,
+                dose_min_override=dose_min,
+                dose_max_override=dose_max,
+            )
+        except KeyError as exc:
+            return jsonify({"error": f"unknown roast / brewer: {exc}"}), 400
 
         fb_index = _build_feedback_index()
-
-        if requested_label and requested_label != "__all__":
-            results = optimize(
-                top_n=int(payload.get("top", 3)),
-                label=requested_label,
-                **common,
-            )
-            results_serialized = [_serialize_result(item, roast_code, fb_index) for item in results]
-            label_used = requested_label
-            top_tds = results[0]["tds"] if results else 1.25
-        else:
-            parallel = optimize_parallel(
-                top_n=int(payload.get("top", 1)),
-                labels=_ui_label_names(),
-                **common,
-            )
-            results_serialized = {
-                lbl: [_serialize_result(item, roast_code, fb_index) for item in items]
-                for lbl, items in parallel.items()
-            }
-            label_used = "__all__"
-            first_tds = next(
-                (items[0]["tds"] for items in parallel.values() if items),
-                1.25,
-            )
-            top_tds = first_tds
-
-        # 顯示用 flavor_max（progress bar 上限）— 取 label 的 ideal × (tds + 0.2)
-        ref_label = requested_label if (requested_label and requested_label != "__all__") else "balanced"
-        max_tds = top_tds + 0.2
-        flavor_max_raw = label_ideal_abs(ref_label, max_tds, roast_code)
-        flavor_max = {k: round(v, 4) for k, v in flavor_max_raw.items()}
-
-        return jsonify(
-            {
-                "meta": {
-                    "roast_code": roast_code,
-                    "roast_name": constants.ROAST_TABLE[roast_code]["name"],
-                    "water_gh": water_gh,
-                    "water_kh": water_kh,
-                    "water_mg_frac": water_mg_frac,
-                    "water_source": water_source,
-                    "label": label_used,
-                    "flavor_max": flavor_max,
-                },
-                "results": results_serialized,
-            }
+        results_serialized = [_serialize_result(r, fb_index) for r in results]
+        used_temp = (
+            results[0]["temp"] if results
+            else (temp if temp is not None else constants.DEFAULT_TEMP[roast_code])
         )
+        ideal = roast_ideal(roast_code)
+        return jsonify({
+            "meta": {
+                "roast_code": roast_code,
+                "roast_name": constants.ROAST_TABLE[roast_code]["name"],
+                "brewer": brewer_size,
+                "temp": used_temp,
+                "ideal": {a: round(ideal[a], 4) for a in ATTRIBUTES},
+            },
+            "results": results_serialized,
+        })
 
     @app.post("/api/feedback")
     def feedback_route():
@@ -233,9 +186,8 @@ def create_app() -> Flask:
     @app.post("/api/feedback/update")
     def feedback_update_route():
         payload = request.get_json(silent=True) or {}
-        ts = payload.get("timestamp")
         try:
-            entry = update_feedback(ts, payload)
+            entry = update_feedback(payload.get("timestamp"), payload)
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         return jsonify({"ok": True, "entry": entry, "edit_window_hours": EDIT_WINDOW_HOURS})
@@ -248,7 +200,12 @@ def create_app() -> Flask:
     @app.get("/api/feedback")
     def feedback_list():
         entries = [_with_current_derived(e) for e in read_all_feedback()]
-        return jsonify({"entries": entries})
+        return jsonify({
+            "entries": entries,
+            "questionnaire_groups": list(QUESTIONNAIRE_GROUPS),
+            "allowed_absolute": sorted(ALLOWED_ABSOLUTE),
+            "allowed_tags": sorted(ALLOWED_TAGS),
+        })
 
     return app
 

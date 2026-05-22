@@ -3,11 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AeroPress · 萃取分析實驗室</title>
+    <title>AeroPress · 感官最佳化實驗室</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500;6..72,600;6..72,700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/webapp.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/phase10.css') }}">
   </head>
   <body>
 
@@ -19,7 +20,7 @@
           <span class="mark-glyph" aria-hidden="true">⌬</span>
           <div class="mark-stack">
             <span class="mark-en">AEROPRESS</span>
-            <span class="mark-tw">EXTRACTION LAB · 萃取分析手稿</span>
+            <span class="mark-tw">SENSORY LAB · 感官最佳化手稿</span>
           </div>
         </div>
         <div class="masthead-tools">
@@ -53,7 +54,7 @@
                   <div class="field-control">
                     <select id="brewer" name="brewer">
                       {% for brewer in brewer_options %}
-                      <option value="{{ brewer }}">{{ brewer }}</option>
+                      <option value="{{ brewer }}" {% if brewer == 'xl' %}selected{% endif %}>{{ brewer }}</option>
                       {% endfor %}
                     </select>
                   </div>
@@ -74,73 +75,18 @@
                 </div>
               </section>
 
-              <!-- group: target -->
+              <!-- group: brew temperature -->
               <section class="field-group">
-                <div class="field field-full" data-help-key="label">
+                <div class="field field-full" data-help-key="temp">
                   <div class="field-head">
-                    <label for="label">風味目標 · FLAVOR TARGET</label>
-                    <button type="button" class="hint-button" data-help-target="label" aria-label="說明">?</button>
+                    <label for="temp">沖煮水溫 · BREW TEMP</label>
+                    <button type="button" class="hint-button" data-help-target="temp" aria-label="說明">?</button>
                   </div>
                   <div class="field-control">
-                    <select id="label" name="label">
-                      {% for lbl in labels %}
-                      <option value="{{ lbl.name }}" {% if lbl.name == 'balanced' %}selected{% endif %}>{{ lbl.name }} — {{ lbl.description }}</option>
-                      {% endfor %}
-                      <option value="">全部並列 · cupping 比對</option>
-                    </select>
+                    <input id="temp" name="temp" type="number" step="0.5" min="70" max="100" value="95">
+                    <span class="field-unit">°C</span>
                   </div>
-                </div>
-              </section>
-
-              <!-- group: water -->
-              <section class="field-group">
-                <div class="field-cluster">
-                  <div class="field field-full" data-help-key="preset">
-                    <div class="field-head">
-                      <label for="preset">水質 · WATER PRESET</label>
-                      <button type="button" class="hint-button" data-help-target="preset" aria-label="說明">?</button>
-                    </div>
-                    <div class="field-control">
-                      <select id="preset" name="preset">
-                        <option value="">手動輸入 · MANUAL</option>
-                        {% for key, preset in presets.items() %}
-                        <option value="{{ key }}">{{ preset.name }}</option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="field-row field-row-sub">
-                    <div class="field" data-help-key="gh">
-                      <div class="field-head">
-                        <label for="gh">GH</label>
-                        <button type="button" class="hint-button" data-help-target="gh" aria-label="說明">?</button>
-                      </div>
-                      <div class="field-control">
-                        <input id="gh" name="gh" type="number" step="0.1" value="50">
-                        <span class="field-unit">ppm</span>
-                      </div>
-                    </div>
-                    <div class="field" data-help-key="kh">
-                      <div class="field-head">
-                        <label for="kh">KH</label>
-                        <button type="button" class="hint-button" data-help-target="kh" aria-label="說明">?</button>
-                      </div>
-                      <div class="field-control">
-                        <input id="kh" name="kh" type="number" step="0.1" value="30">
-                        <span class="field-unit">ppm</span>
-                      </div>
-                    </div>
-                    <div class="field" data-help-key="mg_frac">
-                      <div class="field-head">
-                        <label for="mg_frac">MG RATIO</label>
-                        <button type="button" class="hint-button" data-help-target="mg_frac" aria-label="說明">?</button>
-                      </div>
-                      <div class="field-control">
-                        <input id="mg_frac" name="mg_frac" type="number" step="0.01" min="0" max="1" value="0.40">
-                      </div>
-                    </div>
-                  </div>
+                  <p class="field-note" id="temp-note">焙度切換時自動帶入慣例預設 — 可自行微調。</p>
                 </div>
               </section>
 
@@ -172,32 +118,6 @@
                 </div>
               </section>
 
-              <!-- group: env -->
-              <section class="field-group">
-                <div class="field-row field-row-half">
-                  <div class="field" data-help-key="t_env">
-                    <div class="field-head">
-                      <label for="t_env">T-ENV</label>
-                      <button type="button" class="hint-button" data-help-target="t_env" aria-label="說明">?</button>
-                    </div>
-                    <div class="field-control">
-                      <input id="t_env" name="t_env" type="number" step="0.1" value="25">
-                      <span class="field-unit">°C</span>
-                    </div>
-                  </div>
-                  <div class="field" data-help-key="altitude">
-                    <div class="field-head">
-                      <label for="altitude">ALTITUDE</label>
-                      <button type="button" class="hint-button" data-help-target="altitude" aria-label="說明">?</button>
-                    </div>
-                    <div class="field-control">
-                      <input id="altitude" name="altitude" type="number" step="1" value="0">
-                      <span class="field-unit">m</span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
               <button id="submit-button" type="submit" class="submit-strip">
                 <span class="submit-label">RUN · 最佳化</span>
                 <span class="submit-arrow" aria-hidden="true">→</span>
@@ -222,9 +142,9 @@
               <div class="empty-title">NO SAMPLE LOADED</div>
               <div class="empty-tw">尚未載入樣本</div>
               <p class="empty-instructions">
-                於左側登錄取樣參數 — 焙度、口感方向、水質 — 後執行
+                於左側登錄取樣參數 — 焙度、水溫 — 後執行
                 <span class="empty-cmd">[ RUN · 最佳化 → ]</span>
-                以產生第一筆萃取分析結果。
+                ，系統會搜尋 dose × dial × steep，找出最接近該焙度感官 IDEAL 的配方。
               </p>
             </div>
           </div>
@@ -234,34 +154,17 @@
 
       <footer class="ledger-foot">
         <span class="foot-mark">⌬</span>
-        <span class="foot-line">a personal coffee extraction lab · ver. 8.1 · printed in code</span>
+        <span class="foot-line">a personal coffee sensory lab · phase 10 · printed in code</span>
       </footer>
     </main>
 
-    <!-- ════════ Radar modal (existing IDs preserved) ════════ -->
-    <div id="radar-modal" class="modal" hidden>
-      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="radar-modal-title">
-        <div class="modal-head">
-          <div>
-            <span class="eyebrow">§ FLAVOR RADAR · 風味雷達</span>
-            <h2 id="radar-modal-title">六向量化合物比對</h2>
-            <p class="muted">前三筆樣本在 AC / SW / PS / CA / CGA / MEL 六個向量上的相對強度。</p>
-          </div>
-          <button id="radar-close" class="modal-close" type="button" aria-label="關閉">×</button>
-        </div>
-        <div class="modal-body">
-          <div id="radar" class="radar-wrap"></div>
-          <div id="radar-legend" class="radar-legend"></div>
-        </div>
-      </div>
-    </div>
-
     <script>
-      window.APP_PRESETS = {{ presets|tojson }};
       window.APP_ROAST_OPTIONS = {{ roast_options|tojson }};
       window.APP_BREWER_PRESETS = {{ brewer_presets|tojson }};
-      window.APP_LABELS = {{ labels|tojson }};
-      window.APP_FEEDBACK_TAGS = ["acidic", "thin", "great-body", "bitter", "muted", "floral", "sweet", "harsh", "clean", "balanced", "fruity", "roasty"];
+      window.APP_DEFAULT_TEMPS = {{ default_temps|tojson }};
+      window.APP_ATTRIBUTES = {{ attributes|tojson }};
+      window.APP_AXIS_VIEW = {{ axis_view|tojson }};
+      window.APP_ORDINAL_DEADBAND = {{ ordinal_deadband|tojson }};
       (() => {
         const stamp = document.getElementById('session-stamp');
         if (stamp) {
