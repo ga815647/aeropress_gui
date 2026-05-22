@@ -6,6 +6,8 @@
 > 上游：[`PHASE10_SENSORY_REFOUNDING.md`](PHASE10_SENSORY_REFOUNDING.md) §10–§11、[`PHASE10_STEP5_SCORING.md`](PHASE10_STEP5_SCORING.md)、[`PHASE10_STEP5_5_ALL_ATTRIBUTES.md`](PHASE10_STEP5_5_ALL_ATTRIBUTES.md)、[`FEEDBACK_FORMAT.md`](FEEDBACK_FORMAT.md)。
 >
 > **Step 6 落地紀錄（2026-05-22）：** §9 的 Step 6a + 6b 完成 —— `docs/FEEDBACK_FORMAT.md` 改 pairwise+ordinal schema、`models/feedback.py` 重寫、`webapp.py`/`templates/index.html`/`static/js/webapp.js` 重寫 + 新增 `static/css/phase10.css`。`absolute` 錨點問項目前在問卷中常駐選填（「偶爾填」提示）；§4 設想的「偶發排程」屬 Phase 11。Phase 11（三杯循環狀態機、flag 偵測、changelog）未動。
+>
+> **§4 修訂（2026-05-22，使用者裁決）：逐屬性中間鍵 `=` → `?`（「沒注意到 / 不確定」）。** §4 原文寫「每群 更多 / 一樣 / 更少」、並把「一樣」當有用資料。實作後使用者指出：用 2 杯模糊味覺記憶根本產不出有把握的單屬性「一樣」——「沒注意到差異」是**訊號缺席**、不是「兩杯這屬性相同」的肯定。故逐屬性問項改 `>` / `?` / `<`（schema `ATTR_ORDINAL`），`?` 仍記錄但 **Phase 11 的 flag 偵測 / 模型矯正必須排除任一邊為 `?` 的群** —— 只有 `model` 與 `user` 明確相反方向（`>` vs `<`）才是真矛盾。**`overall` 不變**，維持 `>` / `=` / `<`（整體偏好是 gestalt、記憶負擔低，`=` 是真答案、搜尋的平步訊號需要它）。詳見 `docs/FEEDBACK_FORMAT.md`「`?` does not feed correction」。
 
 ---
 

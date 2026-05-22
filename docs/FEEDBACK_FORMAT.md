@@ -4,8 +4,10 @@ Phase 10 **Step 6a** schema (2026-05-22). The feedback log is the training signa
 for the Phase 11 recipe-generator loop, so the schema is built around the §4
 questionnaire of [`PHASE10_STEP6_FEEDBACK_LOOP.md`](PHASE10_STEP6_FEEDBACK_LOOP.md):
 **pairwise, ordinal, memory-based**. Every cup is judged against the *previous*
-cup; every answer is `>` / `=` / `<` (no magnitude — fuzzy taste memory cannot
-support it, and the sign hill-climb never uses magnitude anyway).
+cup; answers are ordinal — `>` / `=` / `<` for overall preference, `>` / `?` /
+`<` per attribute (`?` = noticed no difference / unsure). No magnitude — fuzzy
+taste memory cannot support it, and the sign hill-climb never uses magnitude
+anyway.
 
 > This supersedes the Phase 8/9 schema (`label` + `water` + `stars` + `tags` +
 > `recipe.score`). Pre-Step-6 entries are still valid on disk and still read —
@@ -32,12 +34,12 @@ One JSON object per line. UTF-8. Newline-terminated.
              "tds": 1.366, "ey": 20.11, "distance": 0.012},
   "compared_to": "2026-05-20T14:00:00+08:00",
   "overall": ">",
-  "attributes_vs": {"acidity": "=", "sweetness": ">", "body": ">",
-                    "bitterness": "<", "astringency": "=", "roast": "=",
+  "attributes_vs": {"acidity": "?", "sweetness": ">", "body": ">",
+                    "bitterness": "<", "astringency": "?", "roast": "?",
                     "character": ">"},
-  "model_attributes_vs": {"acidity": "=", "sweetness": ">", "body": "=",
-                          "bitterness": "=", "astringency": "=", "roast": "=",
-                          "character": "="},
+  "model_attributes_vs": {"acidity": "?", "sweetness": ">", "body": "?",
+                          "bitterness": "?", "astringency": "?", "roast": "?",
+                          "character": "?"},
   "absolute": "good",
   "comment": "比上一杯 body 更扎實，苦味收斂",
   "stars": 5,
@@ -55,8 +57,8 @@ One JSON object per line. UTF-8. Newline-terminated.
 | `recipe` | object or `null` | optional | brew snapshot `{temp, dial, dose, steep_sec, tds?, ey?, distance?}`. `temp/dial/dose/steep_sec` are durable inputs; `tds/ey/distance` are a model projection — **stale-able**, recompute with the current model on read (see *Recompute* below). |
 | `compared_to` | string or `null` | optional | `timestamp` of the prior cup this one is judged against. `null` = no comparison (first cup, or skipped). |
 | `overall` | `">"` / `"="` / `"<"` / `null` | optional | this cup vs the `compared_to` cup, **overall preference**. `>` = this one is better. This is the loop's search signal. |
-| `attributes_vs` | object or `null` | optional | per-questionnaire-group `>`/`=`/`<` vs the `compared_to` cup. Keys ⊆ the 7 `AXIS_VIEW` groups (below). `>` = *more* of that attribute. A partial dict is fine — unanswered groups are simply absent. |
-| `model_attributes_vs` | object or `null` | optional | the model's **prefilled prediction** of `attributes_vs` — the `>`/`=`/`<` the Layer 1+2 model expected between the two cups. Stored verbatim so Phase 11 can flag *model direction-errors* (model said `>`, user said `<`) without re-deriving a possibly-recalibrated model. |
+| `attributes_vs` | object or `null` | optional | per-questionnaire-group `>` / `?` / `<` vs the `compared_to` cup. Keys ⊆ the 7 `AXIS_VIEW` groups (below). `>` = *more* of that attribute, `<` = *less*, **`?` = noticed no difference / unsure**. There is deliberately no `=`: fuzzy 2-cup memory cannot support a confident "exactly equal" per attribute, so the middle answer is honestly "no directional signal". A partial dict is fine — unanswered groups are simply absent. |
+| `model_attributes_vs` | object or `null` | optional | the model's **prefilled prediction** of `attributes_vs` — the `>` / `?` / `<` the Layer 1+2 model expected between the two cups (`?` = within the prefill dead-band, model expects no perceptible change). Stored verbatim so Phase 11 can flag *model direction-errors* without re-deriving a possibly-recalibrated model. |
 | `absolute` | `"good"` / `"ok"` / `"bad"` / `null` | optional | the occasional **absolute-anchor** question — "drink it on its own, is it good" — independent of any comparison. Guards against a long chain of "slightly better than last" drifting somewhere globally bad (§4). |
 | `comment` | string | **primary free input** | free-text — the main qualitative signal; LLM-readable. |
 | `stars` | int 1-5 or `null` | optional | quick gut rating. **Not** the loop's signal (the hill-climb uses only the ordinal `overall`); kept for the logbook view + as a legacy-compatible quick check. |
@@ -90,12 +92,23 @@ on purpose (§4: ask only what a human can distinguish).
 
 For a cup `R` compared against prior cup `P`, the webapp runs `predict_attributes`
 for both, rolls each 10-attribute vector up to the 7 groups (group value = mean
-of its attributes), and fills each group with `>` / `=` / `<` from the sign of
-`group(R) − group(P)`, with a small dead-band (`|Δ| < ORDINAL_DEADBAND` → `=`).
+of its attributes), and fills each group with `>` / `?` / `<` from the sign of
+`group(R) − group(P)`, with a small dead-band (`|Δ| < ORDINAL_DEADBAND` → `?`).
 That prefill is what the user sees; they only correct the groups the model got
 wrong. Both the prefill (`model_attributes_vs`) and the corrected answer
 (`attributes_vs`) are stored — their disagreement is exactly the Phase 11
 direction-error flag (§6 tier 2).
+
+### `?` does not feed correction (Phase 11)
+
+`?` ("noticed no difference / unsure") is **recorded** but is **not a training
+signal**: Phase 11's model-error flag and per-attribute calibration must skip
+any group where either side is `?`. Only a clear, opposite ">" vs "<" between
+`model_attributes_vs` and `attributes_vs` is a genuine direction-error. The
+reason is honesty about perception: with two-cup taste memory, "I didn't notice
+a difference" is an *absence of signal*, not a confident assertion that the two
+cups are equal on that attribute — so it cannot confirm or contradict the model.
+(`overall` is different — its `=` is a real answer and the search uses it.)
 
 ## Write rules
 

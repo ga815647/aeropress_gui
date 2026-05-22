@@ -19,8 +19,14 @@ from models.sensory import AXIS_VIEW
 
 _FEEDBACK_PATH = Path(__file__).resolve().parents[1] / "data" / "feedback.jsonl"
 
-# Ordinal answers — the only vocabulary the questionnaire uses (§4: no magnitude).
+# Overall-preference answer — this cup vs the previous one (§4: no magnitude).
 ORDINAL = {">", "=", "<"}
+# Per-attribute answer — a direction, or "?" = noticed no difference / unsure.
+# There is deliberately NO "=" here: fuzzy 2-cup taste memory cannot support a
+# confident "this attribute is exactly equal", so the middle option is honestly
+# "no directional signal". Phase 11 EXCLUDES "?" from model-error flagging and
+# from calibration — only a clear ">" vs "<" disagreement is a real signal (§4).
+ATTR_ORDINAL = {">", "?", "<"}
 # The occasional absolute-anchor answer (§4 / §6) — independent of any comparison.
 ALLOWED_ABSOLUTE = {"good", "ok", "bad"}
 # Questionnaire groups: the 7 AXIS_VIEW roll-ups of the 10 model attributes.
@@ -39,23 +45,25 @@ def _now_iso() -> str:
 
 
 def _clean_ordinal_map(value, field: str) -> dict | None:
-    """Validate an `{group: >/=/<}` map (attributes_vs / model_attributes_vs).
+    """Validate a per-attribute `{group: >/?/<}` map (attributes_vs /
+    model_attributes_vs).
 
     Returns a canonical dict (unknown groups dropped) or None when empty.
-    Raises ValueError on a malformed shape or a bad ordinal token.
+    Raises ValueError on a malformed shape or a bad token. The vocabulary is
+    ATTR_ORDINAL — `?` ("noticed no difference / unsure"), not `=`.
     """
     if value is None:
         return None
     if not isinstance(value, dict):
-        raise ValueError(f"{field} must be an object of group -> >/=/<")
+        raise ValueError(f"{field} must be an object of group -> >/?/<")
     out: dict[str, str] = {}
     for group, sign in value.items():
         if group not in QUESTIONNAIRE_GROUPS:
             continue  # tolerate stale group names — drop, don't fail
         if sign is None:
             continue
-        if sign not in ORDINAL:
-            raise ValueError(f"{field}[{group}] must be one of {sorted(ORDINAL)}")
+        if sign not in ATTR_ORDINAL:
+            raise ValueError(f"{field}[{group}] must be one of {sorted(ATTR_ORDINAL)}")
         out[str(group)] = sign
     return out or None
 

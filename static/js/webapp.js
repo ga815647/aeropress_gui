@@ -109,10 +109,11 @@
     return n ? sum / n : null;
   }
 
+  // per-attribute: ">" / "<" direction, or "?" = within dead-band (no signal)
   function ordinalSign(delta) {
     if (delta > DEADBAND) return ">";
     if (delta < -DEADBAND) return "<";
-    return "=";
+    return "?";
   }
 
   // model's predicted >/=/< per questionnaire group, comparing two attr sets
@@ -156,7 +157,10 @@
   }
 
   function ordinalGlyph(sign) {
-    return sign === ">" ? "▲" : sign === "<" ? "▼" : "=";
+    if (sign === ">") return "▲";
+    if (sign === "<") return "▼";
+    if (sign === "?") return "?";
+    return "=";
   }
 
   function applyHistoryFilters(entries) {
@@ -197,7 +201,9 @@
     if (entry.attributes_vs) {
       attrs = Object.entries(entry.attributes_vs).map(([g, s]) => {
         const model = entry.model_attributes_vs && entry.model_attributes_vs[g];
-        const conflict = model && model !== s ? " hist-cmp-conflict" : "";
+        // a flag only when model & user claim OPPOSITE directions; "?" = no signal
+        const conflict = ((model === ">" && s === "<") || (model === "<" && s === ">"))
+          ? " hist-cmp-conflict" : "";
         return `<span class="hist-cmp-attr${conflict}">${escapeHtml(GROUP_ZH[g] || g)} ${ordinalGlyph(s)}</span>`;
       }).join("");
     }
@@ -708,7 +714,7 @@
       <div class="q-attr-row" data-q-group="${g}">
         <span class="q-attr-name">${escapeHtml(GROUP_ZH[g] || g)}
           <span class="q-attr-model" data-q-model="${g}"></span></span>
-        ${choiceGroup(slot, `attr-${g}`, [[">", "更多"], ["=", "一樣"], ["<", "更少"]], null)}
+        ${choiceGroup(slot, `attr-${g}`, [[">", "更多"], ["?", "沒注意到"], ["<", "更少"]], null)}
       </div>`).join("");
   }
 
@@ -733,6 +739,7 @@
             <div class="q-row">
               <span class="q-row-label">逐屬性 · 這杯比上一杯…（模型已預填）</span>
               <div class="q-attrs">${attrGroupRows(slot)}</div>
+              <p class="q-hint">「沒注意到」= 沒把握，不計入後續模型矯正；只有明確的更多 / 更少才算訊號。</p>
             </div>
           </div>
 
