@@ -138,8 +138,8 @@ Top 1 全部落在該焙度 `anchor_brew` 鄰近 —— 管線自洽。
 |---|---|---|
 | `models/distance.py` `optimizer.py` `models/ideal.py` `main.py` `output/*` | ✅ Step 5 重寫完成、CLI 全通 | — |
 | `webapp.py`、`models/feedback.py` | ⚠️ import 失敗（依賴已刪的 `models.scoring`/`models.labels`/`optimize_parallel`/`水質`;`feedback` 仍要求 `water` 欄位、`recompute_entry` 仍傳 `label=`）| **Step 6**（webapp label 下拉 + 水質 UI 移除、加溫度控制、feedback schema）|
-| `diagnose_anchor.py`、`tests/` | ⚠️ import 失敗（依賴已刪的 `compounds`/`flavor_score`,仍是 label 島斷言）| **Step 7**（重寫成 Layer 1 物理 band / Layer 2 感官距離）|
-| `.claude/hooks/anchor_check.py` | ⚠️ 仍呼叫 `diagnose_anchor.py`(已壞) | **Step 7**（與 diagnose 一起更新）|
+| `diagnose_anchor.py`、`tests/` | ✅ **Step 7 完成（2026-05-22）** —— diagnose 改 Layer 1 物理 + Layer 2 距離（13 檢查、exit code）;`tests/` 重寫成 6 檔 55 pytest PASS | — |
+| `.claude/hooks/anchor_check.py` | ✅ **Step 7 完成** —— `TRIGGER_SUFFIXES` 更新、偵測改看 exit code | — |
 
 舊 `compounds.py`/`ey_model.py`/`tds_model.py`/`scoring.py`/`labels.py`/`water_presets.py` 已刪,完整保留於 git branch `compound-model-legacy`。
 
@@ -153,11 +153,11 @@ Top 1 全部落在該焙度 `anchor_brew` 鄰近 —— 管線自洽。
 3. `models/feedback.py`:`append_feedback` 不再要求 `water` 欄位（schema 去水質);`recompute_entry` 去掉 `label=` 與水質參數（`score_logged_recipe` 已無)。`feedback.jsonl` 既有的 `label` / `water` 欄位變 vestigial（保留為歷史)。可考慮把 water 留作 feedback 的選填**文字註記**（未來若要建模水質的備料）,但不再是模型輸入。
 4. result dict 新欄位:`distance`、`axes`、`ideal`、`brewer_size`、`roast`;舊 `score` / `compounds` / `t_slurry` / `press_sec` 等不再存在。
 
-**Step 7（diagnose / tests）：**
-1. `diagnose_anchor.py` 重寫:Layer 1 物理 band（`layer1.brew` 對 Hoffman 重現 TDS 1.23）+ Layer 2 感官距離（各焙度 anchor_brew 應 dist≈0、under/over 應 dist 大）。April/Champion 不再是 Layer 1 素浸泡錨點（Step 4 §8 #6）。
-2. 用 under/over 錨點複查 `AXIS_WEIGHT`（§5.2）。
-3. `tests/` 全部重寫（舊測試依賴已刪模組;`test_water_presets.py` 已隨 `water_presets.py` 刪除）。
-4. `.claude/hooks/anchor_check.py` 的 `TRIGGER_SUFFIXES` 更新（移除 `compounds.py`/`ey_model.py`/`tds_model.py`/`scoring.py`,加 `layer1.py`/`sensory.py`/`distance.py`/`ideal.py`）。
+**Step 7（diagnose / tests）—— 完成 2026-05-22：**
+1. ✅ `diagnose_anchor.py` 重寫:Layer 1 物理（Hoffman 素浸泡錨點重現 TDS 1.23、EY sane、萃取單調）+ Layer 2 感官（ideal.json↔predict_attributes 自洽 dist≈0、optimizer 各焙度可達、距離鑑別 good≪over≪under、tim bracket 單調）—— 共 13 檢查,ASCII-only 輸出,**以 exit code 回報**（0=pass / 非零=fail，含 diagnose 自身崩潰）。April/Champion 不是 Layer 1 錨點（Step 4 §8 #6）—— 確認。
+2. ~~用 under/over 錨點複查 `AXIS_WEIGHT`~~ —— **moot：Step 5.5 已把 `distance.py` 改成純未加權 RMS,`AXIS_WEIGHT` 不存在了。**
+3. ✅ `tests/` 重寫成 6 檔（`test_layer1` / `test_sensory_distance` / `test_optimizer` / `test_feedback` / `test_output_and_cli` / `test_webapp`,**55 pytest PASS**）;舊 `test_compound_calibration` / `test_label_scoring` / `test_models` 刪。
+4. ✅ `.claude/hooks/anchor_check.py`:`TRIGGER_SUFFIXES` 換成 `layer1.py`/`sensory.py`/`distance.py`/`ideal.py`+`data/ideal.json`;**偵測由「grep `[ FAIL ]` 字串」改為「看 diagnose 的 exit code」** —— 修掉舊 bug（diagnose 一旦 import 崩潰,輸出無 `[ FAIL ]` 字串 → hook 注入誤導性假 PASS;現在崩潰=非零 exit=block）。
 
 ---
 

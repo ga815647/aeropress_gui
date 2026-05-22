@@ -1,41 +1,27 @@
-from pathlib import Path
-import sys
-import subprocess
-import re
-import os
-import json
+"""Phase 10 output renderers (output/*) + the main.py CLI.
+
+export_json / export_csv / plot_radar consume real optimizer results (10
+sensory attributes + distance, no compounds / score). The CLI smoke test runs
+main.py end to end.
+"""
+from __future__ import annotations
+
 import csv
-from output.export import export_json, export_csv
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+from optimizer import optimize
+from output.export import export_csv, export_json
 from output.radar import plot_radar
+from models.sensory import ATTRIBUTES
 
 
-def _sample_results() -> list[dict]:
-    return [
-        {
-            "brewer": "AeroPress XL",
-            "water_ml": 400,
-            "temp": 92,
-            "dial": 4.5,
-            "steep_sec": 120,
-            "dose": 22.0,
-            "swirl_sec": 5,
-            "swirl_wait_sec": 30,
-            "press_sec": 32,
-            "press_sec_internal": 32,
-            "seal_delay": 3,
-            "pre_seal_drip_sec": 11.3,
-            "pre_seal_drip_ml": 4.2,
-            "total_contact_sec": 187,
-            "ey": 19.2,
-            "tds": 1.241,
-            "fines_ratio": 0.15,
-            "t_slurry": 88.3,
-            "t_kinetic": 112.1,
-            "retention": 2.3,
-            "compounds": {"AC": 0.5, "SW": 1.0, "PS": 0.8, "CA": 0.88, "CGA": 1.0, "MEL": 0.6},
-            "score": 78.5,
-        }
-    ]
+def _sample_results():
+    return optimize(roast_code="medium_light", brewer_size="xl", temp=95.0, top_n=3)
 
 
 def test_export_json_csv_and_radar(tmp_path: Path) -> None:
@@ -43,8 +29,8 @@ def test_export_json_csv_and_radar(tmp_path: Path) -> None:
     cwd = os.getcwd()
     os.chdir(tmp_path)
     try:
-        export_json(results, "medium", 50, 30)
-        export_csv(results, "medium")
+        export_json(results, "medium_light", 95.0)
+        export_csv(results, "medium_light")
         plot_radar(results)
     finally:
         os.chdir(cwd)
@@ -52,64 +38,53 @@ def test_export_json_csv_and_radar(tmp_path: Path) -> None:
     json_path = tmp_path / "output.json"
     csv_path = tmp_path / "output.csv"
     radar_path = tmp_path / "radar_top3.png"
-    assert json_path.exists()
-    assert csv_path.exists()
-    assert radar_path.exists()
-    assert radar_path.stat().st_size > 0
+    assert json_path.exists() and csv_path.exists()
+    assert radar_path.exists() and radar_path.stat().st_size > 0
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
-    assert payload["hoffman_constants"]["swirl_time_sec"] == 5
-    assert payload["results"][0]["vectors"]["dose_g"] == 22.0
+    assert len(payload["results"]) == 3
+    first = payload["results"][0]
+    assert "distance" in first
+    assert set(first["attributes"]) == set(ATTRIBUTES)
+    assert "ideal" in first
+    # the compound-era fields are gone
+    assert "compounds" not in first and "score" not in first
 
     with csv_path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    assert rows[0]["compounds_AC"] == "0.5"
+    assert len(rows) == 3
+    assert "distance" in rows[0]
+    assert "attr_Sour" in rows[0] and "ideal_Sour" in rows[0]
 
 
-
-
-
-def test_cli_reference_command_ranges(tmp_path: Path, monkeypatch) -> None:
+def test_cli_runs_and_reports_distance(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
-    command = [
-        sys.executable,
-        str(root / "main.py"),
-        "--brewer", "xl",
-        "--roast", "medium_light",
-        "--label", "balanced",
-        "--gh", "50", "--kh", "30",
-        "--t-env", "25", "--altitude", "0",
-        "--top", "1",
-    ]
     completed = subprocess.run(
-        command, cwd=tmp_path, capture_output=True, text=True, check=True,
-        timeout=120, env=env, encoding="utf-8",
+        [sys.executable, str(root / "main.py"),
+         "--roast", "medium_light", "--brewer", "xl", "--top", "1"],
+        cwd=tmp_path, capture_output=True, text=True, encoding="utf-8",
+        env=env, timeout=120, check=True,
     )
     stdout = completed.stdout
-
-    temp = int(re.search(r"水溫 (\d+)°C", stdout).group(1))
-    dial = float(re.search(r"刻度 ([\d.]+)", stdout).group(1))
-    steep_match = re.search(r"開始浸泡 (\d+):(\d+)", stdout)
-    steep = int(steep_match.group(1)) * 60 + int(steep_match.group(2))
-    dose = float(re.search(r"豆量 ([\d.]+)g", stdout).group(1))
-    ey = float(re.search(r"EY ([\d.]+)%", stdout).group(1))
-    tds = float(re.search(r"TDS ([\d.]+)%", stdout).group(1))
-    score = float(re.search(r"風味評分：([\d.]+) / 100", stdout).group(1))
-    t_slurry = float(re.search(r"漿體起始 ([\d.]+)°C", stdout).group(1))
-
-    # Phase 8: medium_light × balanced is the proper Hoffman bullseye combination.
-    # Optimizer finds the recipe that produces a Hoffman-style compound profile.
-    assert 90 <= temp <= 99
-    assert 3.5 <= dial <= 5.5
-    assert 30 <= steep <= 420
-    assert 18 <= dose <= 32
-    assert 18 <= ey <= 25
-    assert 1.10 <= tds <= 1.55
-    assert score > 70
-    assert 3 <= (temp - t_slurry) <= 7
-    # Phase 8: label + recipe_id appear in output
-    assert "[label=balanced]" in stdout
+    # Phase 10 terminal output: distance headline + recipe_id, no 0-100 score
+    assert "距目標" in stdout
     assert re.search(r"recipe_id=[0-9a-f]{12}", stdout)
+    assert "預測 TDS" in stdout
+    assert "/ 100" not in stdout
 
+
+def test_cli_json_output(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    subprocess.run(
+        [sys.executable, str(root / "main.py"),
+         "--roast", "light", "--brewer", "xl", "--top", "2", "--output", "json"],
+        cwd=tmp_path, capture_output=True, text=True, encoding="utf-8",
+        env=env, timeout=120, check=True,
+    )
+    payload = json.loads((tmp_path / "output.json").read_text(encoding="utf-8"))
+    assert len(payload["results"]) == 2
+    assert "distance" in payload["results"][0]
