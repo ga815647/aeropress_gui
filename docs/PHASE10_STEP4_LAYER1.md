@@ -191,11 +191,24 @@ Step 4 **不動** `labels.json` 的 medium_light / medium / moderately_dark（St
 4. **評分移除 `tds_factor`**（藍圖 §7.2）：TDS 對風味的影響已完全經 6 軸表達。
 5. **溫度是適度槓桿、且只經 EY/TDS 作用：** Layer 1 `ALPHA=0.026`（Arrhenius Ea≈30，Q10≈1.3）→ 溫度真實地推動 EY/TDS；Layer 2 `b_temp=0` → 溫度無直接感官項。所以溫度的風味效應**完全經 EY/TDS 中介**（Batali 2020：固定 TDS/EY 下溫度無感官效應）—— 這是正確架構（溫度是萃取旋鈕、非風味軸），不是「溫度無感」。但溫度**不進 optimizer 搜尋維度**（見 §8.7）。
 6. **April/Champion 不再是 Layer 1 錨點。** Step 7 重寫 `diagnose_anchor.py` 時，它們應改為「技法落差示意」或移除，不可當素浸泡物理錨點檢查。
-7. **溫度改為「固定 per-roast 輸入」，不進 optimizer 搜尋維度（裁決 2026-05-22）。** 理由：溫度只經 EY/TDS 作用，而 EY/TDS 被 dose/grind/steep 控制得遠更強（steep 30→360s 動 EY ~10pp，溫度 88→98°C 只動 ~1.4pp）→ 溫度在 grid search 裡是**退化維度**（被其他旋鈕吸收的冗餘自由度），optimizer「優化」出的溫度是 tie-break 噪音、假精確。改法：
-   - **Step 5**：optimizer grid 從 `temp × dial × steep × dose` 砍成 `dial × steep × dose`（快 ~18×）；溫度改吃一個 per-roast 預設值。
-   - **Step 6**：webapp 加溫度控制，預設帶 per-roast 值、使用者可調；調整後用新溫度重跑（溫度仍進 Layer 1 → EY/TDS/分數會小幅變動，非裝飾）。
-   - **per-roast 預設值**：淺焙熱 → 深焙涼，可從 `ROAST_TABLE.base_temp` 起步；但 `medium_light` / `light` 用使用者實測偏好（⭐5 medium_light 在 93–94°C、tim light 在 98–100°C），**不要用 Hoffman 的 98**。存放位置（`labels.json` per-roast 欄位 vs `ROAST_TABLE`）於 Step 5 重整 config 時定。
-   - 考慮過的替代（溫度留在 optimizer + Gaussian 軟偏好，如現有 `dial_prefer`）**不採用**：溫度訊號近乎平 → 軟偏好等價於固定、但更複雜。
+7. **Optimizer I/O 架構 —— 溫度為輸入、`dose`/`dial`/`steep` 為輸出（裁決 2026-05-22，使用者對話）。**
+
+   **輸入（使用者給）：** `roast`、`brewer`（→ `water_ml`）、`temperature`。
+   **輸出（optimizer 搜尋）：** `dose × dial × steep`，搜出命中該 roast 6 軸 IDEAL 的組合。grid 從 `temp × dial × steep × dose` 砍掉溫度維度（快 ~18×）。
+
+   **(a) 溫度為何是輸入、不優化 —— 它是退化/中性維度。** Layer 1 `ALPHA` 讓溫度只經 EY/TDS 作用；Layer 2 `b_temp=0` 無直接感官項。對任一目標 `(tds,ey,dial)`，optimizer 換個溫度只要改 `steep` 就能命中同一組 `(tds,ey,dial)` → 同一杯。**溫度不決定杯子、只決定要配多長的 steep。**「優化溫度」只會吐 tie-break 噪音、假精確。
+
+   **(b) 評分不放溫度感知項（裁決：不要）。** 舊 `scoring.py` 的 `SW_AROMA`（>97°C 香氣熱損）/ `SCORCH`（深焙焦苦）是手調閾值。Phase 10 不延續：① 無訓練資料 —— cotter（唯一帶溫度軸）只涵蓋 87–93°C 且 `b_temp`≈0；>97°C 熱損、深焙 scorch 的區域零資料；使用者 feedback n=6 太稀疏且 confound。② Phase 10 原則 —— Layer 2 / 評分是 fit 出來的、不手刻閾值（藍圖 §9）。後果：**溫度在模型裡完全中性。**
+
+   **(c) per-roast 溫度預設值 = 慣例 + 安全，無研究根據、也不需要。** 中性變數沒有「可推導的最佳值」→ 預設不是研究結果，而是慣例（淺焙熱、深焙涼）+ 安全（正常範圍、離沸點留 headroom）；使用者用舌頭微調。建議 `light` ~98°C、`medium_light` ~94–95°C —— 安全**起點**、非最佳值；**不是**從 ⭐5 的 94 反推（那個 94 是舊 optimizer 連帶輸出的 artifact，不是使用者選的理想溫度）。深焙按慣例偏涼，替模型看不到的真實 scorch 風險把關。存放位置 Step 5 重整 config 時定。
+
+   **(d) `dose` 為純輸出（暫定）。** dose 是 TDS 主槓桿；給定 IDEAL 強度 + 水量，能產生該 TDS 的 dose 近乎被決定 → 屬輸出，與 dial/steep 同類。使用者 override dose 暫不做、需要時再加。注意：dose 純輸出要乾淨運作，前提是 per-roast IDEAL 校在使用者真實偏好的沖煮比上（見 §6 —— medium_light IDEAL 現錨 TDS 1.23，使用者 ⭐5 卻在 ~1.36）。
+
+   **(e) Step 6 webapp：** 溫度控制，帶 per-roast 預設、使用者可調；調整後用新溫度重跑（換 steep、杯子幾乎不變）。
+
+   **(f) roast→方法 對應：一半編碼、一半湧現。**「淺焙熱 / 深焙涼」→ 直接編進 (c) 的溫度預設。「淺焙細/短、深焙粗/長」→ **不可手寫死**，須由 optimizer 命中各 roast IDEAL **自然湧現**（Step 5 驗證）。注意：使用者 tim 慣用 60s 短浸泡，但 feedback 是「偏薄 / 香味淡」（萃取不足訊號）→ optimizer 命中 light IDEAL 可能建議比 60s 長的 steep，屬模型該有的修正，勿預先約束。
+
+   考慮過的替代（溫度留 optimizer + Gaussian 軟偏好，如 `dial_prefer`）不採用：訊號近乎平 → 軟偏好等價於固定、但更複雜。
 
 ---
 
