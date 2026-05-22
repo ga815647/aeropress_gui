@@ -201,8 +201,8 @@ knobs ──┬──→ [薄 Layer 1] ──→ TDS / EY ──┐
 | 0 | ✅ 切 `compound-model-legacy` branch 凍結舊模型 | （git）|
 | 1 | ✅ 整理 BCC 屬性表、定案 6 感官軸 → [`PHASE10_STEP1_SENSORY_AXES.md`](PHASE10_STEP1_SENSORY_AXES.md)；取得 UC Davis 27-cell 因子網格 `data/phase10_training/cotter_dataset.csv`（浸泡 DA raw 資料未公開,改靠 feedback）| docs |
 | 2 | ✅ 建 Layer 2 `f(TDS,EY,roast,溫度,研磨)→6 軸` → [`models/sensory.py`](../models/sensory.py)；cotter 27-cell 回歸,文件 [`PHASE10_STEP2_LAYER2.md`](PHASE10_STEP2_LAYER2.md) | `models/sensory.py` |
-| 3 | 重寫 `data/labels.json` —— IDEAL 改 6 感官軸 | `data/labels.json` |
-| 4 | 薄 Layer 1（平衡脫附式 knob→TDS/EY）| `models/`，退役 `ey_model`/`tds_model`/`compounds` |
+| 3 | ✅ 重寫 `data/labels.json` —— IDEAL 改 6 感官軸（per-roast）→ [`PHASE10_STEP3_LABELS.md`](PHASE10_STEP3_LABELS.md) | `data/labels.json` |
+| 4 | ✅ 薄 Layer 1（平衡脫附式 knob→TDS/EY）→ [`models/layer1.py`](../models/layer1.py)；5 參數校準 3 實測錨點，文件 [`PHASE10_STEP4_LAYER1.md`](PHASE10_STEP4_LAYER1.md)。舊 `ey_model`/`tds_model`/`compounds` 退役（Step 5 改接線後刪）| `models/layer1.py` |
 | 5 | 重寫 `models/scoring.py`（sensory-space 距離，移除 `tds_factor`）| `models/scoring.py` |
 | 6 | feedback schema + webapp 實測欄位 | `docs/FEEDBACK_FORMAT.md`、`webapp.py`、`static/js/` |
 | 7 | 重寫 `diagnose_anchor.py` + `tests/`（Layer 1 物理 band / Layer 2 感官分數）| `diagnose_anchor.py`、`tests/` |
