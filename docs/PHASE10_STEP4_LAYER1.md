@@ -189,8 +189,13 @@ Step 4 **不動** `labels.json` 的 medium_light / medium / moderately_dark（St
 2. **`brew()` 簽名：** `(roast, temp, dial, steep_sec, dose, water_ml, brewer="standard")`。`water_ml` 由呼叫端傳（`constants.BREWER_PRESETS[brewer]["water_ml"]`）。
 3. **medium_light 兩個發現（§6）** —— Step 5 重寫評分時一併處理：anchor_brew.ey 21→20、以及 ⭐5 偏好 vs Hoffman IDEAL 的落差。
 4. **評分移除 `tds_factor`**（藍圖 §7.2）：TDS 對風味的影響已完全經 6 軸表達。
-5. **溫度是適度槓桿、且只經 EY/TDS 作用：** Layer 1 `ALPHA=0.026`（Arrhenius Ea≈30，Q10≈1.3）→ 溫度真實地推動 EY/TDS；Layer 2 `b_temp=0` → 溫度無直接感官項。所以溫度的風味效應**完全經 EY/TDS 中介**（Batali 2020：固定 TDS/EY 下溫度無感官效應）—— 這是正確架構（溫度是萃取旋鈕、非風味軸），不是「溫度無感」。Step 5 的 optimizer 對溫度會有真實（適度）梯度。
+5. **溫度是適度槓桿、且只經 EY/TDS 作用：** Layer 1 `ALPHA=0.026`（Arrhenius Ea≈30，Q10≈1.3）→ 溫度真實地推動 EY/TDS；Layer 2 `b_temp=0` → 溫度無直接感官項。所以溫度的風味效應**完全經 EY/TDS 中介**（Batali 2020：固定 TDS/EY 下溫度無感官效應）—— 這是正確架構（溫度是萃取旋鈕、非風味軸），不是「溫度無感」。但溫度**不進 optimizer 搜尋維度**（見 §8.7）。
 6. **April/Champion 不再是 Layer 1 錨點。** Step 7 重寫 `diagnose_anchor.py` 時，它們應改為「技法落差示意」或移除，不可當素浸泡物理錨點檢查。
+7. **溫度改為「固定 per-roast 輸入」，不進 optimizer 搜尋維度（裁決 2026-05-22）。** 理由：溫度只經 EY/TDS 作用，而 EY/TDS 被 dose/grind/steep 控制得遠更強（steep 30→360s 動 EY ~10pp，溫度 88→98°C 只動 ~1.4pp）→ 溫度在 grid search 裡是**退化維度**（被其他旋鈕吸收的冗餘自由度），optimizer「優化」出的溫度是 tie-break 噪音、假精確。改法：
+   - **Step 5**：optimizer grid 從 `temp × dial × steep × dose` 砍成 `dial × steep × dose`（快 ~18×）；溫度改吃一個 per-roast 預設值。
+   - **Step 6**：webapp 加溫度控制，預設帶 per-roast 值、使用者可調；調整後用新溫度重跑（溫度仍進 Layer 1 → EY/TDS/分數會小幅變動，非裝飾）。
+   - **per-roast 預設值**：淺焙熱 → 深焙涼，可從 `ROAST_TABLE.base_temp` 起步；但 `medium_light` / `light` 用使用者實測偏好（⭐5 medium_light 在 93–94°C、tim light 在 98–100°C），**不要用 Hoffman 的 98**。存放位置（`labels.json` per-roast 欄位 vs `ROAST_TABLE`）於 Step 5 重整 config 時定。
+   - 考慮過的替代（溫度留在 optimizer + Gaussian 軟偏好，如現有 `dial_prefer`）**不採用**：溫度訊號近乎平 → 軟偏好等價於固定、但更複雜。
 
 ---
 
