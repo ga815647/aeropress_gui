@@ -1,205 +1,187 @@
 # Architecture
 
-> 模組結構、資料流、評分公式細節。CLAUDE.md 只放紅線原則與錨點基準，
-> 想看「程式怎麼跑」、「評分長什麼樣」翻這裡。
+> 模組結構、資料流、Phase 10/11 管線。CLAUDE.md 只放紅線原則與錨點基準，
+> 想看「程式怎麼跑」翻這裡。
+>
+> Phase 10 之前的六化合物架構（`compounds.py` / `scoring.py` / label 島 / 水質）
+> 已退役 —— 那份舊架構文件凍結在 [`docs/ARCHITECTURE_legacy.md`](docs/ARCHITECTURE_legacy.md)，
+> 只在 git branch `compound-model-legacy` 上成立。各 Phase 的「改了什麼、為什麼」
+> 見 `docs/PHASE10_*.md`、[`docs/PHASE11_LOOP_ENGINE.md`](docs/PHASE11_LOOP_ENGINE.md)。
+
+## 一句話
+
+旋鈕 → 兩層模型算出風味 → 與該焙度的感官 IDEAL 比距離 → 排序。Phase 11 起，
+IDEAL 不是手設的固定靶，而是**迴圈**一代代逼近出來的移動靶。
 
 ## Data Flow
 
 ```
-main.py (CLI args)
-  → runtime.py          # apply T_ENV, altitude, resolve water profile
-  → optimizer.py        # grid search over (temp × dial × steep × dose)
-      ├─ optimize(label=X)         # single label → Top-N
-      └─ optimize_parallel()       # Channel B → Top-1 per label, shared physical pass
-      → models/ey_model.py         # calc_ey: extraction yield %
-      → models/compounds.py        # predict_compounds: six-compound vector
-      → models/tds_model.py        # calc_tds, press time, drip, retention
-      → models/labels.py           # load_labels, ideal_abs, recipe_id
-      → models/scoring.py          # flavor_score(label=X) → final rank score
-  → output/{terminal,export,radar}.py
+使用者固定：roast、brewer(→water_ml)、temperature
+使用者搜尋：dose × dial × steep
+
+  optimizer.optimize(roast, brewer, temp, top_n)
+    └─ 對網格上每個 (dial, steep, dose)：evaluate_recipe()
+         ├─ models/layer1.py   brew()              旋鈕 → {tds, ey}
+         ├─ models/sensory.py  predict_attributes() {tds,ey,roast,dial} → 10 感官屬性
+         ├─ models/ideal.py    roast_ideal()        data/ideal.json → 該焙度 10 屬性 IDEAL
+         └─ models/distance.py attribute_distance() 屬性 vs IDEAL → RMS 距離
+    └─ 依 distance 升冪排序，回 Top-N
+
+CLI：  main.py            → optimizer.optimize → output/{terminal,export,radar}
+Web：  webapp.py          → /api/optimize（最佳化器模式）
+                          → /api/loop/*（Phase 11 迴圈模式，見下）
+                          → /api/feedback（§4 問卷）/ /api/recipes（命名配方）
 ```
 
-## Grid Search (optimizer.py)
+管線只有一條：推薦配方與「重評一杯已記錄的配方」（feedback recompute）走的是
+**同一個** `evaluate_recipe()` —— 一條 code path，已記錄的配方重評會與全新搜尋一致。
 
-`_grid_candidates()` iterates `temp × dial_x10 × steep × dose_x2` once. For each:
-1. Compute `press_sec` via Darcy law (channeling collapse if > 60s threshold)
-2. Compute EY using Arrhenius + concentration gradient model
-3. Predict six compounds (AC, SW, PS, CA, CGA, MEL) at extraction conditions
-4. Apply channeling correction
-5. Compute TDS
-6. Stamp `recipe_id` (sha1 hex prefix of brew params — Phase 9 feedback link)
+## 兩層模型
 
-`_score_against_label()` then scores each physical candidate against one label;
-`optimize_parallel()` reuses the same physical pass across every label (Channel B).
-Top-N selection is per-label, by `_score_raw` descending. Soft `dial_prefer` Gaussian
-penalty (±15% max; XL +0.10 brewer offset) is applied per candidate per label.
+系統是「薄 Layer 1 → 中樞 TDS/EY → Layer 2 → 10 感官屬性」。中樞 TDS/EY 是
+**內部潛變數**：使用者無折射儀、從不實測，它純粹是 Layer 1 的輸出、Layer 2 的輸入。
+（幾何論證、為何是這個中樞，見 `docs/PHASE10_SENSORY_REFOUNDING.md` §3–§4。）
 
-Phase 8 removed the old `TOP_DIVERSITY_*` mechanism — multi-label parallel Top
-(Channel B) supersedes it.
+### Layer 1 — knob → TDS/EY（`models/layer1.py`）
 
-## Six-Compound Model (compounds.py)
-
-| Compound | Flavor role |
-|----------|-------------|
-| AC | Acidity (organic-acid-derived) |
-| SW | Sweetness / aroma volatiles |
-| PS | Polysaccharides → body / mouthfeel |
-| CA | Caffeic acid (mild bitterness) |
-| CGA | Chlorogenic acid (astringency) |
-| MEL | Melanoidins (roasty bitterness) |
-
-**Phase 6（2026-05-14 完成）：純 Arrhenius × 一階反應**
-- 統一架構：`base × (1 − exp(−k·t))`，`k = K_ref × arr(T) × grind_kinetics`
-- AC 特例：`base × (1 − exp(−k_ext·t)) × exp(−k_deg·t)`（萃取 + 衰減雙 Arrhenius）
-- `_arrhenius(T, Ea)` = `exp(Ea/R × (1/T_ref − 1/T))`，T_ref = 98°C
-- 每個化合物的 Ea（kJ/mol，文獻對齊）：AC_EXT 30 / AC_DEG 70 / SW 35 / PS 45 / CA 40 / CGA 55 / MEL 50
-- **化合物層禁所有閾值**（onset / floor / tent / softplus(temp − X)）；溫度敏感全走 Arrhenius、時間用 first-order
-- SW 額外乘 `exp(SW_DIAL_COEFF × (DIAL_BASE − dial))`（細研磨增表面積、香氣多）
-- PS 額外乘 `exp(PS_DIAL_COEFF × (DIAL_BASE − dial))`（連續取代舊 softplus）
-- CGA/AC/MEL 額外乘 `grind_kinetics = exp(GRIND_KINETICS_COEFF × (DIAL_BASE − dial))`（粗磨速率減緩；Phase 7 將同耦合套到 MEL）
-
-`predict_compounds()` 在非倒置時跑兩次 `_predict_closed_compounds`：主流程
-（`effective_steep`）+ drip 流程（`drip_contact ≈ drip_time × 0.2`），按
-`drip_ratio` 加權混合，再依序套用 EY 冪律修正 + press_perc 滲流選擇性。
-
-## Sensory Labels (Phase 8)
-
-Phase 8 split the pre-existing single `IDEAL_FLAVOR[(roast, bracket)]` into
-per-label islands. Each label is one self-contained sensory target:
+平衡脫附式，單一一階逼近平衡天花板：
 
 ```
-data/labels.json
-└─ <label>
-   ├─ ideal: { AC, SW, PS, CA, CGA, MEL }   # compound fractions, ~sum=1
-   ├─ tds_prefer: number                    # 1.17 / 1.27 / 1.40 / 1.56
-   ├─ description: human-readable summary
-   └─ bullseye_anchor: name of seed calibration recipe (or null for hypothetical)
+EY% = E_MAX · (1 − exp(−t_eff / τ)) · f_ratio
+τ   = TAU_REF · exp(−ALPHA·(temp−T_REF)) · exp(−GAMMA·(DIAL_REF−dial))
+f_ratio = water / (water + K_RATIO · dose)
+TDS%    = 萃取固形物 / 出杯重 · 100
 ```
 
-**Initial 4 labels (Phase 8):** `balanced` (Hoffman), `acid-forward` (April),
-`sweet-body` (Championship), `coarse-modern` (Hedrick).
+- 全 `exp()` 結構：全域單調、飽和、無閾值。
+- 5 個參數，**全在 `layer1.py` 模組常數**（不在 `constants.py`）：`E_MAX_REF` 是唯一
+  fit 的數（由 Hoffman 單一**素浸泡**錨點 98°C/4.3/120s/11g/200ml→TDS 1.23 解出），
+  其餘 4 個（`TAU_REF`/`ALPHA`/`GAMMA`/`K_RATIO`）是物理先驗。
+- **brewer-agnostic**：XL 與標準版只差 `water_ml`（與 dose 容量）—— 同沖煮比例下
+  TDS/EY 相同。April/Champion 為技法沖煮、屬不同黑箱，故**不**當 Layer 1 錨點。
+- per-roast `E_MAX_ROAST_FACTOR` / `RETENTION` 是文獻方向先驗，只 medium_light 錨定。
 
-**Zero-coupled** by construction — editing one label cannot alter another's
-scores. New labels are append-only via `data/labels.json` (Channel A discovery).
-Multi-label parallel Top is Channel B (`optimize_parallel()`).
+### Layer 2 — TDS/EY → 10 感官屬性（`models/sensory.py`）
 
-`models.labels.ideal_abs(label, tds)` replaces the deprecated Gaussian-bracket
-`build_ideal_abs(roast, tds)`. No more TDS low/mid/high interpolation — each
-label has one IDEAL, period.
-
-## Scoring Formula (scoring.py)
+`predict_attributes(tds, ey, roast, temp, dial)` → 10 個 cotter CATA 屬性各自的強度：
 
 ```
-flavor_score(actual, tds, roast, label, ...) =
-       compound_reward
-     × tds_factor               # vs label.tds_prefer (per-label Super-Gaussian centre)
-     × ey_factor                # EY_GAUSS_WEIGHT=0.0 → ≡ 1.0
-     × tds_floor_factor
-     × grind_ey_factor          # Phase 5 lite (fine + EY deficit)
-     × mismatch_factor          # Phase 5 lite+ (low TDS + high EY)
+intensity = base + b_tds·z(TDS) + b_ey·z(EY) + b_tds2·z(TDS)²
 ```
 
-### compound_reward — log-ratio Gaussian
-- 每個化合物計算 `log(actual_perceived / ideal_from_label)` 偏差
-- 非對稱 sigma：`COMPOUND_SIGMA_LO`（不足側）/ `COMPOUND_SIGMA_HI`（超標側），sigmoid 平滑混合
-- 加權平均後取 exp。actual = ideal → reward = 1.0
-- `WEIGHTS = {AC:1.0, SW:1.8, PS:1.3, CA/CGA/MEL:1.3}`
-- `SIGMA_LO`: SW 0.15 嚴懲、PS 0.25、AC 0.30、苦味 0.80 寬鬆
-- `SIGMA_HI`: CGA 0.18 / CA/MEL 0.25 嚴懲、AC 0.35、SW/PS 0.60 寬鬆
+- 10 個屬性：`Sour / Citrus / Tea.floral / Sweet / Cereal / Thick.viscous /
+  Bitter / Astringent / Burnt / Dark.chocolate`（`ATTRIBUTES`）。
+- 來源：UC Davis cotter 27-cell 因子網格，全 17 屬性各自對 (TDS,EY) 做 OLS、以
+  R²≥0.44 閘門保留 10 個（砍掉的 7 個皆為保留屬性的弱雙胞或雜訊）。
+- 跨屬性遮蔽（如厚 body 壓花香）**已內建於 cotter 資料**，直接回歸即捕捉，無需手建
+  互動表。
+- `b_temp` 固定 0（Batali 2020：固定 TDS/EY 下溫度無感官效應）。`roast` 經
+  `_ROAST_OFFSET`（文獻方向先驗、未驗證）、`dial` 經 `_GRIND_SLOPE`（弱先驗）進入。
+- `AXIS_VIEW` 把 10 屬性收成 7 群（酸/甜/body/苦/澀/焙烤/個性）—— 純**顯示 / §4 問卷
+  視圖**，不是模型表徵。
 
-### 加速懲罰
-- `ACCEL_W_PER_COMPOUND[CGA]=0.20`、`[MEL]=0.15`
-- 超過 `PENALTY_ACCEL_THRESHOLD=2.5` 後 softplus 加速
-- sigmoid 方向門控（只懲罰超標、不懲罰不足）
+### 距離 — 排序（`models/distance.py`）
 
-### ideal_abs（Phase 8）
-- `models.labels.ideal_abs(label, tds, roast=None)` — 直接從 `data/labels.json[label].ideal` × `tds`
-- 苦味化合物（CA/CGA/MEL）在 scoring 內部再乘 `IDEAL_BITTER_REDUCTION=0.95`
-- **No more bracket interpolation** — old `build_ideal_abs(roast, tds)` 已廢除
-- **roast override（labels.json v3）**：label 可帶 `ideal_by_roast`，某焙度搆不到預設 ideal 時改用自己的 bullseye。目前只有 `balanced.light`（淺焙搆不到 medium_light 的 CGA/MEL 0.12/0.11）—— 粗略 model-derived、無實測錨點，待 light-roast balanced 食譜出現後精修
+```
+distance = sqrt( mean over 10 屬性 of (predicted − ideal)² )
+```
 
-### tds_factor — 不對稱 Super-Gaussian
-- `TDS_GAUSS_SIGMA_LOW=0.15`（太淡嚴懲）
-- `TDS_GAUSS_SIGMA_HIGH=0.65`（高濃縮寬鬆，支援 Championship 1.56%）
-- 平頂指數 `TDS_SUPER_GAUSS_EXP=4`
-- 中心點：每個 label 的 `tds_prefer`（Phase 8 改 per-label，取代舊 per-roast `TDS_PREFER`）
+純未加權 RMS。**沒有 0–100 評分**（cotter hedonic 資料證實無「客觀最好」），
+排序的數字就是顯示的數字。無 `tds_factor`、無 floor —— TDS 影響已完全經屬性表達，
+欠/過萃靠屬性距離自我鑑別（CLAUDE.md 原則 #3）。10 個屬性過了 R² 閘門 → 等權重。
 
-### tds_floor_factor — sigmoid
-- `1 / (1 + exp(-TDS_FLOOR_K × (tds - TDS_FLOOR_MID)))`
-- `MID=0.50`、`K=8.0`（全域連續可導，取代舊 `min(tds/0.80, 1)²`）
+### per-roast IDEAL（`data/ideal.json` + `models/ideal.py`）
 
-### grind_ey_factor — REMOVED (2026-05-21)
-細磨欠萃 EY-floor 懲罰（舊 `GRIND_EY_DEMAND_K` / `EY_DEMAND_WEIGHT`）已移除：它按
-EY×dial（皆過程變數）扣分，撞紅線「EY 不得作為主要扣分依據」。錨點探針證實移除後
-真欠萃（TDS~1.0）仍只拿 10–14 分 —— `compound_reward` + `tds_floor_factor` 自我鑑別
-承載好壞（原則 #3）。它本是 base_ey 17.0 時代的 Phase 5 lite 補丁，TDS 校準後 EY 整體
-下移使其誤傷低於 98°C 的細磨好 brew。
+每個焙度一份 10 屬性 IDEAL（schema v6）。`roast_ideal(roast)` 是唯一讀路徑。
+信心分層：`medium_light` = 使用者 ⭐5 杯（Tier A）；`light` = tim feedback（暫定，
+tim 非 Layer 1 錨點）；`medium` / `moderately_dark` = 佔位（predict_attributes 在
+medium_light 參考點 + roast offset 推得，待該焙度有 feedback 才真錨定）。
 
-### mismatch_factor（Phase 5 lite+）
-- 低 TDS + 高 EY 雙條件 AND-gated（SCA under-concentrated 象限）
-- `TDS_EY_MISMATCH_WEIGHT=2.0` / `TDS_EY_MISMATCH_K=10.0`
+## Grid Search（`optimizer.py`）
 
-### ratio_bonus — REMOVED (Phase 8)
-舊 AC/CGA、SW/(MEL+CGA)、PS/CA 全域加分曲線已廢除。每個 label 的 IDEAL 已隱含
-這些 ratio 偏好，全域 ratio 加分變成「在 IDEAL 之上再疊加偏好」的雙重作用。
+`optimize(roast, brewer, temp, top_n)` 對 `dial × steep × dose` 三維網格窮舉：
 
-## 感知前處理（物理，在 compound_reward 之前）
+- `dial`：3.0–7.5，步進 0.1（迴圈 `dial_x10` 30..75）。
+- `steep`：30–420s，步進 `STEEP_STEP=30`。
+- `dose`：brewer 容量 ∩ 該焙度 `dose_per_100ml`；XL 步進 1.0g、標準 0.5g。
+- `temp`：**輸入、不搜尋** —— 它只經 Layer 1 的 EY/TDS 影響風味（Layer 2 `b_temp=0`），
+  任一 (tds,ey,dial) 目標下不同溫度被不同 steep 吸收，搜它只得 tie-break 雜訊
+  （`docs/PHASE10_STEP4_LAYER1.md` §8）。省略 → `constants.DEFAULT_TEMP[roast]`。
 
-- **KH 壓制酸質感知**：`AC × (KH_FLOOR + (1 − KH_FLOOR) × exp(−KH / KH_PERCEPT_DECAY_SMOOTH))`，`KH_FLOOR=0.65`、`KH_PERCEPT_DECAY_SMOOTH=42.0`（kh=30 → factor≈0.82；kh→∞ 漸近 0.65）
-- **高溫 SW 香氣損失**：sigmoid 中心 `SW_AROMA_THRESH=97°C`，上限 `SW_AROMA_CAP=0.25`，斜率 `SW_AROMA_SIGMOID_K=3.0`
-- **高溫焦苦放大（深焙）**：`SCORCH_PARAMS` per-roast 閾值，softplus 平滑（`SCORCH_SOFTPLUS_K=0.5`）
-- **軟水苦味放大**：GH→0 時 CA/CGA/MEL ×(1+0.25)，sigmoid 過渡（`LOW_GH_THRESHOLD=20`、`GH_SOFT_SIGMOID_K=0.3`）
-- **低溫萃取補正（calc_ey 內）**：`temp_initial < K_LOW_TEMP_FLOOR=87°C` 時飽和補正最高 4×（April 85°C / Championship 80°C 觸發）
+每個候選經 `evaluate_recipe()` 算出 attributes/distance，依 distance 升冪取 Top-N。
+每個結果帶 `recipe_id`（`models/ideal.py:recipe_id()`，sha1 前 12 碼，feedback 反查鍵）。
+
+## Phase 11 迴圈引擎（`models/loop.py`）
+
+把一次性 Top-N 最佳化器升級成**配方產生機** —— per-roast (1+λ) 演化搜尋。
+完整設計見 [`docs/PHASE11_LOOP_ENGINE.md`](docs/PHASE11_LOOP_ENGINE.md)。
+
+```
+冠軍（第 0 代 = optimizer Top-1 model-seed）
+  └─ 三杯循環 [exp1, exp2, champion]
+       exp1, exp2 = 冠軍的單旋鈕擾動（半徑照排程早大後細，溫度不搜）
+       champion   = 進來時的冠軍，原樣重泡（重新錨定味覺、絕對錨點檢查）
+  └─ 三杯各走 §4 問卷 → 三杯到齊 → digest
+       從成對 overall 比較选 {冠軍,exp1,exp2} 勝者；明確 > 才換、平手守成
+       勝者 = 下一循環的冠軍；generation++
+```
+
+- 狀態存 `data/loop_state.json`（per-roast，lazy 產生）。
+- `skip_proposal` = 後勤性重抽（同探索半徑，沒豆/沒時間），**非**味覺回饋。
+- `detect_flags()` 掃 `feedback.jsonl` 找 `model_attributes_vs`↔`attributes_vs`
+  重複反向矛盾（≥2 次、`?` 排除）→ 記 flag、邀請開對話，**永不自動改模型**。
+- 第 3 杯固定為進來時的冠軍重泡（正統 (1+λ)：親代世代內固定）。
+
+## Feedback 與命名配方
+
+- `models/feedback.py` + `data/feedback.jsonl` —— §4 pairwise + ordinal 問卷
+  （`compared_to` / `overall` `>/=/<` / `attributes_vs` `>/?/<` / `model_attributes_vs`
+  / `absolute`）。schema 規格見 [`docs/FEEDBACK_FORMAT.md`](docs/FEEDBACK_FORMAT.md)。
+  append-only；`recompute_entry()` 用當前模型重算 stale 的 tds/ey/distance。
+- `models/saved.py` + `data/saved_recipes.json` —— 使用者手動命名儲存的配方庫。
+- `data/refine_changelog.md` —— Claude tier-3 模型改動紀錄檔（§6 紀律 3）。
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `constants.py` | Tunable physics constants (Layer 1) |
-| `data/labels.json` | Sensory label islands (Layer 2 — IDEAL + TDS_PREFER per label) |
-| `diagnose_anchor.py` | Two-layer anchor validation (Layer 1 physics bands + Layer 2 label scoring) |
-| `models/labels.py` | label loader, `ideal_abs()`, `recipe_id()` |
-| `models/scoring.py` | label-parameterized `flavor_score()` |
-| `models/compounds.py` | Six-compound extraction prediction (Phase 6 pure physics) |
-| `models/ey_model.py` | EY calculation |
-| `models/tds_model.py` | TDS, press time, drip volume, retention |
-| `optimizer.py` | Grid search + `optimize()` (single-label) / `optimize_parallel()` (Channel B) |
-| `runtime.py` | Environment settings (T_ENV, altitude, water profile) |
-| `data/water_presets.py` | Named water profiles |
-| `webapp.py` | Flask web interface (handles single-label + Channel B) |
-| `tests/test_compound_calibration.py` | Layer 1 physics-only tests |
-| `tests/test_label_scoring.py` | Layer 2 label-scoring-only tests |
-| `docs/FEEDBACK_FORMAT.md` | `data/feedback.jsonl` schema spec (Phase 9 hook) |
+| `constants.py` | `ROAST_TABLE` / `BREWER_PRESETS` / `DEFAULT_TEMP` / `DIAL_STEP` / `STEEP_STEP`。註：仍殘留化合物時代的未用常數（vestigial） |
+| `models/layer1.py` | Layer 1 旋鈕→TDS/EY（平衡脫附式；5 參數為模組常數）|
+| `models/sensory.py` | Layer 2 TDS/EY→10 屬性（`ATTRIBUTES` / `AXIS_VIEW` / `_COEF`）|
+| `models/distance.py` | `attribute_distance()` —— 10 屬性 RMS 距離 |
+| `models/ideal.py` | `roast_ideal()` per-roast IDEAL 載入 + `recipe_id()` |
+| `data/ideal.json` | per-roast 10 屬性感官 IDEAL（schema v6）|
+| `optimizer.py` | 網格搜尋 `optimize()` + `evaluate_recipe()` + `score_logged_recipe()` |
+| `models/loop.py` | Phase 11 迴圈引擎（三杯循環、digest、skip、flag）|
+| `models/saved.py` | 命名配方庫 |
+| `models/feedback.py` | `feedback.jsonl` 讀寫（§4 schema）|
+| `data/{loop_state,saved_recipes}.json`、`data/feedback.jsonl` | runtime 狀態（lazy）|
+| `data/refine_changelog.md` | Claude 模型改動紀錄 |
+| `diagnose_anchor.py` | Phase 10 兩層診斷（Layer 1 物理 + Layer 2 感官，13 檢查，以 exit code 回報）|
+| `webapp.py` + `templates/` + `static/` | Flask UI（最佳化器 / 迴圈雙模式）|
+| `main.py` | CLI（`--roast` 必填、`--brewer`/`--temp`/`--top`/`--output`/`--radar`）|
+| `tests/` | `test_layer1` / `test_sensory_distance` / `test_optimizer` / `test_feedback` / `test_loop` / `test_output_and_cli` / `test_webapp`（75 PASS）|
 
 ## ZP6 Dial Reference
 
-- `dial < 4.5`: fine grind (Hoffman anchor 4.3 is here)
-- `dial = 4.5`: model reference point (`DIAL_BASE`)
-- `dial > 4.5`: coarse grind
+- `dial` 範圍 3.0–7.5，步進 0.1。低 = 細、高 = 粗。
+- Layer 1 的 `DIAL_REF = 4.3`（Hoffman 錨點研磨，τ 的 grind 項在此為 1）。
+- Layer 2 的 `_DIAL_REF = 4.3`（grind 先驗的參考點）。
+- **無 brewer dial offset** —— Phase 10 Step 5 移除 `BREWER_TAU_MULT` 後，XL 與標準版
+  不再有研磨偏移；Layer 1 brewer-agnostic（舊 `dial_offset = 0.10` 已不存在）。
 
-`dial_prefer` per roast 儲存在 `ROAST_TABLE`；XL 額外加 `dial_offset = 0.10`
-（在 `BREWER_PRESETS["xl"]` 內），optimizer 在計算 dial Gaussian 時套用。
+## 調整方向參考
 
-## Water Quality Parameters
+Phase 10/11 的「口感矯正」不再是調 scoring 常數 —— 改目標、或讓迴圈收斂：
 
-Water affects scoring through three channels:
-- **GH (hardness)**: 控制化合物萃取效率（calc_ey 內套用）
-- **KH (alkalinity)**: 壓制酸質感知；平滑公式 `KH_FLOOR=0.65 + 0.35 × exp(−KH / KH_PERCEPT_DECAY_SMOOTH=42.0)`
-- **mg_frac**: Mg²⁺ 比例 boost AC/SW；Ca²⁺ 比例 boost PS/CGA
-- Soft water (GH < `LOW_GH_THRESHOLD=20`，如 RO) 觸發額外苦味放大
+| 想做的事 | 動哪裡 | 注意 |
+|---------|--------|------|
+| 收斂到「我的」偏好 | 用 **webapp 迴圈模式**，泡三杯循環、填 §4 問卷 | 別手動調 —— 迴圈就是為此而生 |
+| 改某焙度的風味目標 | `data/ideal.json[<roast>].ideal` 的 10 屬性值 | 零副作用其他焙度 |
+| 模型方向預測錯了（flag 重複出現）| `models/sensory.py` `_COEF` 該屬性係數 | 記一行 `data/refine_changelog.md`、可回退 |
+| Layer 1 TDS/EY 整體偏掉 | `models/layer1.py` 的 5 個參數 | `E_MAX_REF` 動絕對尺度（多會抵銷）；`ALPHA/GAMMA/K_RATIO` 動相對響應 |
+| 加新焙度 | `data/ideal.json` append + `constants.ROAST_TABLE` / `DEFAULT_TEMP` | 跟著補 `_ROAST_OFFSET` |
+| 收藏一組好配方 | webapp 結果卡 / 冠軍卡的「★ 命名儲存」 | 進 `data/saved_recipes.json` |
 
-Default water when unspecified: GH=50, KH=30, mg_frac=0.40.
-
-## 常數修改方向參考（口感矯正用）
-
-| 口感症狀 | 可能方向 | 注意 |
-|---------|---------|------|
-| 太苦 | 收緊 `COMPOUND_SIGMA_HI["CGA"/"MEL"]`、調高 `IDEAL_BITTER_REDUCTION` | 確認 Top3 TDS 不下移 |
-| 酸不足（某 label） | 調 `data/labels.json[<label>].ideal["AC"]` ↑、降 `KH_PERCEPT_DECAY_SMOOTH` | 不影響其他 label |
-| 太澀 | 收緊 `COMPOUND_SIGMA_HI["CGA"]` | 確認 anchor 仍 PASS |
-| 甜感弱（某 label） | 調 `data/labels.json[<label>].ideal["SW"]` ↑、收緊 `COMPOUND_SIGMA_LO["SW"]` | 後者影響所有 label |
-| 太濃 | 調該 label 的 `tds_prefer` ↓ | 不影響其他 label |
-| 太淡 | 調該 label 的 `tds_prefer` ↑ | 同上 |
-| 想要新風味檔案 | append 一個 label 到 `data/labels.json`（Channel A）| 零風險，不動任何既有 label |
-
-修改後**必須**跑 `python diagnose_anchor.py` 確認六錨點全 PASS、`pytest` 全綠。
+改完模型相關檔（`layer1` / `sensory` / `distance` / `ideal.py` / `data/ideal.json`）
+**必須**跑 `python diagnose_anchor.py`（exit 0 = 全 PASS）與 `python -m pytest tests/`。

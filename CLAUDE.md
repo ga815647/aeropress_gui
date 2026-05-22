@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |---------|------|
 | 待辦任務 / phase 歷史 / 評分鑑別度改革紀錄 | [`TASKS.md`](TASKS.md) |
 | 泡法時間軸 / 各時間參數定義 / 三錨點時間圖 | [`BREW_PROTOCOL.md`](BREW_PROTOCOL.md) |
-| Data flow / Grid search / 化合物模型 / 評分公式細節 / 感知前處理 / Key files / Water 參數 / 修改方向表 | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| Data flow / 兩層模型（Layer 1+2）/ Grid search / 迴圈引擎 / Key files / 調整方向表 | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| 舊六化合物架構（Phase 8 評分公式 / 化合物模型 / label 島 / 水質 —— 已凍結，僅 `compound-model-legacy` branch 成立）| [`docs/ARCHITECTURE_legacy.md`](docs/ARCHITECTURE_legacy.md) |
 | **進行中 — Phase 10 感官重構**（架構、訓練資料、8 步執行步驟）| [`docs/PHASE10_SENSORY_REFOUNDING.md`](docs/PHASE10_SENSORY_REFOUNDING.md) |
 | **Phase 10 Step 1 — 6 感官軸定案**（屬性表、軸定義、湧現概念）| [`docs/PHASE10_STEP1_SENSORY_AXES.md`](docs/PHASE10_STEP1_SENSORY_AXES.md) |
 | **Phase 10 Step 2 — Layer 2 風味模型**（cotter 回歸、係數、驗證）| [`docs/PHASE10_STEP2_LAYER2.md`](docs/PHASE10_STEP2_LAYER2.md) |
@@ -64,7 +65,7 @@ python diagnose_anchor.py
 
 若輸出顯示 `[ FAIL ]`，**必須修正常數直到全部通過**，才能回報完成。
 
-修改方向參考表見 [`ARCHITECTURE.md`](ARCHITECTURE.md) §「常數修改方向參考」。
+修改方向參考表見 [`ARCHITECTURE.md`](ARCHITECTURE.md) §「調整方向參考」。
 
 ### 錨點基準（勿偏離）
 
