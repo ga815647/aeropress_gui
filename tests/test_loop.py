@@ -1,0 +1,249 @@
+"""Phase 11 — loop engine (models/loop.py) + named recipes (models/saved.py).
+
+The loop is a (1+lambda) search over the three-cup cycle [exp1, exp2, champion];
+see docs/PHASE11_LOOP_ENGINE.md. Each test redirects the loop-state and feedback
+JSON paths to a tmp dir so the real files are untouched.
+"""
+from __future__ import annotations
+
+import pytest
+
+import models.feedback as feedback
+import models.loop as loop
+import models.saved as saved
+
+
+@pytest.fixture
+def lp(tmp_path, monkeypatch):
+    """loop engine wired to tmp loop-state + feedback files."""
+    monkeypatch.setattr(loop, "_STATE_PATH", tmp_path / "loop_state.json")
+    monkeypatch.setattr(feedback, "_FEEDBACK_PATH", tmp_path / "feedback.jsonl")
+    return loop
+
+
+@pytest.fixture
+def sv(tmp_path, monkeypatch):
+    monkeypatch.setattr(saved, "_SAVED_PATH", tmp_path / "saved_recipes.json")
+    return saved
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+def _knob_diffs(recipe_a: dict, recipe_b: dict) -> int:
+    """How many of dial / steep_sec / dose differ between two recipes."""
+    return sum(recipe_a[k] != recipe_b[k] for k in ("dial", "steep_sec", "dose"))
+
+
+def _brew_cup(lp, roast: str, overall: str, ts: str):
+    """Brew the loop's current proposal: append feedback with `overall` against
+    the loop-suggested compared-to cup, then register it. Returns (outcome, proposal)."""
+    p = lp.current_proposal(roast)
+    entry = feedback.append_feedback({
+        "recipe_id": p["recipe_id"], "roast": roast, "brewer": "xl",
+        "timestamp": ts, "overall": overall,
+        "compared_to": p["suggested_compared_to"],
+        "recipe": {"temp": p["temp"], "dial": p["dial"], "dose": p["dose"],
+                   "steep_sec": p["steep_sec"]},
+        "comment": "t",
+    })
+    return lp.register_feedback(roast, p["recipe_id"], entry), p
+
+
+def _brew_cycle(lp, roast: str, overalls, ts_base: int):
+    """Brew a full three-cup cycle; `overalls` = (exp1, exp2, champion)."""
+    for i, o in enumerate(overalls):
+        _brew_cup(lp, roast, o, f"2026-05-22T10:{ts_base + i:02d}:00+08:00")
+
+
+# ── start / proposal / perturbation ──────────────────────────────────────────
+def test_start_loop_seeds_champion_and_cycle(lp):
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    assert L["generation"] == 0
+    assert L["cycle"]["index"] == 1
+    assert L["champion"]["source"] == "seed"
+    assert {s["role"] for s in L["cycle"]["slots"]} == {"exp1", "exp2", "champion"}
+
+
+def test_proposal_is_first_pending_slot(lp):
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    p = lp.current_proposal("medium_light")
+    assert p["role"] == "exp1" and p["role_index"] == 1
+    # carries the optimizer-result shape the card consumes
+    assert len(p["attributes"]) == 10 and "distance" in p
+
+
+def test_experiments_are_single_knob_perturbations(lp):
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    slots = {s["role"]: s for s in L["cycle"]["slots"]}
+    champ = slots["champion"]["recipe"]
+    # each experiment moves exactly one knob; the champion slot re-brews as-is
+    assert _knob_diffs(slots["exp1"]["recipe"], champ) == 1
+    assert _knob_diffs(slots["exp2"]["recipe"], champ) == 1
+    assert slots["exp1"]["recipe"] != slots["exp2"]["recipe"]
+    assert slots["champion"]["recipe"] == champ
+
+
+def test_champion_slot_rebrews_the_champion(lp):
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    champ = L["champion"]
+    champ_slot = next(s for s in L["cycle"]["slots"] if s["role"] == "champion")
+    for k in ("dial", "steep_sec", "dose"):
+        assert champ_slot["recipe"][k] == champ[k]
+
+
+# ── digest / cycle advance ───────────────────────────────────────────────────
+def test_cycle_advances_after_three_cups(lp):
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    _brew_cycle(lp, "medium_light", ("=", "=", "="), 0)
+    L = lp.get_loop("medium_light")
+    assert L["generation"] == 1
+    assert L["cycle"]["index"] == 2
+    assert len(L["history"]) == 1
+    # a fresh cycle is all-pending again
+    assert all(s["status"] == "pending" for s in L["cycle"]["slots"])
+
+
+def test_digest_champion_holds_on_all_ties(lp):
+    L0 = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    champ_before = {k: L0["champion"][k] for k in ("dial", "steep_sec", "dose")}
+    _brew_cycle(lp, "medium_light", ("=", "=", "="), 0)
+    L = lp.get_loop("medium_light")
+    assert L["history"][0]["winner_role"] == "champion"
+    champ_after = {k: L["champion"][k] for k in ("dial", "steep_sec", "dose")}
+    assert champ_after == champ_before  # incumbent kept — no clear win
+
+
+def test_digest_promotes_a_winning_experiment(lp):
+    """exp1 `>` champion, exp2 `<` exp1, champion `=` exp2 -> exp1 is the winner
+    and becomes the next cycle's champion (the recipe exp1 was brewed at)."""
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    L0 = lp.get_loop("medium_light")
+    exp1_recipe = next(s["recipe"] for s in L0["cycle"]["slots"] if s["role"] == "exp1")
+    _brew_cycle(lp, "medium_light", (">", "<", "="), 0)
+    L = lp.get_loop("medium_light")
+    assert L["history"][0]["winner_role"] == "exp1"
+    for k in ("dial", "steep_sec", "dose"):
+        assert L["champion"][k] == exp1_recipe[k]
+    assert L["champion"]["source"] == "cycle"
+
+
+def test_two_cycles_use_direct_champion_edge(lp):
+    """From cycle 2 on, exp1 is compared to the prior champion cup directly —
+    the loop must keep advancing the generation each completed cycle."""
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    _brew_cycle(lp, "medium_light", ("=", "=", "="), 0)
+    _brew_cycle(lp, "medium_light", ("=", "=", "="), 10)
+    L = lp.get_loop("medium_light")
+    assert L["generation"] == 2 and L["cycle"]["index"] == 3
+    assert len(L["history"]) == 2
+
+
+# ── skip ─────────────────────────────────────────────────────────────────────
+def test_skip_rerolls_at_same_generation(lp):
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    before = lp.current_proposal("medium_light")
+    result = lp.skip_proposal("medium_light", before["recipe_id"])
+    assert result["skipped"] is True
+    after = lp.current_proposal("medium_light")
+    assert after["recipe_id"] != before["recipe_id"]   # a fresh proposal
+    assert after["skips"] == 1                          # skip counted
+    assert after["generation"] == before["generation"]  # same radius / generation
+    assert after["role"] == "exp1"                      # still the same slot
+
+
+def test_skip_champion_rebrew_is_rejected(lp):
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    champ_id = next(s["recipe_id"] for s in L["cycle"]["slots"] if s["role"] == "champion")
+    result = lp.skip_proposal("medium_light", champ_id)
+    assert result["skipped"] is False  # the champion re-brew is not a perturbation
+
+
+# ── register_feedback robustness ─────────────────────────────────────────────
+def test_register_feedback_ignores_unknown_recipe(lp):
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    outcome = lp.register_feedback("medium_light", "deadbeefcafe", {"timestamp": "x"})
+    assert outcome["matched"] is False and outcome["digested"] is False
+
+
+def test_register_feedback_noop_without_loop(lp):
+    outcome = lp.register_feedback("medium_light", "whatever", {"timestamp": "x"})
+    assert outcome == {"matched": False, "digested": False, "loop": None}
+
+
+# ── reset ────────────────────────────────────────────────────────────────────
+def test_reset_loop_starts_fresh(lp):
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    _brew_cycle(lp, "medium_light", (">", "<", "="), 0)
+    assert lp.get_loop("medium_light")["generation"] == 1
+    lp.reset_loop("medium_light")
+    L = lp.get_loop("medium_light")
+    assert L["generation"] == 0 and L["cycle"]["index"] == 1 and L["history"] == []
+
+
+def test_loops_are_per_roast(lp):
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    lp.start_loop("light", brewer="xl", temp=98.0)
+    assert set(lp.load_loops()) == {"medium_light", "light"}
+    # advancing one roast's loop leaves the other untouched
+    _brew_cycle(lp, "light", ("=", "=", "="), 0)
+    assert lp.get_loop("light")["generation"] == 1
+    assert lp.get_loop("medium_light")["generation"] == 0
+
+
+# ── flag detection ───────────────────────────────────────────────────────────
+def test_detect_flags_needs_repeat(lp):
+    """One model/user direction contradiction is noise; it must repeat to flag."""
+    base = {"roast": "medium_light", "brewer": "xl"}
+    one = {**base, "recipe_id": "r1",
+           "model_attributes_vs": {"bitterness": ">"},
+           "attributes_vs": {"bitterness": "<"}}
+    feedback.append_feedback(one)
+    assert lp.detect_flags() == []          # single contradiction -> no flag
+    feedback.append_feedback({**one, "recipe_id": "r2"})
+    flags = lp.detect_flags()
+    assert len(flags) == 1
+    assert flags[0]["group"] == "bitterness"
+    assert flags[0]["direction"] == "model_over"  # model said more, user said less
+    assert flags[0]["count"] == 2
+
+
+def test_detect_flags_skips_qmark(lp):
+    """`?` on either side is an absence of signal, never a contradiction."""
+    for rid in ("a", "b", "c"):
+        feedback.append_feedback({
+            "roast": "light", "brewer": "xl", "recipe_id": rid,
+            "model_attributes_vs": {"acidity": ">"},
+            "attributes_vs": {"acidity": "?"},
+        })
+    assert lp.detect_flags() == []
+
+
+def test_detect_flags_ignores_agreement(lp):
+    for rid in ("a", "b", "c"):
+        feedback.append_feedback({
+            "roast": "light", "brewer": "xl", "recipe_id": rid,
+            "model_attributes_vs": {"sweetness": ">"},
+            "attributes_vs": {"sweetness": ">"},  # model and user agree
+        })
+    assert lp.detect_flags() == []
+
+
+# ── saved recipes ────────────────────────────────────────────────────────────
+def test_save_and_list_recipe(sv):
+    entry = sv.save_recipe("我的中淺焙日常", "medium_light", "xl", 95.0,
+                           4.4, 150, 24.0, note="平衡")
+    assert entry["name"] == "我的中淺焙日常"
+    assert entry["recipe_id"] and entry["id"]
+    recipes = sv.list_recipes()
+    assert len(recipes) == 1 and recipes[0]["note"] == "平衡"
+
+
+def test_save_recipe_requires_name(sv):
+    with pytest.raises(ValueError):
+        sv.save_recipe("", "light", "xl", 98.0, 4.0, 60, 25.0)
+
+
+def test_delete_recipe(sv):
+    entry = sv.save_recipe("tmp", "light", "xl", 98.0, 4.0, 60, 25.0)
+    assert sv.delete_recipe(entry["id"]) is True
+    assert sv.list_recipes() == []
+    assert sv.delete_recipe(entry["id"]) is False  # already gone

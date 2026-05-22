@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/webapp.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/phase10.css') }}">
   </head>
-  <body>
+  <body data-mode="optimizer">
 
     <main class="ledger">
 
@@ -136,6 +136,18 @@
         <!-- ────── SPECIMEN SHEET / right ────── -->
         <section class="specimen-sheet">
           <div class="sheet-rule sheet-rule-top" aria-hidden="true"></div>
+
+          <div class="mode-tabs" role="tablist" aria-label="模式">
+            <button type="button" class="mode-tab is-active" data-mode-tab="optimizer" role="tab" aria-selected="true">
+              <span class="mode-tab-en">OPTIMIZER</span>
+              <span class="mode-tab-tw">最佳化器 · 一次給多組</span>
+            </button>
+            <button type="button" class="mode-tab" data-mode-tab="loop" role="tab" aria-selected="false">
+              <span class="mode-tab-en">LOOP</span>
+              <span class="mode-tab-tw">迴圈精修 · 單杯逐代</span>
+            </button>
+          </div>
+
           <div id="results" class="specimen-body">
             <div class="empty-state">
               <div class="empty-mark" aria-hidden="true">⊕</div>
@@ -148,6 +160,8 @@
               </p>
             </div>
           </div>
+
+          <div id="loop-view" class="specimen-body" hidden></div>
         </section>
 
       </div><!-- /ledger-body -->

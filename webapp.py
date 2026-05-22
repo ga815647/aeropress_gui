@@ -27,6 +27,8 @@ from models.feedback import (
 from models.ideal import available_roasts, roast_ideal
 from models.sensory import ATTRIBUTES, AXIS_VIEW
 from optimizer import optimize
+from models import loop as loop_engine
+from models import saved as saved_recipes
 
 # Group means with |delta| below this read as "=" in the model prefill of the
 # §4 questionnaire. CATA-frequency units; tunable. Mirrored to the client.
@@ -56,6 +58,51 @@ def _serialize_result(result: dict, feedback_index: dict[str, list[dict]] | None
         "ideal": {a: round(ideal[a], 4) for a in ATTRIBUTES},
         "deltas": {a: round(attrs[a] - ideal[a], 4) for a in ATTRIBUTES},
         "feedback": feedback,
+    }
+
+
+def _serialize_proposal(proposal: dict,
+                        feedback_index: dict[str, list[dict]] | None = None) -> dict:
+    """A loop proposal -> the JSON the loop card consumes. Same 10-attribute /
+    distance shape as an optimizer result, plus the loop context."""
+    card = _serialize_result(proposal, feedback_index)
+    for key in ("role", "role_index", "cycle_index", "generation", "skips",
+                "suggested_compared_to", "is_champion_rebrew", "champion"):
+        card[key] = proposal.get(key)
+    return card
+
+
+def _serialize_loop(loop: dict) -> dict:
+    """Loop state -> a compact summary for the loop panel."""
+    return {
+        "roast": loop["roast"],
+        "brewer": loop["brewer"],
+        "temp": loop["temp"],
+        "generation": loop["generation"],
+        "champion": loop["champion"],
+        "cycle_index": loop["cycle"]["index"],
+        "slots": [
+            {"role": s["role"], "status": s["status"], "skips": s["skips"]}
+            for s in loop["cycle"]["slots"]
+        ],
+        "history": loop.get("history", []),
+        "started_at": loop.get("started_at"),
+        "updated_at": loop.get("updated_at"),
+    }
+
+
+def _loop_payload(roast_code: str) -> dict:
+    """The /api/loop response for one roast — loop summary, the next proposal
+    (evaluated), and any flags raised against this roast."""
+    loop = loop_engine.get_loop(roast_code)
+    proposal = loop_engine.current_proposal(roast_code) if loop else None
+    fb_index = _build_feedback_index()
+    flags = [f for f in loop_engine.detect_flags() if f["roast"] == roast_code]
+    return {
+        "roast": roast_code,
+        "loop": _serialize_loop(loop) if loop else None,
+        "proposal": _serialize_proposal(proposal, fb_index) if proposal else None,
+        "flags": flags,
     }
 
 
@@ -181,7 +228,90 @@ def create_app() -> Flask:
             entry = append_feedback(payload)
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
-        return jsonify({"ok": True, "entry": entry})
+        # Hand the entry to the loop engine: if its recipe_id is a current cycle
+        # slot, the loop marks it brewed and (when the cycle completes) digests.
+        # A loop fault must never block feedback persistence — the entry is
+        # already on disk; swallow and report no advance.
+        loop_result = {"matched": False, "digested": False}
+        try:
+            outcome = loop_engine.register_feedback(
+                entry["roast"], entry["recipe_id"], entry
+            )
+            loop_result = {"matched": outcome["matched"],
+                           "digested": outcome["digested"]}
+        except Exception:  # noqa: BLE001 — deliberate: feedback is already saved
+            pass
+        return jsonify({"ok": True, "entry": entry, "loop": loop_result})
+
+    @app.get("/api/loop")
+    def loop_state():
+        roast_code = str(request.args.get("roast", "medium_light"))
+        return jsonify(_loop_payload(roast_code))
+
+    @app.post("/api/loop/start")
+    def loop_start():
+        payload = request.get_json(silent=True) or {}
+        roast_code = str(payload.get("roast", "medium_light"))
+        brewer_size = str(payload.get("brewer", "xl"))
+        temp = payload.get("temp")
+        try:
+            loop_engine.start_loop(
+                roast_code, brewer=brewer_size,
+                temp=float(temp) if temp not in (None, "") else None,
+            )
+        except (KeyError, IndexError) as exc:
+            return jsonify({"error": f"cannot start loop: {exc}"}), 400
+        return jsonify(_loop_payload(roast_code))
+
+    @app.post("/api/loop/reset")
+    def loop_reset():
+        payload = request.get_json(silent=True) or {}
+        roast_code = str(payload.get("roast", "medium_light"))
+        brewer = payload.get("brewer")
+        temp = payload.get("temp")
+        try:
+            loop_engine.reset_loop(
+                roast_code,
+                brewer=str(brewer) if brewer else None,
+                temp=float(temp) if temp not in (None, "") else None,
+            )
+        except (KeyError, IndexError) as exc:
+            return jsonify({"error": f"cannot reset loop: {exc}"}), 400
+        return jsonify(_loop_payload(roast_code))
+
+    @app.post("/api/loop/skip")
+    def loop_skip():
+        payload = request.get_json(silent=True) or {}
+        roast_code = str(payload.get("roast", ""))
+        recipe_id = str(payload.get("recipe_id", ""))
+        result = loop_engine.skip_proposal(roast_code, recipe_id)
+        if not result["skipped"]:
+            return jsonify(
+                {"error": "nothing to skip (champion re-brew or unknown id)"}
+            ), 400
+        return jsonify(_loop_payload(roast_code))
+
+    @app.get("/api/recipes")
+    def recipes_list():
+        return jsonify({"recipes": saved_recipes.list_recipes()})
+
+    @app.post("/api/recipes")
+    def recipes_save():
+        payload = request.get_json(silent=True) or {}
+        try:
+            entry = saved_recipes.save_recipe(
+                name=payload.get("name"), roast=payload.get("roast"),
+                brewer=payload.get("brewer"), temp=payload.get("temp"),
+                dial=payload.get("dial"), steep_sec=payload.get("steep_sec"),
+                dose=payload.get("dose"), note=payload.get("note", ""),
+            )
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": True, "recipe": entry})
+
+    @app.delete("/api/recipes/<saved_id>")
+    def recipes_delete(saved_id: str):
+        return jsonify({"ok": saved_recipes.delete_recipe(saved_id)})
 
     @app.post("/api/feedback/update")
     def feedback_update_route():

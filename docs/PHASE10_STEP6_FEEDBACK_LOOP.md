@@ -1,6 +1,7 @@
 # Phase 10 — Step 6 + Phase 11：Feedback 迴圈設計
 
-> **狀態：Step 6 已實作（2026-05-22）。Phase 11 迴圈引擎尚未實作。**
+> **狀態：Step 6 + Phase 11 皆已實作（2026-05-22）。**
+> Phase 11 迴圈引擎的落地紀錄與相對本設計的實作裁決見 [`PHASE11_LOOP_ENGINE.md`](PHASE11_LOOP_ENGINE.md)。
 > 本文件是 **Step 6**（feedback schema + webapp）與後續 **Phase 11**（迴圈引擎）的設計依據。
 > Step 5 / 5.5 完成後，與使用者在對話中逐步議定的設計 —— 寫成此文件以免遺失於對話 context。
 > 上游：[`PHASE10_SENSORY_REFOUNDING.md`](PHASE10_SENSORY_REFOUNDING.md) §10–§11、[`PHASE10_STEP5_SCORING.md`](PHASE10_STEP5_SCORING.md)、[`PHASE10_STEP5_5_ALL_ATTRIBUTES.md`](PHASE10_STEP5_5_ALL_ATTRIBUTES.md)、[`FEEDBACK_FORMAT.md`](FEEDBACK_FORMAT.md)。
@@ -114,11 +115,12 @@
 - `models/feedback.py:recompute_entry` 去掉 `label=` 與水質參數（`score_logged_recipe` 已無）。
 - result / feedback 用 `attributes` + `distance`，不再有 `compounds` / `score`。
 
-**Phase 11（迴圈引擎，Step 6 之後）:**
-- 三杯循環的狀態機（冠軍、擾動排程、提案下兩杯）。
-- flag 偵測（模型方向矛盾）。
-- changelog（Claude 改動紀錄檔）。
-- 提案 UX：**單杯呈現 + 跳過鈕**，不做「多選一菜單」（裁決見下）。
+**Phase 11（迴圈引擎，Step 6 之後）— ✅ 完成 2026-05-22，落地紀錄 [`PHASE11_LOOP_ENGINE.md`](PHASE11_LOOP_ENGINE.md)：**
+- 三杯循環的狀態機（冠軍、擾動排程、提案下兩杯）。→ `models/loop.py`
+- flag 偵測（模型方向矛盾）。→ `loop.detect_flags()`
+- changelog（Claude 改動紀錄檔）。→ `data/refine_changelog.md`
+- 提案 UX：**單杯呈現 + 跳過鈕**，不做「多選一菜單」（裁決見下）。→ webapp 模式頁籤
+- 加碼（使用者 2026-05-22）：命名配方庫 `models/saved.py` + 迴圈重製鈕。
 
 **提案 UX 裁決（2026-05-22，使用者問「跳過鈕 vs 一次產多個給我選」）：**
 
@@ -156,7 +158,7 @@
 
 1. ~~**Step 6a** —— feedback schema 重寫（`FEEDBACK_FORMAT.md` 先定稿，照 §4：成對 + ordinal）。~~ **完成 2026-05-22。**
 2. ~~**Step 6b** —— webapp 改（label / 水質下架、溫度控制、10 屬性 + distance 顯示、沖煮回饋表單改成 §4 的問卷）。~~ **完成 2026-05-22。**
-3. **Step 7** —— `diagnose_anchor.py` + `tests/` 重寫（獨立於本文件；見 [`PHASE10_STEP5_SCORING.md`](PHASE10_STEP5_SCORING.md) §7）。**← 下一步**
-4. **Phase 11** —— 三杯循環引擎 + flag 偵測 + changelog。
+3. ~~**Step 7** —— `diagnose_anchor.py` + `tests/` 重寫。~~ **完成 2026-05-22。**
+4. ~~**Phase 11** —— 三杯循環引擎 + flag 偵測 + changelog。~~ **完成 2026-05-22 —— 落地紀錄見 [`PHASE11_LOOP_ENGINE.md`](PHASE11_LOOP_ENGINE.md)。**
 
 **依賴:** Step 6 的 schema 必須先照 §4 設計（成對 + ordinal），否則 Phase 11 沒有正確的訓練訊號。

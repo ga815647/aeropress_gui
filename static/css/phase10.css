@@ -248,3 +248,422 @@
   .attr-row { grid-template-columns: 92px 1fr 48px 48px; gap: var(--s-2); }
   .q-attr-row { flex-direction: column; align-items: flex-start; gap: var(--s-2); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 11 — loop mode (mode tabs · single-cup proposal · saved recipes)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── mode tabs ───────────────────────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: var(--s-5);
+}
+.mode-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s-3) var(--s-4);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  border-bottom: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.mode-tab + .mode-tab { border-left: none; }
+.mode-tab:hover { background: var(--paper-shade); }
+.mode-tab.is-active {
+  background: var(--paper);
+  border-top: 2px solid var(--cobalt);
+}
+.mode-tab-en {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: var(--track-wide);
+  color: var(--ink-mute);
+}
+.mode-tab.is-active .mode-tab-en { color: var(--cobalt); }
+.mode-tab-tw { font-family: var(--font-body); font-size: var(--t-2xs); color: var(--ink-mute); }
+
+/* in loop mode the optimizer RUN button is irrelevant — hide it */
+body[data-mode="loop"] #submit-button { display: none; }
+
+/* ── loop banner (transient notice) ──────────────────────────── */
+.loop-banner {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-3) var(--s-4);
+  background: var(--cobalt-soft);
+  border: 1px solid var(--rule-cobalt);
+  color: var(--cobalt-deep);
+  margin-bottom: var(--s-4);
+}
+
+/* ── loop header ─────────────────────────────────────────────── */
+.loop-head { margin-bottom: var(--s-5); }
+.loop-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.loop-title {
+  font-family: var(--font-display);
+  font-size: var(--t-xl);
+  font-weight: 600;
+  color: var(--ink);
+  margin: var(--s-1) 0;
+}
+.loop-sub { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--ink-soft); }
+
+/* ── champion panel ──────────────────────────────────────────── */
+.loop-champion {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--cobalt);
+  background: var(--paper-soft);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.loop-champion-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.loop-champion-tag {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  font-weight: 700;
+  letter-spacing: var(--track-wide);
+  color: var(--cobalt);
+}
+.loop-champion-src { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--ink-mute); }
+.loop-champion-recipe {
+  font-family: var(--font-mono);
+  font-size: var(--t-md);
+  color: var(--ink);
+  margin: var(--s-2) 0;
+}
+
+/* ── three-cup progress tracker ──────────────────────────────── */
+.loop-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-5);
+}
+.loop-progress-key {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.loop-progress-cups { display: flex; align-items: center; gap: var(--s-2); }
+.loop-cup {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+}
+.loop-cup-mark { font-size: var(--t-xs); }
+.loop-cup.is-done { color: var(--moss); border-color: var(--moss); }
+.loop-cup.is-current {
+  color: var(--cobalt);
+  border-color: var(--cobalt);
+  background: var(--cobalt-soft);
+  font-weight: 600;
+}
+.loop-cup-skip { color: var(--amber); }
+.loop-cup-link { color: var(--ink-faint); font-family: var(--font-mono); }
+
+/* ── proposal card chrome (the card itself reuses .sample) ───── */
+.loop-proposal { border: 1px solid var(--rule); padding: var(--s-5); }
+.loop-proposal-badge {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  line-height: 1.6;
+  padding: var(--s-3);
+  background: var(--paper-soft);
+  border-left: 3px solid var(--ink-faint);
+  color: var(--ink-soft);
+  margin-bottom: var(--s-4);
+}
+.loop-proposal-badge.is-champ {
+  border-left-color: var(--cobalt);
+  background: var(--cobalt-soft);
+  color: var(--cobalt-deep);
+}
+.loop-actions { margin: var(--s-4) 0; }
+.loop-skip {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-2) var(--s-4);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.loop-skip:hover { background: var(--paper-shade); }
+.loop-skip-note {
+  display: block;
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin-top: var(--s-2);
+}
+
+/* ── champion-progression history ────────────────────────────── */
+.loop-history { margin: var(--s-5) 0; }
+.loop-history > summary {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: var(--s-2) 0;
+}
+.loop-history-empty {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin: var(--s-5) 0;
+}
+.loop-history-row {
+  display: flex;
+  gap: var(--s-3);
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: var(--s-2) 0;
+  border-bottom: 1px dotted var(--rule);
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+}
+.loop-history-gen { color: var(--ink-mute); min-width: 92px; }
+.loop-history-win { font-weight: 600; padding: 0 var(--s-2); }
+.loop-history-win-new { color: var(--cobalt); }
+.loop-history-win-hold { color: var(--ink-mute); }
+.loop-history-recipe { color: var(--ink-soft); }
+
+/* ── reset ───────────────────────────────────────────────────── */
+.loop-reset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-top: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--rule);
+}
+.loop-reset {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-2) var(--s-4);
+  background: var(--paper);
+  border: 1px solid var(--amber);
+  color: var(--amber-deep);
+  cursor: pointer;
+}
+.loop-reset:hover { background: var(--amber-soft); }
+.loop-reset-note { font-family: var(--font-body); font-size: var(--t-2xs); color: var(--ink-mute); }
+
+/* ── flags notice ────────────────────────────────────────────── */
+.loop-flags {
+  border: 1px solid var(--amber);
+  background: var(--amber-soft);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.loop-flags-head {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--amber-deep);
+}
+.loop-flags-list { margin: var(--s-2) 0; padding-left: var(--s-5); }
+.loop-flag-item {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+.loop-flag-group { font-weight: 600; color: var(--amber-deep); }
+.loop-flags-note {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin: var(--s-2) 0 0;
+}
+
+/* ── start card (no loop yet) ────────────────────────────────── */
+.loop-start {
+  text-align: center;
+  padding: var(--s-8) var(--s-5);
+  border: 1px dashed var(--rule-strong);
+}
+.loop-start-mark { font-size: var(--t-3xl); color: var(--ink-faint); }
+.loop-start-title {
+  font-family: var(--font-display);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  color: var(--ink);
+  margin: var(--s-3) 0;
+}
+.loop-start-text {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  color: var(--ink-soft);
+  line-height: 1.7;
+  max-width: 46ch;
+  margin: 0 auto var(--s-5);
+}
+.loop-start-btn {
+  font-family: var(--font-mono);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  letter-spacing: var(--track-wide);
+  padding: var(--s-3) var(--s-6);
+  background: var(--cobalt);
+  border: 1px solid var(--cobalt);
+  color: var(--paper);
+  cursor: pointer;
+}
+.loop-start-btn:hover { background: var(--cobalt-deep); }
+
+/* ── save-recipe control ─────────────────────────────────────── */
+.save-recipe { margin: var(--s-4) 0; }
+.save-recipe-toggle {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper);
+  border: 1px dashed var(--rule-strong);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.save-recipe-toggle:hover { background: var(--paper-shade); }
+.save-recipe-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+}
+.save-recipe-form[hidden] { display: none; }
+.save-recipe-name, .save-recipe-note {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  padding: var(--s-2);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+.save-recipe-name { flex: 1; min-width: 140px; }
+.save-recipe-note { flex: 1; min-width: 120px; }
+.save-recipe-do {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-2) var(--s-4);
+  background: var(--cobalt);
+  border: 1px solid var(--cobalt);
+  color: var(--paper);
+  cursor: pointer;
+}
+.save-recipe-do:disabled { opacity: 0.5; cursor: wait; }
+.save-recipe-msg { font-family: var(--font-mono); font-size: var(--t-2xs); }
+
+/* ── saved-recipe collection ─────────────────────────────────── */
+.saved-collection {
+  margin-top: var(--s-6);
+  padding-top: var(--s-5);
+  border-top: 2px solid var(--rule);
+}
+.saved-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--s-3);
+}
+.saved-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.saved-count {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  color: var(--cobalt);
+}
+.saved-empty {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  padding: var(--s-3) 0;
+}
+.saved-list { display: flex; flex-direction: column; gap: var(--s-2); }
+.saved-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+}
+.saved-item-name {
+  font-family: var(--font-body);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.saved-item-recipe {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.saved-item-note {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin-top: var(--s-1);
+}
+.saved-item-actions { display: flex; flex-direction: column; gap: var(--s-1); }
+.saved-apply, .saved-del {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  padding: var(--s-1) var(--s-2);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.saved-apply:hover { background: var(--cobalt-soft); border-color: var(--rule-cobalt); }
+.saved-del:hover { background: var(--amber-soft); border-color: var(--amber); color: var(--amber-deep); }

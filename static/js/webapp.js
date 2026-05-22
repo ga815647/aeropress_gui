@@ -4,6 +4,7 @@
 
   const submitButton = document.getElementById("submit-button");
   const resultsNode = document.getElementById("results");
+  const loopViewNode = document.getElementById("loop-view");
   const tooltipTitle = document.getElementById("tooltip-title");
   const tooltipBody = document.getElementById("tooltip-body");
   const tooltipMeta = document.getElementById("tooltip-meta");
@@ -25,6 +26,9 @@
   let steepInterval = null;
   // fb form state, keyed by slot — prefill + comparison context
   const fbState = {};
+  // Phase 11 loop mode
+  let loopData = null;          // last /api/loop payload
+  let loopProposal = null;      // the current proposed cup (a result-shaped dict)
 
   // ── attribute / group display labels ────────────────────────────────
   const ATTR_ZH = {
@@ -657,6 +661,11 @@
         </div>
         <div class="attr-list">${attributeRows(result)}</div>
 
+        ${saveControlHtml({
+          roast: result.roast, brewer: result.brewer_size, temp: result.temp,
+          dial: result.dial, steep_sec: result.steep_sec, dose: result.dose,
+        }, `opt-${index}`)}
+
         ${renderFeedbackForm(result, `detail-${index}`)}
       </article>`;
   }
@@ -932,6 +941,12 @@
         sel.innerHTML = comparedToOptions(ownerSection ? ownerSection.dataset.fbRecipe : "");
         sel.value = keep;
       });
+      // loop mode: the feedback just advanced the cycle — pull the next proposal
+      if (document.body.dataset.mode === "loop") {
+        const advanced = data.loop && data.loop.digested;
+        await loadLoop();
+        if (advanced) flashLoopBanner("✦ 三杯到齊 — 已結算循環、冠軍更新、下一代提案已就緒");
+      }
     } catch (err) {
       msg.textContent = `失敗：${err.message || err}`;
       msg.style.color = "var(--amber)";
@@ -941,8 +956,427 @@
   }
 
   function findResultByRecipeId(recipeId) {
+    if (loopProposal && loopProposal.recipe_id === recipeId) return loopProposal;
     if (!latestPayload || !latestPayload.results) return null;
     return latestPayload.results.find((r) => r.recipe_id === recipeId) || null;
+  }
+
+  // ════════════════ §11 LOOP MODE ════════════════
+  const ROLE_LABEL = { exp1: "實驗 A", exp2: "實驗 B", champion: "冠軍重泡" };
+  let savedCache = [];
+
+  function switchMode(mode) {
+    if (mode !== "optimizer" && mode !== "loop") return;
+    document.body.dataset.mode = mode;
+    document.querySelectorAll("[data-mode-tab]").forEach((tab) => {
+      const on = tab.dataset.modeTab === mode;
+      tab.classList.toggle("is-active", on);
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    resultsNode.hidden = mode !== "optimizer";
+    loopViewNode.hidden = mode !== "loop";
+    clearInterval(steepInterval);
+    steepInterval = null;
+    steepTimer = null;
+    if (mode === "loop") loadLoop();
+  }
+
+  async function loadLoop() {
+    const roast = roastSelect.value;
+    loopViewNode.innerHTML =
+      `<div class="empty-state"><div class="empty-title">載入迴圈…</div></div>`;
+    await fetchHistory();   // compared-to dropdown + champion lookups stay fresh
+    try {
+      const resp = await fetch(`/api/loop?roast=${encodeURIComponent(roast)}`);
+      loopData = await resp.json();
+    } catch (err) {
+      loopViewNode.innerHTML =
+        `<div class="empty-state"><div class="empty-title">迴圈載入失敗</div>` +
+        `<p class="empty-instructions">${escapeHtml(String(err))}</p></div>`;
+      return;
+    }
+    loopProposal = loopData.proposal || null;
+    renderLoopView(loopData);
+    loadSaved();
+  }
+
+  function renderLoopView(data) {
+    const flags = renderLoopFlags(data.flags || []);
+    if (!data.loop) {
+      loopViewNode.innerHTML = `${flags}${renderLoopStart()}<div id="saved-panel"></div>`;
+      return;
+    }
+    const loop = data.loop;
+    const proposal = data.proposal;
+    loopViewNode.innerHTML = `
+      ${flags}
+      <div class="loop-panel">
+        ${renderLoopHeader(loop)}
+        ${renderLoopChampion(loop)}
+        ${renderLoopProgress(loop)}
+        ${proposal ? renderLoopProposal(proposal) : ""}
+        ${renderLoopHistory(loop)}
+        ${renderLoopReset()}
+      </div>
+      <div id="saved-panel"></div>`;
+    if (proposal) {
+      resetSteepTimer("loop", proposal);
+      attachFeedbackHandlers();
+      // preselect the loop's suggested compared-to cup, then recompute prefill
+      const sel = loopViewNode.querySelector('.q-compared[data-q-slot="loop"]');
+      if (sel && proposal.suggested_compared_to &&
+          Array.from(sel.options).some((o) => o.value === proposal.suggested_compared_to)) {
+        sel.value = proposal.suggested_compared_to;
+      }
+      refreshPrefill("loop");
+    }
+  }
+
+  function renderLoopHeader(loop) {
+    const opt = (window.APP_ROAST_OPTIONS || []).find((o) => o.code === loop.roast);
+    const roastName = (opt && opt.name) || loop.roast;
+    return `
+      <header class="loop-head">
+        <span class="loop-eyebrow">§ LOOP · 配方產生機</span>
+        <h2 class="loop-title">${escapeHtml(roastName)} · 迴圈精修</h2>
+        <p class="loop-sub">第 ${loop.generation} 代 · 循環 #${loop.cycle_index} ·
+          ${escapeHtml(loop.brewer)} · ${loop.temp}°C · 已結算 ${loop.history.length} 次</p>
+      </header>`;
+  }
+
+  function renderLoopChampion(loop) {
+    const c = loop.champion;
+    const src = c.source === "seed" ? "模型 seed（optimizer Top-1）" : "迴圈勝出";
+    return `
+      <div class="loop-champion">
+        <div class="loop-champion-head">
+          <span class="loop-champion-tag">CHAMPION · 當前冠軍</span>
+          <span class="loop-champion-src">${escapeHtml(src)}</span>
+        </div>
+        <div class="loop-champion-recipe">${loop.temp}°C · dial ${c.dial} ·
+          ${c.dose}g · steep ${formatTime(c.steep_sec)}</div>
+        ${saveControlHtml({
+          roast: loop.roast, brewer: loop.brewer, temp: loop.temp,
+          dial: c.dial, steep_sec: c.steep_sec, dose: c.dose,
+        }, "champion")}
+      </div>`;
+  }
+
+  function renderLoopProgress(loop) {
+    const firstPending = (loop.slots.find((s) => s.status === "pending") || {}).role;
+    const cups = loop.slots.map((s) => {
+      const done = s.status === "brewed";
+      const current = !done && s.role === firstPending;
+      const cls = done ? "is-done" : current ? "is-current" : "";
+      const mark = done ? "●" : current ? "◉" : "○";
+      const skip = s.skips ? `<span class="loop-cup-skip">跳過×${s.skips}</span>` : "";
+      return `<div class="loop-cup ${cls}"><span class="loop-cup-mark">${mark}</span>` +
+        `<span class="loop-cup-name">${ROLE_LABEL[s.role]}</span>${skip}</div>`;
+    }).join('<span class="loop-cup-link" aria-hidden="true">→</span>');
+    return `<div class="loop-progress"><span class="loop-progress-key">本循環 · 三杯</span>` +
+      `<div class="loop-progress-cups">${cups}</div></div>`;
+  }
+
+  function renderLoopProposal(p) {
+    const accent = ROAST_COLOR[p.roast] || "#1d4ed8";
+    const roleText = { 1: "實驗 A · 冠軍的單旋鈕擾動", 2: "實驗 B · 冠軍的單旋鈕擾動",
+                       3: "冠軍重泡 · 重新錨定味覺記憶" }[p.role_index];
+    const badge = p.is_champion_rebrew
+      ? `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`
+      : `<div class="loop-proposal-badge">這是冠軍的擾動實驗 — 靠喝評判，別靠讀數字挑。距離只是參考。</div>`;
+    const skip = p.is_champion_rebrew ? "" : `
+      <div class="loop-actions">
+        <button type="button" class="loop-skip" data-loop-skip="${escapeHtml(p.recipe_id)}">
+          這杯泡不了 · 跳過 ↻</button>
+        <span class="loop-skip-note">跳過＝後勤性（沒豆 / 沒時間 / 器材不在），
+          會在同探索半徑換一個提案；不是「看起來會難喝」。${p.skips ? ` 已跳過 ${p.skips} 次。` : ""}</span>
+      </div>`;
+    return `
+      <article class="sample loop-proposal" id="recipe-card-loop" style="--accent:${accent};">
+        <header class="sample-head">
+          <div class="sample-no"><span>CYCLE</span><span class="sample-no-num">#${p.cycle_index}</span></div>
+          <div class="sample-label">第 ${p.role_index} / 3 杯 · ${escapeHtml(roleText)}</div>
+        </header>
+        ${badge}
+        <div class="score-block">
+          <div class="score-display">${p.distance.toFixed(4)}</div>
+          <div class="score-meta">
+            <div class="score-label">距該焙度感官 IDEAL · DISTANCE</div>
+            <div class="score-hint">參考用 — 迴圈靠你的舌頭收斂，不靠這個數字排序。</div>
+          </div>
+        </div>
+        <div class="vector-grid">
+          <div class="vector-cell"><span class="vector-label">TEMP · 水溫</span><span class="vector-value">${p.temp}<span class="vector-unit">°C</span></span></div>
+          <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${p.dial}</span></div>
+          <div class="vector-cell"><span class="vector-label">DOSE · 粉量</span><span class="vector-value">${p.dose}<span class="vector-unit">g</span></span></div>
+          <div class="vector-cell"><span class="vector-label">STEEP · 浸泡</span><span class="vector-value">${formatTime(p.steep_sec)}</span></div>
+        </div>
+        <div class="brew-meta">
+          注水 ${p.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(p.steep_sec)} → 旋轉 → 穩定下壓
+          <span class="brew-meta-latent">內部估值 TDS ${p.tds.toFixed(2)}% · EY ${p.ey.toFixed(1)}%（粗估）</span>
+        </div>
+        ${renderSteepTimer(p, "loop")}
+        <div class="specimen-section">
+          <span class="specimen-section-title">SENSORY PROFILE · 10 感官屬性</span>
+          <span class="specimen-section-aside">實線=預測 · ◆=IDEAL</span>
+        </div>
+        <div class="attr-list">${attributeRows(p)}</div>
+        ${skip}
+        ${renderFeedbackForm(p, "loop")}
+      </article>`;
+  }
+
+  function renderLoopHistory(loop) {
+    if (!loop.history || !loop.history.length) {
+      return `<div class="loop-history-empty">尚無結算紀錄 — 完成本循環三杯後，這裡顯示冠軍如何演進。</div>`;
+    }
+    const rows = loop.history.slice().reverse().map((h) => {
+      const win = { exp1: "實驗 A 勝出", exp2: "實驗 B 勝出",
+                    champion: "冠軍守成" }[h.winner_role];
+      const a = h.champion_after;
+      const kind = h.winner_role === "champion" ? "hold" : "new";
+      return `<div class="loop-history-row">
+        <span class="loop-history-gen">gen ${h.generation} · #${h.cycle_index}</span>
+        <span class="loop-history-win loop-history-win-${kind}">${win}</span>
+        <span class="loop-history-recipe">dial ${a.dial} · ${a.dose}g · ${formatTime(a.steep_sec)}</span>
+      </div>`;
+    }).join("");
+    return `<details class="loop-history"><summary>冠軍演進 · ${loop.history.length} 次結算</summary>${rows}</details>`;
+  }
+
+  function renderLoopFlags(flags) {
+    if (!flags || !flags.length) return "";
+    const items = flags.map((f) => {
+      const dir = f.direction === "model_over"
+        ? "模型高估了此屬性的變化方向" : "模型低估了此屬性的變化方向";
+      return `<li class="loop-flag-item"><span class="loop-flag-group">${escapeHtml(GROUP_ZH[f.group] || f.group)}</span> — ${dir} · 已重複 ${f.count} 次</li>`;
+    }).join("");
+    return `
+      <div class="loop-flags">
+        <div class="loop-flags-head">⚑ 模型方向偏差 — 累積 ${flags.length} 項</div>
+        <ul class="loop-flags-list">${items}</ul>
+        <p class="loop-flags-note">迴圈不會自己改模型。建議開一個對話，讓 Claude 讀
+          feedback.jsonl 一次檢視這批 flag（見 docs/PHASE10_STEP6_FEEDBACK_LOOP.md §6 tier 2/3）。</p>
+      </div>`;
+  }
+
+  function renderLoopStart() {
+    return `
+      <div class="loop-start">
+        <div class="loop-start-mark" aria-hidden="true">⟳</div>
+        <h2 class="loop-start-title">尚未開始這個焙度的迴圈</h2>
+        <p class="loop-start-text">
+          迴圈是<strong>配方產生機</strong> — 留一個冠軍、每代提兩個擾動實驗，
+          你泡了、用 §4 對照問卷比較，系統往你的偏好收斂（約 10–30 杯）。
+          第一代冠軍由 optimizer Top-1 model-seed，不是亂槍打鳥。
+          先在左側選好<strong>焙度 / 水溫 / 容量</strong>，再開始。
+        </p>
+        <button type="button" class="loop-start-btn" data-loop-start>開始迴圈精修 · START LOOP →</button>
+      </div>`;
+  }
+
+  function renderLoopReset() {
+    return `
+      <div class="loop-reset-row">
+        <button type="button" class="loop-reset" data-loop-reset>↺ 重新開始迴圈</button>
+        <span class="loop-reset-note">捨棄目前冠軍與循環，從新的 model-seed 重跑。會跳出確認。</span>
+      </div>`;
+  }
+
+  function flashLoopBanner(text) {
+    loopViewNode.querySelector(".loop-banner")?.remove();
+    const div = document.createElement("div");
+    div.className = "loop-banner";
+    div.textContent = text;
+    loopViewNode.prepend(div);
+    setTimeout(() => div.remove(), 6500);
+  }
+
+  async function startLoop() {
+    const body = {
+      roast: roastSelect.value, brewer: brewerSelect.value,
+      temp: tempInput.value === "" ? null : Number(tempInput.value),
+    };
+    loopViewNode.innerHTML =
+      `<div class="empty-state"><div class="empty-title">啟動迴圈中…</div></div>`;
+    try {
+      const resp = await fetch("/api/loop/start", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      loopData = await resp.json();
+      if (loopData.error) throw new Error(loopData.error);
+      loopProposal = loopData.proposal || null;
+      renderLoopView(loopData);
+      loadSaved();
+    } catch (err) {
+      loopViewNode.innerHTML =
+        `<div class="empty-state"><div class="empty-title">啟動失敗</div>` +
+        `<p class="empty-instructions">${escapeHtml(String(err.message || err))}</p></div>`;
+    }
+  }
+
+  async function resetLoop() {
+    if (!window.confirm("重新開始迴圈？目前冠軍與整個循環會被捨棄，從新的 model-seed 重跑。")) return;
+    const body = {
+      roast: (loopData && loopData.roast) || roastSelect.value,
+      brewer: brewerSelect.value,
+      temp: tempInput.value === "" ? null : Number(tempInput.value),
+    };
+    try {
+      const resp = await fetch("/api/loop/reset", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      loopData = await resp.json();
+      if (loopData.error) throw new Error(loopData.error);
+      loopProposal = loopData.proposal || null;
+      renderLoopView(loopData);
+      loadSaved();
+      flashLoopBanner("↺ 迴圈已重置 — 新的第 0 代冠軍與循環 #1 已就緒");
+    } catch (err) {
+      flashLoopBanner("重置失敗：" + (err.message || err));
+    }
+  }
+
+  async function skipProposal(recipeId) {
+    const body = { roast: (loopData && loopData.roast) || roastSelect.value, recipe_id: recipeId };
+    try {
+      const resp = await fetch("/api/loop/skip", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      loopData = await resp.json();
+      if (loopData.error) throw new Error(loopData.error);
+      loopProposal = loopData.proposal || null;
+      renderLoopView(loopData);
+      loadSaved();
+      flashLoopBanner("↻ 已跳過 — 在同探索半徑換了一個提案");
+    } catch (err) {
+      flashLoopBanner("跳過失敗：" + (err.message || err));
+    }
+  }
+
+  // ── saved recipes (named library) ───────────────────────────────────
+  function saveControlHtml(recipe, ctxId) {
+    const json = escapeHtml(JSON.stringify(recipe));
+    return `
+      <div class="save-recipe" data-save-ctx="${escapeHtml(ctxId)}" data-save-recipe="${json}">
+        <button type="button" class="save-recipe-toggle" data-save-toggle>★ 命名儲存這組參數</button>
+        <div class="save-recipe-form" hidden>
+          <input class="save-recipe-name" type="text" maxlength="40" placeholder="幫這組參數取個名字…">
+          <input class="save-recipe-note" type="text" maxlength="120" placeholder="備註（選填）">
+          <button type="button" class="save-recipe-do" data-save-do>儲存</button>
+          <span class="save-recipe-msg"></span>
+        </div>
+      </div>`;
+  }
+
+  async function submitSaveRecipe(btn) {
+    const wrap = btn.closest(".save-recipe");
+    if (!wrap) return;
+    const msg = wrap.querySelector(".save-recipe-msg");
+    let recipe;
+    try {
+      recipe = JSON.parse(wrap.dataset.saveRecipe);
+    } catch (err) {
+      msg.textContent = "參數解析失敗";
+      msg.style.color = "var(--amber)";
+      return;
+    }
+    const name = (wrap.querySelector(".save-recipe-name").value || "").trim();
+    const note = (wrap.querySelector(".save-recipe-note").value || "").trim();
+    if (!name) {
+      msg.textContent = "請先取個名字";
+      msg.style.color = "var(--amber)";
+      return;
+    }
+    btn.disabled = true;
+    msg.textContent = "儲存中…";
+    msg.style.color = "var(--ink-mute)";
+    try {
+      const resp = await fetch("/api/recipes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, note, ...recipe }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || "save failed");
+      msg.textContent = "✓ 已存：" + name;
+      msg.style.color = "var(--lichen)";
+      wrap.querySelector(".save-recipe-name").value = "";
+      wrap.querySelector(".save-recipe-note").value = "";
+      wrap.querySelector(".save-recipe-form").hidden = true;
+      if (document.body.dataset.mode === "loop") loadSaved();
+    } catch (err) {
+      msg.textContent = "失敗：" + (err.message || err);
+      msg.style.color = "var(--amber)";
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function loadSaved() {
+    const panel = document.getElementById("saved-panel");
+    if (!panel) return;
+    try {
+      const resp = await fetch("/api/recipes");
+      savedCache = (await resp.json()).recipes || [];
+    } catch (err) {
+      savedCache = savedCache || [];
+    }
+    panel.innerHTML = renderSavedPanel(savedCache);
+  }
+
+  function renderSavedPanel(recipes) {
+    const body = recipes.length
+      ? recipes.map(renderSavedItem).join("")
+      : `<div class="saved-empty">尚無命名配方。在任何結果卡或冠軍卡點「★ 命名儲存」即可收藏。</div>`;
+    return `
+      <div class="saved-collection">
+        <div class="saved-head">
+          <span class="saved-eyebrow">§ 已存配方 · NAMED RECIPES</span>
+          <span class="saved-count">${recipes.length}</span>
+        </div>
+        <div class="saved-list">${body}</div>
+      </div>`;
+  }
+
+  function renderSavedItem(r) {
+    const opt = (window.APP_ROAST_OPTIONS || []).find((o) => o.code === r.roast);
+    const roastName = (opt && opt.name) || r.roast;
+    return `
+      <div class="saved-item" data-saved-id="${escapeHtml(r.id)}">
+        <div class="saved-item-main">
+          <div class="saved-item-name">${escapeHtml(r.name)}</div>
+          <div class="saved-item-recipe">${escapeHtml(roastName)} · ${escapeHtml(r.brewer)} ·
+            ${r.temp}°C · dial ${r.dial} · ${r.dose}g · ${formatTime(r.steep_sec)}</div>
+          ${r.note ? `<div class="saved-item-note">${escapeHtml(r.note)}</div>` : ""}
+        </div>
+        <div class="saved-item-actions">
+          <button type="button" class="saved-apply" data-saved-apply="${escapeHtml(r.id)}">帶入左側</button>
+          <button type="button" class="saved-del" data-saved-del="${escapeHtml(r.id)}">刪除</button>
+        </div>
+      </div>`;
+  }
+
+  function applySaved(savedId) {
+    const r = savedCache.find((x) => x.id === savedId);
+    if (!r) return;
+    roastSelect.value = r.roast;
+    brewerSelect.value = r.brewer;
+    tempInput.value = r.temp;
+    syncDoseStep();
+    switchMode("optimizer");
+    submitButton.focus();
+  }
+
+  async function deleteSaved(savedId) {
+    try {
+      await fetch(`/api/recipes/${encodeURIComponent(savedId)}`, { method: "DELETE" });
+    } catch (err) {
+      /* best effort */
+    }
+    loadSaved();
   }
 
   // ════════════════ WIRING ════════════════
@@ -962,10 +1396,53 @@
     if (doseMaxInput) doseMaxInput.step = stepG;
   }
 
-  roastSelect.addEventListener("change", () => { syncRoastDefaults(); showHelp("roast"); });
+  roastSelect.addEventListener("change", () => {
+    syncRoastDefaults();
+    showHelp("roast");
+    if (document.body.dataset.mode === "loop") loadLoop();
+  });
   brewerSelect.addEventListener("change", syncDoseStep);
   syncDoseStep();
   syncRoastDefaults();
+
+  // mode tabs — optimizer (Top-N menu) vs loop (single-cup refinement)
+  document.querySelectorAll("[data-mode-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => switchMode(tab.dataset.modeTab));
+  });
+
+  // loop-view delegated clicks — start / reset / skip / saved actions + timer
+  loopViewNode.addEventListener("click", (event) => {
+    if (event.target.closest("[data-loop-start]")) { startLoop(); return; }
+    if (event.target.closest("[data-loop-reset]")) { resetLoop(); return; }
+    const skip = event.target.closest("[data-loop-skip]");
+    if (skip) { skipProposal(skip.dataset.loopSkip); return; }
+    const apply = event.target.closest("[data-saved-apply]");
+    if (apply) { applySaved(apply.dataset.savedApply); return; }
+    const del = event.target.closest("[data-saved-del]");
+    if (del) { deleteSaved(del.dataset.savedDel); return; }
+    if (event.target.closest("[data-timer-toggle]") && loopProposal) {
+      toggleSteepTimer("loop", loopProposal);
+      return;
+    }
+    if (event.target.closest("[data-timer-reset]") && loopProposal) {
+      resetSteepTimer("loop", loopProposal);
+    }
+  });
+
+  // named-recipe save controls appear in BOTH views — one document delegation
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-save-toggle]");
+    if (toggle) {
+      const form = toggle.closest(".save-recipe").querySelector(".save-recipe-form");
+      if (form) {
+        form.hidden = !form.hidden;
+        if (!form.hidden) form.querySelector(".save-recipe-name").focus();
+      }
+      return;
+    }
+    const doBtn = event.target.closest("[data-save-do]");
+    if (doBtn) submitSaveRecipe(doBtn);
+  });
 
   document.querySelectorAll("[data-help-key] input, [data-help-key] select").forEach((el) => {
     const key = el.closest("[data-help-key]").dataset.helpKey;

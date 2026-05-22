@@ -33,6 +33,8 @@
 | 2026-05-15 | 8 | 感官 label 島分裂（Layer 2 落地）：`data/labels.json` 4 個 label（balanced/acid-forward/sweet-body/coarse-modern），廢 build_ideal_abs TDS bracket 內插 + 廢 ratio_bonus 全套 + 廢 diversify_top；新增 `optimize_parallel()`（Channel B 多 label 並列 Top）、`recipe_id`（Phase 9 feedback 鉤子）、`models/labels.py` loader；tests 拆 `test_compound_calibration.py`（Layer 1）+ `test_label_scoring.py`（Layer 2）；6 錨點 + 28 pytest 全 PASS |
 | 2026-05-15 | 8.1 | Webapp label UI + Tim label：templates/index.html 加 `<select id="label">`、JS Channel B 並列 cards、移除 pre-Phase-8 dose-chip 7-段系統；append-only 加 `tim` label（Tim Wendelboe Filter Recipe 反推） |
 | 2026-05-15 | 9 | Layer 1 grind ceiling 修 coarse↔fine degeneracy：CGA / MEL 加 `ceiling(dial) = exp(coeff × (DIAL_BASE − dial))`（純 exp，符合原則 #4），表面積限制 plateau；coarse-modern Top 1 從 dial 4.3 / 94°C / 120s 修正為 dial 5.9-6.0 / 97-98°C / 180-210s（真粗 + 長）。額外加 label-level `dial_prefer` override（每個 label 自帶 archetypal 研磨偏好），覆寫 ROAST_TABLE roast-level prefer |
+| 2026-05-21~22 | 10 | 感官重新奠基：6 化合物 → 10 cotter CATA 屬性；管線 `旋鈕→薄 Layer 1→TDS/EY→Layer 2→10 屬性→距離`；`label` 概念移除（per-roast IDEAL）；水質整組移除；無 0–100 評分。Step 1–7 完成，詳見 `docs/PHASE10_*` |
+| 2026-05-22 | 11 | 迴圈引擎：per-roast (1+λ) 演化搜尋，三杯循環 `[實驗1,實驗2,冠軍重泡]` 狀態機 + digest + skip + flag 偵測 + changelog（`models/loop.py`）；命名配方庫（`models/saved.py`）；webapp 模式頁籤 + 單杯提案 + 跳過 + 重製鈕。75 pytest PASS。詳見 [`docs/PHASE11_LOOP_ENGINE.md`](docs/PHASE11_LOOP_ENGINE.md) |
 
 詳細實作見下方各 Phase section。
 
