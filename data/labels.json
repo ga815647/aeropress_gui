@@ -1,7 +1,7 @@
 {
   "_schema": {
     "version": 5,
-    "note": "Phase 10 per-roast sensory IDEAL. LABEL CONCEPT REMOVED (2026-05-21 — blueprint docs/PHASE10_SENSORY_REFOUNDING.md §0): for a fixed bean+roast+brewer there is a single 'good', not N co-equal flavor targets — so the v4 multi-label islands (balanced/acid-forward/sweet-body/coarse-modern/tim) are dropped. Layer 2 target = ONE 6-axis sensory IDEAL per roast; axes = acidity/sweetness/body/bitterness/astringency/roast in models.sensory.SENSORY_AXES order. Each IDEAL = predict_axes(**anchor_brew). Confidence tiers: medium_light = literature anchor (Hoffman, measured TDS, stable); light = user tim feedback (re-derived at Phase 10 Step 4 through the new thin Layer 1 models/layer1.py; still provisional — tim is not a Layer 1 calibration anchor); medium / moderately_dark = deterministic placeholders. Filename labels.json + module models/labels.py keep their (now-misnomer) names until Step 5 rewrites the scoring chain. After Step 3 the old scoring chain (models/scoring.py, models/labels.py:ideal_abs, diagnose_anchor.py, tests/) is stale until Step 5/7 — expected Phase 10 transitional state. Detail: docs/PHASE10_STEP3_LABELS.md.",
+    "note": "Phase 10 per-roast sensory IDEAL. LABEL CONCEPT REMOVED (2026-05-21 — blueprint docs/PHASE10_SENSORY_REFOUNDING.md §0): for a fixed bean+roast+brewer there is a single 'good', not N co-equal flavor targets — so the v4 multi-label islands (balanced/acid-forward/sweet-body/coarse-modern/tim) are dropped. Layer 2 target = ONE 6-axis sensory IDEAL per roast; axes = acidity/sweetness/body/bitterness/astringency/roast in models.sensory.SENSORY_AXES order. Each IDEAL = predict_axes(**anchor_brew). Confidence tiers: medium_light = user ⭐5 feedback cup (Tier A — re-derived 2026-05-22 from the user's logged 'impeccable' brew, replaces the earlier Hoffman literature anchor; n=2 consistent ⭐5 cups); light = user tim feedback (re-derived at Phase 10 Step 4 through the new thin Layer 1 models/layer1.py; still provisional — tim is not a Layer 1 calibration anchor); medium / moderately_dark = deterministic placeholders (predict_axes at medium_light's reference brew point + roast offset). Filename labels.json + module models/labels.py keep their (now-misnomer) names until Step 5 rewrites the scoring chain. After Step 3 the old scoring chain (models/scoring.py, models/labels.py:ideal_abs, diagnose_anchor.py, tests/) is stale until Step 5/7 — expected Phase 10 transitional state. Detail: docs/PHASE10_STEP3_LABELS.md.",
     "fields": {
       "ideal": "6 sensory axis target intensities (acidity/sweetness/body/bitterness/astringency/roast). Scale = CATA detection frequency, nominally [0,1]; do NOT sum to 1 — independent intensities, not mass fractions. Bullseye for the Step 5 sensory-space distance score.",
       "anchor_brew": "the Layer 1 point {tds,ey,roast,dial} the IDEAL was derived from via predict_axes(). Traceability / reproducibility / Step 4 thin-Layer-1 calibration reference. NOT a scoring field.",
@@ -16,21 +16,21 @@
     "description": "淺焙（Nordic 真淺焙 / Tim Wendelboe 風）。roast 軸為各焙度最低、酸質為各焙度最高（明亮）。模型尚無『淺焙明亮 vs 悶』訊號 → feedback 第一精修對象。"
   },
   "medium_light": {
-    "ideal": {"acidity": 0.2743, "sweetness": 0.1660, "body": 0.0583, "bitterness": 0.2865, "astringency": 0.1638, "roast": 0.2723},
-    "anchor_brew": {"tds": 1.23, "ey": 21.0, "roast": "medium_light", "dial": 4.3},
-    "seed": "Hoffman literature anchor — measured TDS 1.23, stable across the Step 4 Layer 1 rewrite (Hoffman is itself a Layer 1 calibration anchor). The user's two ⭐5 feedback cups recompute to ~1.23/18 and sit only dist 0.043 from this IDEAL → independent confirmation that the Hoffman target is this user's 'good'.",
-    "description": "中淺焙（Hoffman El Tambo 風；本系統校準最紮實的焙度）。六軸皆不極端、酸與苦適中、帶焙烤底韻。"
+    "ideal": {"acidity": 0.3243, "sweetness": 0.1575, "body": 0.0714, "bitterness": 0.3284, "astringency": 0.1653, "roast": 0.2850},
+    "anchor_brew": {"tds": 1.3537, "ey": 19.9203, "roast": "medium_light", "dial": 4.4},
+    "seed": "user ⭐5 feedback cup — RE-DERIVED 2026-05-22, replaces the earlier Hoffman literature anchor (TDS 1.23). Source = the user's logged 'impeccable' (無可挑剔) medium_light brew: 94°C / dial 4.4 / 24g / 150s / XL 400ml, recomputed through the Phase 10 Step 4 thin Layer 1 → TDS 1.354 / EY 19.92. Rationale: Hoffman's 'Brewing for Balance' recipe is a respected reference, not an objective optimum — cotter hedonic-liking data shows no single 'best' exists (liking near-flat, 1.25 spread on a ~9-pt scale across all 27 cells; consumers split into two clusters with opposite optima, TDS 1.50/EY 16.6% vs TDS 1.05/EY 20.9%). For a single-user system the authoritative target is the user's own ⭐5 cup. Confidence: Tier A — n=2 mutually consistent ⭐5 cups (the other, 93°C/4.3, sits only 6-axis dist 0.002 from this IDEAL).",
+    "description": "中淺焙。校準在使用者實測 ⭐5 杯（94°C/4.4/24g/150s，使用者評『無可挑剔』）。相對 Hoffman 文獻杯，本 IDEAL 更酸、更苦、body 略厚 —— 此為使用者偏好，非文獻平均。"
   },
   "medium": {
-    "ideal": {"acidity": 0.2393, "sweetness": 0.1460, "body": 0.0683, "bitterness": 0.3215, "astringency": 0.1738, "roast": 0.3323},
-    "anchor_brew": {"tds": 1.23, "ey": 21.0, "roast": "medium", "dial": 4.3},
-    "seed": "PLACEHOLDER — deterministic: predict_axes at medium_light's brew point (1.23/21/dial 4.3) with the `medium` roast offset. No anchor, no feedback. Refine when a medium-roast cup is logged.",
+    "ideal": {"acidity": 0.2893, "sweetness": 0.1375, "body": 0.0814, "bitterness": 0.3634, "astringency": 0.1753, "roast": 0.3450},
+    "anchor_brew": {"tds": 1.3537, "ey": 19.9203, "roast": "medium", "dial": 4.4},
+    "seed": "PLACEHOLDER — deterministic: predict_axes at medium_light's reference brew point (1.3537/19.92/dial 4.4 — the user's ⭐5 cup) with the `medium` roast offset. No anchor, no feedback. Refine when a medium-roast cup is logged.",
     "description": "中焙。佔位用 —— 無錨點、無 feedback，沿 _ROAST_OFFSET 自 medium_light 推得。"
   },
   "moderately_dark": {
-    "ideal": {"acidity": 0.1893, "sweetness": 0.1160, "body": 0.0883, "bitterness": 0.3715, "astringency": 0.1888, "roast": 0.4123},
-    "anchor_brew": {"tds": 1.23, "ey": 21.0, "roast": "moderately_dark", "dial": 4.3},
-    "seed": "PLACEHOLDER — deterministic: predict_axes at medium_light's brew point (1.23/21/dial 4.3) with the `moderately_dark` roast offset. No anchor, no feedback.",
+    "ideal": {"acidity": 0.2393, "sweetness": 0.1075, "body": 0.1014, "bitterness": 0.4134, "astringency": 0.1903, "roast": 0.4250},
+    "anchor_brew": {"tds": 1.3537, "ey": 19.9203, "roast": "moderately_dark", "dial": 4.4},
+    "seed": "PLACEHOLDER — deterministic: predict_axes at medium_light's reference brew point (1.3537/19.92/dial 4.4 — the user's ⭐5 cup) with the `moderately_dark` roast offset. No anchor, no feedback.",
     "description": "中深焙。佔位用 —— 無錨點、無 feedback，沿 _ROAST_OFFSET 自 medium_light 推得。"
   }
 }

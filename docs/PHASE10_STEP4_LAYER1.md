@@ -161,7 +161,9 @@ tim n=3 bracket **仍正確排序**（感官距離 ⭐4 0.000 < ⭐3 0.033 < ⭐
 
 ---
 
-## 6. 發現 / 開放項目（medium_light，交給 Step 5）
+## 6. 發現 / 開放項目（medium_light）
+
+> **更新 2026-05-22（使用者裁決後落實）：** 下列兩個發現**已處理** —— medium_light IDEAL 已用使用者 ⭐5 杯重新校準（94°C/4.4/24g/150s XL → TDS 1.354/EY 19.92，取代 Hoffman 文獻錨點），medium / moderately_dark placeholder 一併重算到新參考點。依據:cotter hedonic-liking 資料證實無「客觀最好」（喜好曲面近乎平、消費者分兩群偏好相反）→ 單人系統以使用者實測 ⭐5 為準。詳見 `data/labels.json` medium_light `seed`。§6 本文保留 Step 4 當下的發現紀錄。
 
 Step 4 **不動** `labels.json` 的 medium_light / medium / moderately_dark（Step 3 將 medium_light 定為 Tier A frozen）。但新 Layer 1 暴露兩個 medium_light 相關事實，需 Step 5 處理：
 
