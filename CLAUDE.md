@@ -26,6 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Phase 10 + Phase 11 都已完成、合進 `main`。** 系統現在是:
 
+- **架構意圖** —— Hoffman 是 Layer 1 的**一次性校準錨點**(`E_MAX_REF` 由它解出一次、`diagnose_anchor.py` 做回歸守護),**不是持續調整的目標**;系統的所有**持續目標都是使用者的 cup feedback** —— per-roast IDEAL = 你的杯子,迴圈在搜尋。Layer 2 不存在「外部風味錨點」(April / Champion / Hedrick 等都是歷史文獻、無功能)。
 - **管線:** `knobs → models/layer1.py:brew → {TDS, EY} → models/sensory.py:predict_attributes → 10 感官屬性 → models/distance.py:attribute_distance → 距該焙度 IDEAL 的 RMS`。沒有 0–100 評分;排序的數字就是顯示的數字。詳見 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 - **per-roast IDEAL 信心分層** —— `medium_light` = 使用者 ⭐5 杯(Tier A);`light` = tim feedback(暫定,tim 不是 Layer 1 錨點);`medium` / `moderately_dark` = 佔位,待該焙度有 feedback 才真錨定。
 - **Phase 11 迴圈引擎是主要精修機制** —— per-roast (1+λ) 演化搜尋,三杯循環 `[實驗1, 實驗2, 冠軍重泡]`,使用者用 §4 對照問卷比較,系統往使用者偏好收斂(約 10–30 杯)。webapp 點「迴圈精修」頁籤進入。詳見 [`docs/PHASE11_LOOP_ENGINE.md`](docs/PHASE11_LOOP_ENGINE.md)。
@@ -82,23 +83,6 @@ python -m pytest tests/       # 75 PASS
 
 ---
 
-## Layer 1 校準錨點 — Hoffman(純浸泡)
-
-`models/layer1.py` 的唯一錨定點。`E_MAX_REF` 由它解出(讓 predicted TDS = 實測 1.23%),其餘 4 個參數(`TAU_REF` / `ALPHA` / `GAMMA` / `K_RATIO`)是物理先驗。
-
-| 參數 | Hoffman 實測 | 模型對應 |
-|------|------------|---------|
-| TDS | 1.23%(實測) | `diagnose_anchor.py`: assert `\|predicted − 1.23\| ≤ 0.05` |
-| EY | 20–22% | `diagnose_anchor.py` band `[17, 23]`(EY 不進評分,只做合理性 sanity)|
-| 研磨 | 450–600µm EK43 ≈ ZP6 dial 4.3 | `models/layer1.py:DIAL_REF = 4.3` |
-| 水溫 | 97.8°C (208°F) | `T_REF = 98.0` |
-| 浸泡 | 2:00 → swirl → press | 錨點檢查 `fixed_steep = 120s` |
-| 劑量 / 水量 | 11g / 200ml | — |
-
-**注意:April / Championship 已不是 Layer 1 錨點。** Phase 10 Step 4 把它們剔除 —— 它們是技法沖煮(半密封 / 倒置 + agitation),屬「不同黑箱」,不該用來校準純浸泡模型(`docs/PHASE10_STEP4_LAYER1.md` §6)。三錨點完整食譜仍在 [`BREW_PROTOCOL.md`](BREW_PROTOCOL.md),當歷史 / 感官參考。
-
----
-
 ## 模型設計原則(紅線,禁止偏離)
 
 **好喝不好喝跟「怎麼泡」無關。系統只看杯中物 —— Layer 2 預測的 10 感官屬性。**
@@ -124,11 +108,11 @@ python -m pytest tests/       # 75 PASS
    - **distance(`models/distance.py`)—— 純未加權 RMS。** 沒有 `tds_factor`、沒有 floor、沒有 ratio bonus、沒有加權。閘門過了的 10 個屬性等權進入。
    - **代價(歷史教訓):** 任一層偷塞閾值或補丁 → 模型自我鑑別力下降(→ 違反 #3)→ 評分得靠 process-variable 後置 gate 補救(`acid_trap = sigmoid(temp − 96) × sigmoid(120 − steep)`)→ 補丁治標、根因仍在模組內部的非物理 gate。Phase 8/9 累積的這類補丁就是 Phase 10 重寫的動機。
 
-5. **錨點兩層:Layer 1 物理校準錨點 vs Layer 2 感官目標** —— 嚴格角色分工,共用數字、不同角色:
-   - **Layer 1 物理校準錨點** —— 唯一是 **Hoffman**(98°C / dial 4.3 / 120s / 11g / 200ml → 實測 TDS 1.23%)。`E_MAX_REF` 由它解出。**與好不好喝無關** —— 它只回答「物理模型對不對」。可以無限多(多了只是更多 fit 點,不會互相打架);April / Champion 是技法沖煮,**剔除**。
-   - **Layer 2 感官目標(per-roast IDEAL)** —— 每個焙度一份 10 屬性目標(`data/ideal.json`)。**這是 Phase 11 迴圈在搜尋的移動靶,不是手設的固定靶。** `medium_light` = 使用者 ⭐5 杯(Tier A);`light` = tim feedback(暫定);`medium` / `moderately_dark` = 佔位,待 feedback 校準。可以有「沒對應感官目標的純物理錨點」(只進 Layer 1)、也可以有「沒對應物理錨點的感官目標」(per-roast IDEAL 都靠 feedback,不需要對應物理錨點)。
-   - **違反此原則的徵兆:** 加新焙度時動到舊焙度的分數;改某焙度 IDEAL 動到 Hoffman 的物理重現 —— 兩層沒拆乾淨。
-   - **歷史(供對照):** Phase 4 加 Hedrick 時打亂 Hoffman / April 的分數,就是這條原則沒落實的症狀;Phase 8 拆 label 島、Phase 10 改 per-roast IDEAL,把兩層的角色完全分開,該症狀絕跡。
+5. **物理校準 vs 感官目標,不互相動** —— 系統有**一個** Layer 1 物理校準點(Hoffman,one-shot 解出 `E_MAX_REF`、`diagnose_anchor.py` 做回歸守護;規格 hard-coded 在 `diagnose_anchor.py` 與 [`models/layer1.py`](models/layer1.py) 的 `DIAL_REF` / `T_REF` 等),與**一組** per-roast 感官目標([`data/ideal.json`](data/ideal.json),Phase 11 迴圈在搜尋的移動靶 = 使用者的杯子)。兩個角色不准互換:
+   - 別動 `E_MAX_REF` / `models/layer1.py` 參數去修苦感 → 該動 `data/ideal.json` 或讓迴圈跑。
+   - 別動 `data/ideal.json` 去修 TDS 預測 → 該動 Layer 1。
+   - **Phase 10/11 沒有「外部風味錨點」** —— April / Champion / Hedrick 是歷史文獻、無功能;[`BREW_PROTOCOL.md`](BREW_PROTOCOL.md) 留作歷史對照。
+   - **違反此原則的徵兆:** 加新焙度時動到舊焙度的分數;改某焙度 IDEAL 動到 Hoffman 的物理重現。
 
 ### 原則 #1 vs #4 的關係
 

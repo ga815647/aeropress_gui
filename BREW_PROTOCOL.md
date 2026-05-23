@@ -1,8 +1,19 @@
 # 泡法時間軸與參數定義
 
-> 這份文件是 `compounds.py` / `optimizer.py` / `diagnose_anchor.py` / `terminal.py`
-> 之間所有時間參數的單一真相來源。Session 間如果搞不清楚「哪個參數對應哪個動作」，
-> 先看這裡再讀程式碼。
+> ⚠️ **Phase 8 文件 — 大半已過期。** 本檔描述的大多時間參數(`effective_steep` /
+> `t_kinetic` / `press_equiv` / `pour_offset` / `drip_time` / `press_perc_*` /
+> `swirl_mult`)隨 `compounds.py` / `ey_model.py` / `tds_model.py` 在 Phase 10
+> 一併刪除。Phase 10/11 的 Layer 1([`models/layer1.py`](models/layer1.py))**只有
+> 一個時間項**:`t_eff = steep_sec + T_PRESS_OFFSET(=10s)` —— 不再有上面那一堆。
+>
+> 本檔目前的有效內容只剩 **§3 三錨點食譜的原始參數**(劑量 / 研磨 / 水溫 / 浸泡
+> 時間)—— 純歷史 / 感官對照。其中**只有 Hoffman 是活的 Layer 1 校準錨點**;
+> April / Championship 是技法沖煮,Phase 10 Step 4 已從 Layer 1 錨點集**剔除**
+> (見 [`docs/PHASE10_STEP4_LAYER1.md`](docs/PHASE10_STEP4_LAYER1.md) §6)。
+>
+> §1 時間參數總表 / §4 常見陷阱 / §5 cheatsheet 描述的是 `compound-model-legacy`
+> branch 上的程式;**`main` 上沒有那些 module 或常數**。整份目前的角色是
+> compound-era 歷史 + 三錨點食譜原始資料。
 
 ## 1. 時間參數總表
 
@@ -62,6 +73,13 @@ t=0:00                                                          steep_sec       
 ---
 
 ## 3. 三錨點時間圖
+
+> **Phase 10/11 重點:** 三錨點中**只有 Hoffman** 是活的 Layer 1 校準錨點
+> (`models/layer1.py` 用它解出 `E_MAX_REF`)。**April / Championship 已從 Layer 1
+> 錨點集剔除** —— 它們是技法沖煮(半密封 / 倒置 + agitation),屬「不同黑箱」,
+> 不該用來校準純浸泡模型(見 [`docs/PHASE10_STEP4_LAYER1.md`](docs/PHASE10_STEP4_LAYER1.md) §6)。
+> 本節 April / Championship 的時間軸描述為 `compound-model-legacy` branch 上的實作
+> 細節,純歷史對照;`main` 不再依時序模擬這兩個食譜。
 
 ### Hoffman 平衡（standard / 11g / 200ml / 98°C / steep=120）
 
