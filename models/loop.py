@@ -109,9 +109,35 @@ def _load() -> dict:
         return {}
     try:
         with _STATE_PATH.open(encoding="utf-8") as handle:
-            return json.load(handle)
+            state = json.load(handle)
     except (json.JSONDecodeError, OSError):
         return {}
+    return _migrate(state)
+
+
+def _migrate(state: dict) -> dict:
+    """Lossless in-place migrations for pre-2026-05-23 loop_state.json files.
+
+    1. Field rename: `last_champion_cup` -> `last_cup` (the cross-cycle anchor
+       in the new [exp1, champion, exp2] ordering is prev cycle's exp2, not its
+       champion-rebrew — so the old name is misleading).
+    2. Slot reorder: old `[exp1, exp2, champion]` -> new `[exp1, champion, exp2]`,
+       but ONLY when all three slots are still pending. A cycle whose brewed
+       feedback already chained to specific neighbor cups under the old order
+       is not silently rearranged (its `compared_to` edges would no longer
+       match the new digest's expectations) — the user should reset that loop.
+    """
+    for loop in state.values():
+        if "last_champion_cup" in loop and "last_cup" not in loop:
+            loop["last_cup"] = loop.pop("last_champion_cup")
+        cycle = loop.get("cycle") or {}
+        slots = cycle.get("slots") or []
+        roles = [s.get("role") for s in slots]
+        if (roles == ["exp1", "exp2", "champion"]
+                and all(s.get("status") == "pending" for s in slots)):
+            by_role = {s["role"]: s for s in slots}
+            cycle["slots"] = [by_role["exp1"], by_role["champion"], by_role["exp2"]]
+    return state
 
 
 def _save(state: dict) -> None:

@@ -188,6 +188,82 @@ def test_reset_loop_starts_fresh(lp):
     assert L["generation"] == 0 and L["cycle"]["index"] == 1 and L["history"] == []
 
 
+def test_migration_reorders_old_slot_layout(lp, tmp_path):
+    """A loop_state.json written before the 2026-05-23 reorder has slots in
+    [exp1, exp2, champion] order. _load() should reorder them in place to
+    [exp1, champion, exp2] when nothing is brewed yet (lossless)."""
+    import json
+    old_state = {
+        "medium_light": {
+            "roast": "medium_light", "brewer": "xl", "temp": 95.0,
+            "water_ml": 400, "generation": 0,
+            "champion": {"dial": 4.5, "steep_sec": 150, "dose": 24.0,
+                         "recipe_id": "x", "source": "seed"},
+            "last_champion_cup": None,   # old field name
+            "history": [],
+            "cycle": {"index": 1, "slots": [
+                {"role": "exp1", "status": "pending",
+                 "recipe": {"dial": 4.4, "steep_sec": 150, "dose": 24.0},
+                 "recipe_id": "a", "feedback_timestamp": None,
+                 "feedback_overall": None, "feedback_compared_to": None,
+                 "skips": 0, "skipped": [], "move": ["dial", -1]},
+                {"role": "exp2", "status": "pending",
+                 "recipe": {"dial": 4.5, "steep_sec": 120, "dose": 24.0},
+                 "recipe_id": "b", "feedback_timestamp": None,
+                 "feedback_overall": None, "feedback_compared_to": None,
+                 "skips": 0, "skipped": [], "move": ["steep_sec", -1]},
+                {"role": "champion", "status": "pending",
+                 "recipe": {"dial": 4.5, "steep_sec": 150, "dose": 24.0},
+                 "recipe_id": "c", "feedback_timestamp": None,
+                 "feedback_overall": None, "feedback_compared_to": None,
+                 "skips": 0, "skipped": [], "move": None},
+            ]},
+        }
+    }
+    lp._STATE_PATH.write_text(json.dumps(old_state), encoding="utf-8")
+    L = lp.get_loop("medium_light")
+    assert [s["role"] for s in L["cycle"]["slots"]] == ["exp1", "champion", "exp2"]
+    assert "last_champion_cup" not in L          # renamed
+    assert "last_cup" in L
+
+
+def test_migration_skips_reorder_when_a_cup_is_brewed(lp):
+    """Half-brewed old-order cycle: leave the slots alone — its feedback
+    chained to specific neighbor cups under the old order, silent reordering
+    would orphan those edges. User should reset that loop to start fresh."""
+    import json
+    old_state = {
+        "light": {
+            "roast": "light", "brewer": "xl", "temp": 98.0, "water_ml": 400,
+            "generation": 0,
+            "champion": {"dial": 3.7, "steep_sec": 60, "dose": 25.0,
+                         "recipe_id": "x", "source": "seed"},
+            "last_champion_cup": None, "history": [],
+            "cycle": {"index": 1, "slots": [
+                {"role": "exp1", "status": "brewed",   # already brewed
+                 "recipe": {"dial": 3.6, "steep_sec": 60, "dose": 25.0},
+                 "recipe_id": "a", "feedback_timestamp": "2026-05-23T08:00:00+08:00",
+                 "feedback_overall": ">", "feedback_compared_to": None,
+                 "skips": 0, "skipped": [], "move": ["dial", -1]},
+                {"role": "exp2", "status": "pending",
+                 "recipe": {"dial": 3.7, "steep_sec": 90, "dose": 25.0},
+                 "recipe_id": "b", "feedback_timestamp": None,
+                 "feedback_overall": None, "feedback_compared_to": None,
+                 "skips": 0, "skipped": [], "move": ["steep_sec", 1]},
+                {"role": "champion", "status": "pending",
+                 "recipe": {"dial": 3.7, "steep_sec": 60, "dose": 25.0},
+                 "recipe_id": "c", "feedback_timestamp": None,
+                 "feedback_overall": None, "feedback_compared_to": None,
+                 "skips": 0, "skipped": [], "move": None},
+            ]},
+        }
+    }
+    lp._STATE_PATH.write_text(json.dumps(old_state), encoding="utf-8")
+    L = lp.get_loop("light")
+    # left untouched because exp1 is brewed
+    assert [s["role"] for s in L["cycle"]["slots"]] == ["exp1", "exp2", "champion"]
+
+
 def test_loops_are_per_roast(lp):
     lp.start_loop("medium_light", brewer="xl", temp=95.0)
     lp.start_loop("light", brewer="xl", temp=98.0)
