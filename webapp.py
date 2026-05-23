@@ -66,7 +66,7 @@ def _serialize_proposal(proposal: dict,
     """A loop proposal -> the JSON the loop card consumes. Same 10-attribute /
     distance shape as an optimizer result, plus the loop context."""
     card = _serialize_result(proposal, feedback_index)
-    for key in ("role", "role_index", "cycle_index", "generation", "skips",
+    for key in ("role", "role_index", "kind", "cycle_index", "generation", "skips",
                 "suggested_compared_to", "is_champion_rebrew", "champion"):
         card[key] = proposal.get(key)
     return card

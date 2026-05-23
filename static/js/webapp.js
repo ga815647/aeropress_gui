@@ -1146,12 +1146,22 @@
 
   function renderLoopProposal(p) {
     const accent = ROAST_COLOR[p.roast] || "#1d4ed8";
-    const roleText = { 1: "實驗 A · 冠軍的單旋鈕擾動",
-                       2: "冠軍重泡 · 重新錨定味覺記憶",
-                       3: "實驗 B · 冠軍的單旋鈕擾動" }[p.role_index];
-    const badge = p.is_champion_rebrew
-      ? `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`
-      : `<div class="loop-proposal-badge">這是冠軍的擾動實驗 — 靠喝評判，別靠讀數字挑。距離只是參考。</div>`;
+    const isLeap = p.kind === "leap";
+    const roleText = p.is_champion_rebrew
+      ? "冠軍重泡 · 重新錨定味覺記憶"
+      : (p.role_index === 1
+          ? "實驗 A · 冠軍的單旋鈕擾動"
+          : (isLeap
+              ? "實驗 B · 多旋鈕大跳（joint 探索）"
+              : "實驗 B · 冠軍的單旋鈕擾動"));
+    let badge;
+    if (p.is_champion_rebrew) {
+      badge = `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`;
+    } else if (isLeap) {
+      badge = `<div class="loop-proposal-badge is-leap">🎯 <strong>LEAP · 多旋鈕大跳</strong> —— 不是單旋鈕擾動，而是模型 Top-N 裡離冠軍結構遠的好候選。用來跨 saddle、檢驗冠軍是否其實在錯誤 basin。靠喝評判，別靠讀數字挑。</div>`;
+    } else {
+      badge = `<div class="loop-proposal-badge">這是冠軍的單旋鈕擾動 — 靠喝評判，別靠讀數字挑。距離只是參考。</div>`;
+    }
     const firstCupHint = (p.suggested_compared_to == null)
       ? `<div class="loop-firstcup-hint">↳ <strong>第一杯小提醒</strong> — 沒有上一杯可對照，下方「整體 / 逐屬性」比較欄會自動藏。填<strong>感想 / 單獨喝 / 星等</strong>任一就能送出，digest 也不需要這杯的 overall。</div>`
       : "";

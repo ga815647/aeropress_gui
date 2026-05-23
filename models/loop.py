@@ -94,6 +94,28 @@ DOSE_RADIUS_0_STD = 1.5        # grams, generation 0 (standard)
 # before it is surfaced as a flag — blueprint §6 discipline 2, one is noise.
 FLAG_REPEAT_THRESHOLD = 2
 
+# ── informed-leap exp2 (Iterated Local Search "kick") ───────────────────────
+# Pure single-knob coordinate descent (the original Phase 11 loop) can't escape
+# saddle points where a multi-knob *joint* recipe is preferred but each
+# 1-knob neighbour is worse-or-equal. So exp2 is a "leap": pulled from the
+# optimizer's Top-N (the model surrogate's good candidates) but filtered to
+# differ from the champion in at least LEAP_KNOB_DIFF_MIN knobs. exp1 remains
+# single-knob — attribution stays clean for the local refine, the leap probes
+# joint regions. Fallback to single-knob exp2 if no leap candidate qualifies
+# (model thinks the entire Top-N is cup-adjacent to the champion).
+LEAP_TOP_N = 30
+LEAP_KNOB_DIFF_MIN = 2
+
+# SCA Gold Cup sanity gate — don't let the surrogate's far-Top-N leap land
+# at an under-extracted / over-concentrated cup just because the model
+# *thinks* its predicted attributes look fine. The "Gold Cup" box is the
+# universally-accepted "well-brewed" region; a leap that proposes outside
+# it is asking the user to brew an obviously dud cup. Anchors slightly
+# outside (e.g. medium_light IDEAL at TDS≈1.37) are explicitly fine for
+# the *champion* to sit at — the gate only constrains the *leap proposal*.
+GOLD_CUP_TDS_RANGE = (1.15, 1.35)   # SCA Gold Cup brew strength, %
+GOLD_CUP_EY_RANGE = (18.0, 22.0)    # SCA Gold Cup extraction yield, %
+
 _KNOBS = ("dial", "steep_sec", "dose")
 _SLOT_ROLES = ("exp1", "champion", "exp2")  # brew order — see module doc
 
@@ -248,7 +270,10 @@ def _cycle_rng(roast: str, generation: int, cycle_index: int, salt: int = 0) -> 
 
 
 def _new_slot(role: str, recipe: dict, move, roast: str, brewer_size: str,
-              temp: float) -> dict:
+              temp: float, kind: str | None = None) -> dict:
+    """Build a cycle slot. `kind` annotates how an experiment was generated:
+    "single" = local single-knob perturbation, "leap" = surrogate-guided
+    multi-knob jump (informed leap), None = champion re-brew slot."""
     return {
         "role": role,
         "recipe": recipe,
@@ -257,6 +282,7 @@ def _new_slot(role: str, recipe: dict, move, roast: str, brewer_size: str,
             steep_sec=recipe["steep_sec"], temp=temp, dose=recipe["dose"],
         ),
         "move": list(move) if move else None,
+        "kind": kind,
         "status": "pending",
         "skips": 0,
         "skipped": [],
@@ -264,6 +290,83 @@ def _new_slot(role: str, recipe: dict, move, roast: str, brewer_size: str,
         "feedback_overall": None,
         "feedback_compared_to": None,
     }
+
+
+def _informed_leap_candidate(loop: dict, exp1_recipe: dict,
+                             extra_excluded_ids: set = frozenset()):
+    """Surrogate-guided exp2 candidate — the Iterated Local Search "kick".
+
+    Strategy: pull the optimizer's Top-N (model says it's good — close to the
+    roast IDEAL), then filter to recipes that
+    (a) differ from the champion in ≥ LEAP_KNOB_DIFF_MIN knobs (true multi-knob
+        leap, escapes coordinate-descent saddles),
+    (b) are not the exp1 recipe (don't duplicate the local-refine candidate),
+    (c) have no prior feedback in the log (every brewed cup should be new info),
+    (d) are not in `extra_excluded_ids` (used by skip re-roll to avoid the
+        recipe the user just declined).
+    Among the survivors, pick the one structurally MOST distant from the
+    champion — maximize information gain per cup.
+
+    Returns the knob recipe dict, or None when nothing qualifies (e.g. the
+    model thinks the entire Top-N is cup-adjacent to the champion). The
+    caller falls back to single-knob exp2 when None.
+    """
+    champion = loop["champion"]
+    champ_knobs = _knob_recipe(champion)
+    exp1_id = compute_recipe_id(
+        roast=loop["roast"], brewer=loop["brewer"],
+        dial=exp1_recipe["dial"], steep_sec=exp1_recipe["steep_sec"],
+        temp=loop["temp"], dose=exp1_recipe["dose"],
+    )
+
+    try:
+        candidates = optimize(
+            roast_code=loop["roast"], brewer_size=loop["brewer"],
+            temp=loop["temp"], top_n=LEAP_TOP_N,
+        )
+    except (KeyError, IndexError):  # bad roast / empty grid — no leap
+        return None
+
+    brewed_ids = {
+        e.get("recipe_id") for e in read_all_feedback() if e.get("recipe_id")
+    }
+    excluded = brewed_ids | set(extra_excluded_ids) | {exp1_id}
+
+    dose_step = 1.0 if loop["brewer"] == "xl" else 0.5
+
+    def _normed_l1(k):
+        """Distance to champion in normalised grid-steps (each knob counted in
+        its own step units so dial vs steep vs dose are commensurable)."""
+        return (
+            abs(k["dial"] - champ_knobs["dial"]) / constants.DIAL_STEP
+            + abs(k["steep_sec"] - champ_knobs["steep_sec"]) / constants.STEEP_STEP
+            + abs(k["dose"] - champ_knobs["dose"]) / dose_step
+        )
+
+    far = []
+    for c in candidates:
+        if c["recipe_id"] in excluded:
+            continue
+        # SCA Gold Cup gate: a leap that lands outside the universally-good
+        # box is a dud regardless of how good the model says its attributes
+        # are. (The champion may itself sit slightly outside — that's its
+        # business; the leap proposal must stay in the box.)
+        if not (GOLD_CUP_TDS_RANGE[0] <= c["tds"] <= GOLD_CUP_TDS_RANGE[1]):
+            continue
+        if not (GOLD_CUP_EY_RANGE[0] <= c["ey"] <= GOLD_CUP_EY_RANGE[1]):
+            continue
+        c_knobs = {k: c[k] for k in _KNOBS}
+        if c_knobs == champ_knobs:
+            continue
+        knob_diffs = sum(1 for k in _KNOBS if c_knobs[k] != champ_knobs[k])
+        if knob_diffs < LEAP_KNOB_DIFF_MIN:
+            continue
+        far.append(c_knobs)
+
+    if not far:
+        return None
+    far.sort(key=_normed_l1, reverse=True)
+    return far[0]
 
 
 def _build_cycle(loop: dict, cycle_index: int) -> dict:
@@ -278,21 +381,38 @@ def _build_cycle(loop: dict, cycle_index: int) -> dict:
     moves = _valid_moves(champion, generation, roast, brewer, water_ml)
     slots: list[dict] = []
 
+    # exp1 — single-knob local refine (attribution stays clean).
     pick1 = _pick_experiment(moves, rng, set(), set())
     if pick1 is None:  # champion boxed into a corner — degenerate, re-brew it
         pick1 = ((None, 0), _knob_recipe(champion))
-    pick2 = _pick_experiment(
-        moves, rng, {pick1[0][0]} if pick1[0][0] else set(), {pick1[0]},
-    )
-    if pick2 is None:
-        pick2 = pick1
+    exp1_recipe = pick1[1]
+
+    # exp2 — informed leap (Iterated Local Search "kick", multi-knob from the
+    # surrogate's Top-N). Falls back to single-knob when the model thinks the
+    # whole Top-N is cup-adjacent to the champion.
+    leap_recipe = _informed_leap_candidate(loop, exp1_recipe)
+    if leap_recipe is not None:
+        exp2_recipe = leap_recipe
+        exp2_move = None        # leap has no single (knob, sign)
+        exp2_kind = "leap"
+    else:
+        pick2 = _pick_experiment(
+            moves, rng, {pick1[0][0]} if pick1[0][0] else set(), {pick1[0]},
+        )
+        if pick2 is None:
+            pick2 = pick1
+        exp2_recipe = pick2[1]
+        exp2_move = pick2[0]
+        exp2_kind = "single"
 
     # Brew order [exp1, champion, exp2] — champion in the middle so BOTH
     # experiments are cup-adjacent to it (direct exp↔champion edges, every cycle).
-    slots.append(_new_slot("exp1", pick1[1], pick1[0], roast, brewer, temp))
+    slots.append(_new_slot("exp1", exp1_recipe, pick1[0], roast, brewer, temp,
+                           kind="single"))
     slots.append(_new_slot("champion", _knob_recipe(champion), None,
                            roast, brewer, temp))
-    slots.append(_new_slot("exp2", pick2[1], pick2[0], roast, brewer, temp))
+    slots.append(_new_slot("exp2", exp2_recipe, exp2_move, roast, brewer, temp,
+                           kind=exp2_kind))
     return {"index": cycle_index, "slots": slots}
 
 
@@ -380,6 +500,7 @@ def _digest(loop: dict) -> dict:
         "cycle_index": loop["cycle"]["index"],
         "generation": loop["generation"],
         "winner_role": winner_role,
+        "exp2_kind": exp2.get("kind"),      # "leap" / "single" — trace which kicks win
         "edges": {
             "exp1_vs_champ": exp1_vs_champ,
             "exp2_vs_champ": exp2_vs_champ,
@@ -511,6 +632,7 @@ def current_proposal(roast: str) -> dict | None:
         **evaluated,
         "role": slot["role"],
         "role_index": role_index,
+        "kind": slot.get("kind"),       # "single" / "leap" / None (champion slot)
         "cycle_index": loop["cycle"]["index"],
         "generation": loop["generation"],
         "skips": slot["skips"],
@@ -609,6 +731,7 @@ def skip_proposal(roast: str, recipe_id: str) -> dict:
     move, recipe = pick
     slot["recipe"] = recipe
     slot["move"] = list(move)
+    slot["kind"] = "single"  # skip re-rolls via _pick_experiment (single-knob)
     slot["recipe_id"] = compute_recipe_id(
         roast=loop["roast"], brewer=loop["brewer"], dial=recipe["dial"],
         steep_sec=recipe["steep_sec"], temp=loop["temp"], dose=recipe["dose"],

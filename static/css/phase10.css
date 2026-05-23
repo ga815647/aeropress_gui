@@ -470,6 +470,12 @@ body[data-mode="loop"] #submit-button { display: none; }
   background: var(--cobalt-soft);
   color: var(--cobalt-deep);
 }
+.loop-proposal-badge.is-leap {
+  border-left-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber-deep);
+}
+.loop-proposal-badge.is-leap strong { color: var(--amber-deep); font-weight: 700; }
 .loop-firstcup-hint {
   font-family: var(--font-body);
   font-size: var(--t-2xs);

@@ -71,15 +71,79 @@ def test_proposal_is_first_pending_slot(lp):
     assert len(p["attributes"]) == 10 and "distance" in p
 
 
-def test_experiments_are_single_knob_perturbations(lp):
+def test_exp1_is_single_knob_perturbation(lp):
+    """exp1 is always a single-knob local refine (attribution stays clean)."""
     L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
     slots = {s["role"]: s for s in L["cycle"]["slots"]}
     champ = slots["champion"]["recipe"]
-    # each experiment moves exactly one knob; the champion slot re-brews as-is
     assert _knob_diffs(slots["exp1"]["recipe"], champ) == 1
-    assert _knob_diffs(slots["exp2"]["recipe"], champ) == 1
+    assert slots["exp1"]["kind"] == "single"
     assert slots["exp1"]["recipe"] != slots["exp2"]["recipe"]
     assert slots["champion"]["recipe"] == champ
+    assert slots["champion"]["kind"] is None    # champion re-brew, not an experiment
+
+
+def test_exp2_is_informed_leap_when_available(lp):
+    """exp2 is the surrogate-guided 'kick' — model Top-N candidate that differs
+    from the champion in >= LEAP_KNOB_DIFF_MIN knobs. medium_light + XL has a
+    rich enough grid that a leap is essentially always available."""
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    slots = {s["role"]: s for s in L["cycle"]["slots"]}
+    champ = slots["champion"]["recipe"]
+    exp2 = slots["exp2"]
+    assert exp2["kind"] in ("leap", "single")
+    if exp2["kind"] == "leap":
+        assert _knob_diffs(exp2["recipe"], champ) >= lp.LEAP_KNOB_DIFF_MIN
+        assert exp2["move"] is None             # leap has no single (knob, sign)
+    else:
+        # graceful fallback (rare for medium_light XL — model Top-N is rich)
+        assert _knob_diffs(exp2["recipe"], champ) == 1
+
+
+def test_leap_respects_sca_gold_cup(lp):
+    """Every leap exp2 candidate must land in the SCA Gold Cup box
+    (TDS 1.15–1.35%, EY 18–22%) — sanity filter on the surrogate's far-Top-N
+    proposals so a leap never asks the user to brew an under- or over-
+    extracted cup just because predicted attributes look model-good."""
+    import constants
+    from models.layer1 import brew as layer1_brew
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    exp2 = next(s for s in L["cycle"]["slots"] if s["role"] == "exp2")
+    if exp2["kind"] != "leap":
+        pytest.skip("no leap candidate available in this fixture state")
+    water_ml = constants.BREWER_PRESETS["xl"]["water_ml"]
+    r = exp2["recipe"]
+    l1 = layer1_brew("medium_light", 95.0, r["dial"], r["steep_sec"],
+                     r["dose"], water_ml)
+    lo_tds, hi_tds = lp.GOLD_CUP_TDS_RANGE
+    lo_ey, hi_ey = lp.GOLD_CUP_EY_RANGE
+    assert lo_tds <= l1["tds"] <= hi_tds, (
+        f"leap TDS {l1['tds']:.3f}% outside Gold Cup [{lo_tds}, {hi_tds}]")
+    assert lo_ey <= l1["ey"] <= hi_ey, (
+        f"leap EY {l1['ey']:.2f}% outside Gold Cup [{lo_ey}, {hi_ey}]")
+
+
+def test_leap_excludes_already_brewed_recipes(lp):
+    """The leap candidate is filtered against the feedback log — a recipe the
+    user has already given feedback on is not re-proposed as a leap."""
+    import models.feedback as feedback
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    leap_slot = next(s for s in L["cycle"]["slots"] if s["role"] == "exp2")
+    if leap_slot["kind"] != "leap":
+        pytest.skip("no leap candidate available in this fixture state")
+    leap_id = leap_slot["recipe_id"]
+
+    # Submit feedback for the current leap recipe.
+    feedback.append_feedback({
+        "recipe_id": leap_id, "roast": "medium_light", "brewer": "xl",
+        "recipe": {"temp": 95.0, **leap_slot["recipe"]},
+        "comment": "tried it",
+    })
+    # Reset cycle (or trigger a rebuild) and the same leap should not reappear.
+    lp.reset_loop("medium_light")
+    L2 = lp.get_loop("medium_light")
+    exp2 = next(s for s in L2["cycle"]["slots"] if s["role"] == "exp2")
+    assert exp2["recipe_id"] != leap_id
 
 
 def test_champion_slot_rebrews_the_champion(lp):
