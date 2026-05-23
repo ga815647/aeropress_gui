@@ -66,8 +66,10 @@ def _serialize_proposal(proposal: dict,
     """A loop proposal -> the JSON the loop card consumes. Same 10-attribute /
     distance shape as an optimizer result, plus the loop context."""
     card = _serialize_result(proposal, feedback_index)
-    for key in ("role", "role_index", "kind", "cycle_index", "generation", "skips",
-                "suggested_compared_to", "is_champion_rebrew", "champion"):
+    for key in ("role", "role_index", "kind", "move", "stall", "cycle_index",
+                "generation", "skips", "suggested_compared_to",
+                "is_champion_rebrew", "champion", "stall_counter",
+                "stall_rotation_idx"):
         card[key] = proposal.get(key)
     return card
 
@@ -82,11 +84,14 @@ def _serialize_loop(loop: dict) -> dict:
         "champion": loop["champion"],
         "cycle_index": loop["cycle"]["index"],
         "slots": [
-            {"role": s["role"], "status": s["status"], "skips": s["skips"]}
+            {"role": s["role"], "status": s["status"], "skips": s["skips"],
+             "kind": s.get("kind"), "stall": bool(s.get("stall", False))}
             for s in loop["cycle"]["slots"]
         ],
         "history": loop.get("history", []),
         "last_cup": loop.get("last_cup"),
+        "stall_counter": loop.get("stall_counter", 0),
+        "stall_rotation_idx": loop.get("stall_rotation_idx", 0),
         "started_at": loop.get("started_at"),
         "updated_at": loop.get("updated_at"),
     }

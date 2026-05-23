@@ -1111,9 +1111,28 @@
       </header>`;
   }
 
+  function formatStallMoveLabel(knob, sign) {
+    if (!knob) return "";
+    const dirs = sign > 0
+      ? { dial: "更粗 +0.1", steep_sec: "較長 +30s", dose: "較多 +1g" }
+      : { dial: "更細 −0.1", steep_sec: "較短 −30s", dose: "較少 −1g" };
+    const names = { dial: "Dial", steep_sec: "Steep", dose: "Dose" };
+    return `${names[knob] || knob} ${dirs[knob] || (sign > 0 ? "+1" : "−1")}`;
+  }
+
   function renderLoopChampion(loop) {
     const c = loop.champion;
     const src = c.source === "seed" ? "模型 seed（optimizer Top-1）" : "迴圈勝出";
+    const stallCount = loop.stall_counter || 0;
+    const stallRot = loop.stall_rotation_idx || 0;
+    let stallNote = "";
+    if (stallCount >= 3 && stallRot < 6) {
+      stallNote = `<div class="loop-champion-stall is-active">⚙️ STALL-TRIGGER 進行中 · 連續守成 ${stallCount} cycles · ${stallRot}/6 個 1-knob 鄰居已試</div>`;
+    } else if (stallRot >= 6) {
+      stallNote = `<div class="loop-champion-stall is-exhausted">✓ STALL-TRIGGER 已試完 6 個 1-knob 鄰居,冠軍仍守 —— 視為真實局部最佳</div>`;
+    } else if (stallCount > 0) {
+      stallNote = `<div class="loop-champion-stall">連續守成 ${stallCount} cycles（${3 - stallCount} 個 cycle 後將觸發 STALL-TRIGGER）</div>`;
+    }
     return `
       <div class="loop-champion">
         <div class="loop-champion-head">
@@ -1122,6 +1141,7 @@
         </div>
         <div class="loop-champion-recipe">${loop.temp}°C · dial ${formatDial(c.dial)} ·
           ${c.dose}g · steep ${formatTime(c.steep_sec)}</div>
+        ${stallNote}
         ${saveControlHtml({
           roast: loop.roast, brewer: loop.brewer, temp: loop.temp,
           dial: c.dial, steep_sec: c.steep_sec, dose: c.dose,
@@ -1148,18 +1168,28 @@
     const accent = ROAST_COLOR[p.roast] || "#1d4ed8";
     const isLeap = p.kind === "leap";
     const isIso = p.kind === "iso";
+    const isStall = p.stall === true;
+    const stallDirText = (Array.isArray(p.move) && p.move.length === 2)
+      ? formatStallMoveLabel(p.move[0], p.move[1])
+      : "";
     const roleText = p.is_champion_rebrew
       ? "冠軍重泡 · 重新錨定味覺記憶"
       : (p.role_index === 1
-          ? (isIso
-              ? "實驗 A · 同 TDS/EY 探索（iso）"
-              : "實驗 A · 冠軍的單旋鈕擾動")
+          ? (isStall
+              ? `實驗 A · STALL-TRIGGER 單旋鈕（${stallDirText}）`
+              : (isIso
+                  ? "實驗 A · 同 TDS/EY 探索（iso）"
+                  : "實驗 A · 冠軍的單旋鈕擾動"))
           : (isLeap
               ? "實驗 B · 多旋鈕大跳（joint 探索）"
               : "實驗 B · 冠軍的單旋鈕擾動"));
     let badge;
     if (p.is_champion_rebrew) {
       badge = `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`;
+    } else if (isStall) {
+      const rot = p.stall_rotation_idx || 0;
+      const count = p.stall_counter || 0;
+      badge = `<div class="loop-proposal-badge is-stall">⚙️ <strong>STALL-TRIGGER · 連續守成 ${count} cycles</strong> —— 多旋鈕探索（iso/leap）都贏不過冠軍 → 系統開始 burst-test 1-knob 鄰居，看真實峰是不是就差一格。這次測 <code>${escapeHtml(stallDirText)}</code>（${rot}/6 個方向已試）。</div>`;
     } else if (isIso) {
       badge = `<div class="loop-proposal-badge is-iso">🔄 <strong>ISO · 同 TDS/EY 探索</strong> —— 模型認為這杯跟冠軍味道幾乎相同（<code>b_temp=0</code>、弱 grind 假設下）。你若<strong>喝出差別</strong> → 模型在這片區域少了訊號，是高資訊量回饋；<strong>喝不出</strong> → 確認模型假設、零訊號也算結論。</div>`;
     } else if (isLeap) {

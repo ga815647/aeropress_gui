@@ -159,6 +159,109 @@ def test_iso_and_leap_respect_per_roast_steep_cap(lp):
             )
 
 
+def _brew_champion_hold(lp, roast, ts_base):
+    """Brew a cycle where the champion wins — overalls (=, >, <) means
+    cup-2 (champion) > exp1 AND cup-3 (exp2) < champion → champion wins."""
+    import models.feedback as feedback
+    for i, o in enumerate(("=", ">", "<")):
+        p = lp.current_proposal(roast)
+        entry = feedback.append_feedback({
+            "recipe_id": p["recipe_id"], "roast": roast, "brewer": "xl",
+            "timestamp": f"2026-05-23T{ts_base:02d}:{i:02d}:00+08:00",
+            "overall": o, "compared_to": p["suggested_compared_to"],
+            "recipe": {"temp": p["temp"], "dial": p["dial"],
+                       "dose": p["dose"], "steep_sec": p["steep_sec"]},
+            "comment": "c",
+        })
+        lp.register_feedback(roast, p["recipe_id"], entry)
+
+
+def test_stall_counter_increments_on_champion_hold(lp):
+    """Each cycle where the champion holds bumps stall_counter by 1."""
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    assert lp.get_loop("medium_light")["stall_counter"] == 0
+    _brew_champion_hold(lp, "medium_light", 10)
+    assert lp.get_loop("medium_light")["stall_counter"] == 1
+    _brew_champion_hold(lp, "medium_light", 11)
+    assert lp.get_loop("medium_light")["stall_counter"] == 2
+
+
+def test_stall_counter_resets_on_experiment_win(lp):
+    """Any non-champion winner resets stall_counter (and rotation_idx) to 0."""
+    import models.feedback as feedback
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    # First brew two champion-holds so counter = 2
+    _brew_champion_hold(lp, "medium_light", 10)
+    _brew_champion_hold(lp, "medium_light", 11)
+    assert lp.get_loop("medium_light")["stall_counter"] == 2
+    # Now brew a cycle where exp1 wins (overall pattern that makes exp1 win):
+    #   cup-2 (champion vs exp1) = "<" → exp1 beats champion ;
+    #   cup-3 (exp2 vs champion) = "=" → exp2 doesn't beat champion ;
+    #   → exp1 wins.
+    for i, o in enumerate(("=", "<", "=")):
+        p = lp.current_proposal("medium_light")
+        entry = feedback.append_feedback({
+            "recipe_id": p["recipe_id"], "roast": "medium_light", "brewer": "xl",
+            "timestamp": f"2026-05-23T12:{i:02d}:00+08:00",
+            "overall": o, "compared_to": p["suggested_compared_to"],
+            "recipe": {"temp": p["temp"], "dial": p["dial"],
+                       "dose": p["dose"], "steep_sec": p["steep_sec"]},
+            "comment": "c",
+        })
+        lp.register_feedback("medium_light", p["recipe_id"], entry)
+    L = lp.get_loop("medium_light")
+    assert L["history"][-1]["winner_role"] == "exp1"
+    assert L["stall_counter"] == 0
+    assert L["stall_rotation_idx"] == 0
+
+
+def test_stall_trigger_fires_at_threshold_with_single_step(lp):
+    """After STALL_THRESHOLD consecutive champion-holds, the next cycle's exp1
+    is a kind="single" stall=True 1-step perturbation (NOT iso, NOT
+    generation-aware radius)."""
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    # Three champion-holds → counter = 3 → next cycle should stall-trigger
+    for i in range(lp.STALL_THRESHOLD):
+        _brew_champion_hold(lp, "medium_light", 10 + i)
+    L = lp.get_loop("medium_light")
+    champ = L["champion"]
+    assert L["stall_counter"] == lp.STALL_THRESHOLD
+    exp1 = next(s for s in L["cycle"]["slots"] if s["role"] == "exp1")
+    assert exp1["kind"] == "single"
+    assert exp1["stall"] is True
+    # exactly 1 knob different, exactly 1 grid step
+    diffs = [k for k in ("dial", "steep_sec", "dose")
+             if exp1["recipe"][k] != champ[k]]
+    assert len(diffs) == 1
+    k = diffs[0]
+    grid_step = {"dial": 0.1, "steep_sec": 30, "dose": 1.0}[k]
+    assert abs(exp1["recipe"][k] - champ[k]) == pytest.approx(grid_step, abs=1e-6)
+
+
+def test_stall_rotates_through_six_directions_then_exhausts(lp):
+    """The stall rotation covers exactly 6 (knob, sign) pairs in order; after
+    they're all tried, exp1 returns to iso (rotation_idx == 6, stall disabled)."""
+    lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    # Three champion-holds to arm the trigger
+    for i in range(lp.STALL_THRESHOLD):
+        _brew_champion_hold(lp, "medium_light", 10 + i)
+    moves_seen = []
+    # Now run 6 more champion-holds — each cycle's exp1 should be stall
+    # and cycle through STALL_KNOB_ROTATION in order.
+    for i in range(len(lp.STALL_KNOB_ROTATION)):
+        exp1 = next(s for s in lp.get_loop("medium_light")["cycle"]["slots"]
+                    if s["role"] == "exp1")
+        assert exp1["stall"] is True
+        moves_seen.append(tuple(exp1["move"]))
+        _brew_champion_hold(lp, "medium_light", 20 + i)
+    assert moves_seen == list(lp.STALL_KNOB_ROTATION)
+    # After all 6 tried, rotation_idx == 6, stall disabled — next exp1 is iso
+    L = lp.get_loop("medium_light")
+    assert L["stall_rotation_idx"] == len(lp.STALL_KNOB_ROTATION)
+    exp1 = next(s for s in L["cycle"]["slots"] if s["role"] == "exp1")
+    assert exp1["kind"] != "single" or not exp1.get("stall")
+
+
 def test_override_to_single_knob_replaces_slot(lp):
     """User-triggered override replaces a pending experiment slot with a
     single-knob perturbation of the champion along (knob, sign). The slot's

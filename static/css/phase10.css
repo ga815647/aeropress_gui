@@ -495,6 +495,41 @@ body[data-mode="loop"] #submit-button { display: none; }
   color: var(--cobalt-deep);
 }
 .loop-proposal-badge.is-single strong { color: var(--cobalt-deep); font-weight: 700; }
+.loop-proposal-badge.is-stall {
+  border-left-color: var(--ink-soft);
+  background: var(--paper-shade);
+  color: var(--ink);
+}
+.loop-proposal-badge.is-stall strong { color: var(--ink); font-weight: 700; }
+.loop-proposal-badge.is-stall code {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  background: var(--paper);
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+}
+
+/* Stall info under champion card */
+.loop-champion-stall {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  margin-top: var(--s-2);
+  padding: 4px 8px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+.loop-champion-stall.is-active {
+  border-color: var(--ink-soft);
+  background: var(--paper-shade);
+  color: var(--ink);
+}
+.loop-champion-stall.is-exhausted {
+  border-color: var(--moss);
+  background: rgba(63, 107, 58, 0.08);
+  color: var(--moss);
+}
 
 /* User-triggered single-knob override picker (collapsed details block) */
 .single-knob-override {
