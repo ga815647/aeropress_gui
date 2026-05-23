@@ -162,13 +162,65 @@ medium_light 參考點 + roast offset 推得，待該焙度有 feedback 才真�
 | `main.py` | CLI（`--roast` 必填、`--brewer`/`--temp`/`--top`/`--output`/`--radar`）|
 | `tests/` | `test_layer1` / `test_sensory_distance` / `test_optimizer` / `test_feedback` / `test_loop` / `test_output_and_cli` / `test_webapp`（75 PASS）|
 
-## ZP6 Dial Reference
+## Grinder Dial Reference
 
-- `dial` 範圍 3.0–7.5，步進 0.1。低 = 細、高 = 粗。
-- Layer 1 的 `DIAL_REF = 4.3`（Hoffman 錨點研磨，τ 的 grind 項在此為 1）。
-- Layer 2 的 `_DIAL_REF = 4.3`（grind 先驗的參考點）。
+模型的 `dial` 軸校準在 **1Zpresso ZP6**（使用者主力）。其他磨豆機透過下方的 µm
+橋接，共同錨點是 **Hoffman 點**（ZP6 dial 4.3 ≈ 627µm）。
+
+### 1Zpresso ZP6 — 模型原生軸
+
+- 範圍 240–1050µm，9 numbered turns × 10 sub-clicks = 90 clicks。
+  **每 click ≈ 9µm、每 numbered step ≈ 90µm。**
+- 模型 `dial` 搜尋範圍 3.0–7.5，步進 0.1。**低 = 細、高 = 粗。**
+- `models/layer1.py:DIAL_REF = 4.3`（Hoffman 錨點研磨，τ grind 項在此 = 1）。
+- `models/sensory.py:_DIAL_REF = 4.3`（grind 先驗的參考點）。
+- AeroPress 推薦範圍（原廠）：0.7 – 6.2。
 - **無 brewer dial offset** —— Phase 10 Step 5 移除 `BREWER_TAU_MULT` 後，XL 與標準版
   不再有研磨偏移；Layer 1 brewer-agnostic（舊 `dial_offset = 0.10` 已不存在）。
+
+來源：[1Zpresso ZP6 grind settings · Honest Coffee Guide](https://honestcoffeeguide.com/1zpresso-zp6-grind-settings/)、原廠手冊。
+
+### Baratza Forte BG — 副磨豆機（Brewed Group 刀盤）
+
+> **注意：**這是 **Baratza** 的產品，**不是 Mahlkönig**（常見混淆 —— Mahlkönig 有
+> EK43 / Forte EK，但 Forte BG 是 Baratza 的）。Forte BG = "Brewed Group" 刀盤裝在
+> Baratza Forte 機身，54mm flat steel burrs。
+
+- 範圍 230–1150µm，260 個位置：**10 macro × 26 micro**。
+- dial 寫法 `<macro><micro>` 例如 `3F`、`5I`、`8R`。
+- **每 micro 步（A→B→…→Z）≈ 3.54µm；每 macro 步 ≈ 92µm。**
+- 方向：**低 macro / 低 micro = 細**（跟 ZP6 同方向、數字越小越細）。物理「lever UP」
+  = 降數字 = 變細。
+- AeroPress 推薦範圍（原廠）：**2A – 8X**（寬，因為 AeroPress 風格多元 — Hoffman 細，
+  April / Champion 粗）。
+
+來源：[Baratza Forté BG grind settings · Honest Coffee Guide](https://honestcoffeeguide.com/baratza-forte-bg-grind-settings/)、[Baratza Forte AP/BG 原廠手冊 PDF](https://baratza.com/wp-content/uploads/2015/07/Forte-BG-AP-Manual-EN-v2.3-SmallSize.pdf)。
+
+### 對應表（µm 線性中位數估算）
+
+| ZP6 dial | ≈ µm | Forte BG | 用途 / 對應狀態 |
+|---|---|---|---|
+| 4.0 | 600 | **5A** | 比 Hoffman 略細 |
+| **4.3** | **627** | **5I** | **Hoffman Layer 1 錨點 · medium_light IDEAL 來源** |
+| 4.5 | 645 | 5N | 模型 `DIAL_REF` |
+| 5.0 | 690 | 6A | 略粗 |
+| 6.0 | 778 | 6Z | 粗磨象限（舊 coarse-modern 區） |
+| 6.75 | 848 | 7S | 真粗（舊 April / Champion 區） |
+
+**用法：** webapp 顯示 `dial 4.3` → Forte BG 轉到 `5I`；顯示 `dial 4.5` → `5N`；
+依此類推。表的對應 = 兩台磨豆機 µm 範圍的線性中位數估算。
+
+### 警告 — 這是粗估，不是精校
+
+- **線性內插忽略分布形狀差異** —— ZP6 是 conical 手磨、Forte BG 是 54mm flat。中位數
+  可能對得上，但**分布寬窄不同**（Forte BG 一般 spread 較窄、fines 較少）。
+- **µm 會漂移** —— 刀盤磨損、豆種、烘焙度、磨機溫度都會影響實際粒徑。你的 Hoffman
+  對應點實際可能落在 `4Z – 5R` 之間，不是表上的 `5I`。
+- **實務做法：** 從表上的對應點（例：`5I`）**起跑**，泡兩三杯，**用 webapp 迴圈精修讓
+  系統往你的 Forte BG 收斂**。IDEAL 是你的杯子、不是 ZP6 的數字 —— 迴圈會自動修掉
+  磨豆機間的對應誤差（這正是 Phase 11 設計的意義）。
+- **BG vs AP 刀盤** —— 本對應假設 **BG**（brewed group，較適合 filter）。若你裝的是
+  **AP**（all-purpose），分布特性略不同，但仍從 `5I` 起微調即可。
 
 ## 調整方向參考
 
