@@ -1085,6 +1085,9 @@
     const badge = p.is_champion_rebrew
       ? `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`
       : `<div class="loop-proposal-badge">這是冠軍的擾動實驗 — 靠喝評判，別靠讀數字挑。距離只是參考。</div>`;
+    const firstCupHint = (p.suggested_compared_to == null)
+      ? `<div class="loop-firstcup-hint">↳ <strong>第一杯小提醒</strong> — 沒有上一杯可對照，下方「整體 / 逐屬性」比較欄會自動藏。填<strong>感想 / 單獨喝 / 星等</strong>任一就能送出，digest 也不需要這杯的 overall。</div>`
+      : "";
     const skip = p.is_champion_rebrew ? "" : `
       <div class="loop-actions">
         <button type="button" class="loop-skip" data-loop-skip="${escapeHtml(p.recipe_id)}">
@@ -1123,6 +1126,7 @@
         </div>
         <div class="attr-list">${attributeRows(p)}</div>
         ${skip}
+        ${firstCupHint}
         ${renderFeedbackForm(p, "loop")}
       </article>`;
   }

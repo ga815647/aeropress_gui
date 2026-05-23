@@ -406,6 +406,17 @@ body[data-mode="loop"] #submit-button { display: none; }
   background: var(--cobalt-soft);
   color: var(--cobalt-deep);
 }
+.loop-firstcup-hint {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  line-height: 1.6;
+  padding: var(--s-2) var(--s-3);
+  margin: var(--s-3) 0;
+  background: var(--paper-soft);
+  border-left: 2px solid var(--ink-faint);
+  color: var(--ink-mute);
+}
+.loop-firstcup-hint strong { color: var(--ink-soft); font-weight: 600; }
 .loop-actions { margin: var(--s-4) 0; }
 .loop-skip {
   font-family: var(--font-mono);
