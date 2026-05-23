@@ -532,7 +532,12 @@ body[data-mode="loop"] #submit-button { display: none; }
 }
 
 /* ── masthead DOCS dropdown ──────────────────────────────────── */
-.masthead-docs { position: relative; }
+/* masthead is already position:relative (webapp.css L168) but has no
+ * z-index → no stacking context → ledger-body content can paint over the
+ * dropdown. Elevate the whole masthead so anything inside it (the menu)
+ * stacks above the document content below. */
+.masthead { z-index: 100; }
+.masthead-docs { position: relative; z-index: 200; }
 .masthead-docs > summary {
   list-style: none;
   cursor: pointer;
@@ -552,7 +557,7 @@ body[data-mode="loop"] #submit-button { display: none; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  z-index: 100;
+  z-index: 999;
 }
 .masthead-docs-menu a {
   display: grid;
