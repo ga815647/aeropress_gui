@@ -1147,21 +1147,52 @@
   function renderLoopProposal(p) {
     const accent = ROAST_COLOR[p.roast] || "#1d4ed8";
     const isLeap = p.kind === "leap";
+    const isIso = p.kind === "iso";
     const roleText = p.is_champion_rebrew
       ? "冠軍重泡 · 重新錨定味覺記憶"
       : (p.role_index === 1
-          ? "實驗 A · 冠軍的單旋鈕擾動"
+          ? (isIso
+              ? "實驗 A · 同 TDS/EY 探索（iso）"
+              : "實驗 A · 冠軍的單旋鈕擾動")
           : (isLeap
               ? "實驗 B · 多旋鈕大跳（joint 探索）"
               : "實驗 B · 冠軍的單旋鈕擾動"));
     let badge;
     if (p.is_champion_rebrew) {
       badge = `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`;
+    } else if (isIso) {
+      badge = `<div class="loop-proposal-badge is-iso">🔄 <strong>ISO · 同 TDS/EY 探索</strong> —— 模型認為這杯跟冠軍味道幾乎相同（<code>b_temp=0</code>、弱 grind 假設下）。你若<strong>喝出差別</strong> → 模型在這片區域少了訊號，是高資訊量回饋；<strong>喝不出</strong> → 確認模型假設、零訊號也算結論。</div>`;
     } else if (isLeap) {
-      badge = `<div class="loop-proposal-badge is-leap">🎯 <strong>LEAP · 多旋鈕大跳</strong> —— 不是單旋鈕擾動，而是模型 Top-N 裡離冠軍結構遠的好候選。用來跨 saddle、檢驗冠軍是否其實在錯誤 basin。靠喝評判，別靠讀數字挑。</div>`;
+      badge = `<div class="loop-proposal-badge is-leap">🎯 <strong>LEAP · 多旋鈕大跳</strong> —— 不是單旋鈕擾動，而是模型 Top-N 裡離冠軍結構遠的好候選（金杯內）。用來跨 saddle、檢驗冠軍是否其實在錯誤 basin。靠喝評判，別靠讀數字挑。</div>`;
     } else {
-      badge = `<div class="loop-proposal-badge">這是冠軍的單旋鈕擾動 — 靠喝評判，別靠讀數字挑。距離只是參考。</div>`;
+      badge = `<div class="loop-proposal-badge is-single">🔬 <strong>SINGLE · 單旋鈕擾動</strong> —— 沿一個旋鈕單向小步,attribution 乾淨;若是你按「切換為單旋鈕」觸發的,就是你正想釐清的那個旋鈕。</div>`;
     }
+    // User-triggered single-knob override (the on-demand "I want to clarify
+    // this specific knob" path; see ARCHITECTURE.md / PHASE11 §override).
+    const overrideUI = p.is_champion_rebrew ? "" : `
+      <details class="single-knob-override" data-slot-recipe="${escapeHtml(p.recipe_id)}">
+        <summary class="single-knob-toggle">🔬 切換為單旋鈕測試 —— 想釐清某個旋鈕的影響</summary>
+        <div class="single-knob-picker">
+          <p class="single-knob-hint">這個 slot 即時換成 champion 在該旋鈕單向擾動的配方,<code>kind="single"</code>,attribution 乾淨。已泡過的 slot 不能改。</p>
+          <div class="single-knob-rows">
+            <div class="single-knob-row">
+              <span class="single-knob-name">Dial · 研磨</span>
+              <button type="button" data-override-knob="dial" data-override-sign="-1">更細 ←</button>
+              <button type="button" data-override-knob="dial" data-override-sign="1">更粗 →</button>
+            </div>
+            <div class="single-knob-row">
+              <span class="single-knob-name">Steep · 浸泡</span>
+              <button type="button" data-override-knob="steep_sec" data-override-sign="-1">較短 ←</button>
+              <button type="button" data-override-knob="steep_sec" data-override-sign="1">較長 →</button>
+            </div>
+            <div class="single-knob-row">
+              <span class="single-knob-name">Dose · 粉量</span>
+              <button type="button" data-override-knob="dose" data-override-sign="-1">較少 ←</button>
+              <button type="button" data-override-knob="dose" data-override-sign="1">較多 →</button>
+            </div>
+          </div>
+        </div>
+      </details>`;
     const firstCupHint = (p.suggested_compared_to == null)
       ? `<div class="loop-firstcup-hint">↳ <strong>第一杯小提醒</strong> — 沒有上一杯可對照，下方「整體 / 逐屬性」比較欄會自動藏。填<strong>感想 / 單獨喝 / 星等</strong>任一就能送出，digest 也不需要這杯的 overall。</div>`
       : "";
@@ -1203,6 +1234,7 @@
         </div>
         <div class="attr-list">${attributeRows(p)}</div>
         ${skip}
+        ${overrideUI}
         ${firstCupHint}
         ${renderFeedbackForm(p, "loop")}
       </article>`;
@@ -1318,6 +1350,30 @@
       flashLoopBanner("↺ 迴圈已重置 — 新的第 0 代冠軍與循環 #1 已就緒");
     } catch (err) {
       flashLoopBanner("重置失敗：" + (err.message || err));
+    }
+  }
+
+  async function overrideToSingleKnob(recipeId, knob, sign) {
+    const roast = (loopData && loopData.roast) || roastSelect.value;
+    try {
+      const resp = await fetch("/api/loop/override_single_knob", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roast, recipe_id: recipeId, knob, sign }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      loopData = data;
+      loopProposal = data.proposal || null;
+      renderLoopView(data);
+      loadSaved();
+      const knobZh = { dial: "Dial", steep_sec: "Steep", dose: "Dose" }[knob] || knob;
+      const dirByKnob = sign > 0
+        ? { dial: "更粗", steep_sec: "較長", dose: "較多" }
+        : { dial: "更細", steep_sec: "較短", dose: "較少" };
+      const dirZh = dirByKnob[knob] || (sign > 0 ? "+" : "-");
+      flashLoopBanner(`🔬 已切換為單旋鈕測試 — ${knobZh} ${dirZh}`);
+    } catch (err) {
+      flashLoopBanner("切換失敗:" + (err.message || err));
     }
   }
 
@@ -1503,6 +1559,14 @@
     if (event.target.closest("[data-loop-reset]")) { resetLoop(); return; }
     const skip = event.target.closest("[data-loop-skip]");
     if (skip) { skipProposal(skip.dataset.loopSkip); return; }
+    const override = event.target.closest("[data-override-knob]");
+    if (override) {
+      const wrap = override.closest("[data-slot-recipe]");
+      const rid = wrap && wrap.dataset.slotRecipe;
+      if (rid) overrideToSingleKnob(rid, override.dataset.overrideKnob,
+                                     Number(override.dataset.overrideSign));
+      return;
+    }
     const apply = event.target.closest("[data-saved-apply]");
     if (apply) { applySaved(apply.dataset.savedApply); return; }
     const del = event.target.closest("[data-saved-del]");

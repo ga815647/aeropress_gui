@@ -292,6 +292,26 @@ def create_app() -> Flask:
             ), 400
         return jsonify(_loop_payload(roast_code))
 
+    @app.post("/api/loop/override_single_knob")
+    def loop_override_single_knob():
+        """User-triggered: replace a pending slot with a single-knob
+        perturbation of the champion along (knob, sign). Used when the
+        user has a specific hypothesis the automatic iso/leap can't test."""
+        payload = request.get_json(silent=True) or {}
+        roast_code = str(payload.get("roast", ""))
+        recipe_id = str(payload.get("recipe_id", ""))
+        knob = str(payload.get("knob", ""))
+        try:
+            sign = int(payload.get("sign", 0))
+        except (TypeError, ValueError):
+            return jsonify({"error": "sign must be +1 or -1"}), 400
+        result = loop_engine.override_to_single_knob(
+            roast_code, recipe_id, knob, sign,
+        )
+        if not result.get("overridden"):
+            return jsonify({"error": result.get("reason", "override failed")}), 400
+        return jsonify(_loop_payload(roast_code))
+
     @app.get("/api/recipes")
     def recipes_list():
         return jsonify({"recipes": saved_recipes.list_recipes()})

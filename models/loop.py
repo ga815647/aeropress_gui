@@ -119,6 +119,39 @@ LEAP_KNOB_DIFF_MIN = 2
 GOLD_CUP_TDS_RANGE = (1.15, 1.40)   # extended Gold Cup brew strength, %
 GOLD_CUP_EY_RANGE = (17.0, 22.0)    # extended Gold Cup extraction yield, %
 
+# ── iso-(TDS,EY) exp1 (probe Layer 2's b_temp=0 + weak _GRIND_SLOPE) ─────────
+# Layer 2 (`models/sensory.py`) holds b_temp=0 (Batali 2020: temp doesn't change
+# flavour at fixed TDS/EY) and weak _GRIND_SLOPE (only Thick.viscous +
+# Astringent have non-zero grind sensitivity). So the model says "iso-(TDS,EY)
+# cups are flavour-equivalent regardless of how you got there" — which is the
+# Layer 2 assumption with the LEAST training data behind it. exp1 = iso-jump
+# directly probes this assumption: pick a grid recipe with the same TDS/EY as
+# the champion (within ε), but structurally different (≥ LEAP_KNOB_DIFF_MIN
+# knobs different). If the user tastes a difference → model's b_temp=0 / weak-
+# grind assumption is wrong → high-information feedback. If not → confirms
+# the iso-equivalence assumption in this region. No Gold Cup gate on iso (it
+# inherits the champion's TDS/EY by construction — champion's own sanity IS
+# the sanity check).
+ISO_TDS_TOL = 0.05      # % — tighter than a refractometer's measurement noise
+ISO_EY_TOL = 0.5        # pp — 1/8 of the Gold Cup EY width (4 pp)
+
+# Per-roast steep upper bound for iso + leap proposals — long immersion is a
+# Layer-1 extrapolation (cotter trained at ~60–240 s) where Layer 2 can't
+# capture the real physics: volatile-aromatic dissipation, brewer-temperature
+# decay, cooling-induced selectivity shift. Model predicts identical TDS/EY
+# but two cups at the same TDS/EY don't taste the same when one is 60 s and
+# the other 420 s. Light roasts are the most sensitive — Nordic-style filter
+# is 60–120 s; past ~180 s the volatiles are gone. Both iso and leap candidate
+# scans filter against this cap; the optimizer's grid itself stays open (the
+# user's seed champion can sit wherever IDEAL puts it).
+STEEP_MAX_BY_ROAST = {
+    "light":           180,     # Nordic 60-120s; >180s = muddled volatiles
+    "medium_light":    240,     # Hoffmann 120s, longer ~210s upper extreme
+    "medium":          270,
+    "moderately_dark": 300,
+}
+_STEEP_MAX_FALLBACK = 300
+
 _KNOBS = ("dial", "steep_sec", "dose")
 _SLOT_ROLES = ("exp1", "champion", "exp2")  # brew order — see module doc
 
@@ -346,9 +379,15 @@ def _informed_leap_candidate(loop: dict, exp1_recipe: dict,
             + abs(k["dose"] - champ_knobs["dose"]) / dose_step
         )
 
+    steep_cap = STEEP_MAX_BY_ROAST.get(loop["roast"], _STEEP_MAX_FALLBACK)
     far = []
     for c in candidates:
         if c["recipe_id"] in excluded:
+            continue
+        # Per-roast steep cap — long immersion is Layer-1 extrapolation; model
+        # predicts same TDS/EY at 60 s and 420 s but the cup tastes wildly
+        # different (volatile-aromatic loss, temperature decay).
+        if c["steep_sec"] > steep_cap:
             continue
         # SCA Gold Cup gate: a leap that lands outside the universally-good
         # box is a dud regardless of how good the model says its attributes
@@ -372,6 +411,136 @@ def _informed_leap_candidate(loop: dict, exp1_recipe: dict,
     return far[0]
 
 
+def _iso_tds_ey_candidate(loop: dict, extra_excluded_ids: set = frozenset()):
+    """Pick an iso-(TDS,EY) exp1 candidate — Layer 1 grid scan for recipes
+    that match the champion's TDS and EY within ISO_TDS_TOL / ISO_EY_TOL,
+    differ structurally in ≥ LEAP_KNOB_DIFF_MIN knobs, and have no prior
+    feedback in the log. Returns the knob recipe dict, or None when nothing
+    qualifies (caller falls back to single-knob exp1).
+
+    Cheaper than the optimizer Top-N path because it only runs Layer 1
+    (skips Layer 2 + distance). Direct iteration over the same grid the
+    optimizer uses — dose values via `optimizer._dose_values` for parity.
+    """
+    from optimizer import _dose_values as _optimizer_dose_values
+    from models.layer1 import brew as _layer1_brew
+
+    champ_knobs = _knob_recipe(loop["champion"])
+    roast = loop["roast"]
+    brewer = loop["brewer"]
+    temp = loop["temp"]
+    water_ml = loop["water_ml"]
+
+    # Champion's own TDS/EY via Layer 1 — the target for iso matching.
+    cl1 = _layer1_brew(roast, temp, champ_knobs["dial"],
+                      champ_knobs["steep_sec"], champ_knobs["dose"], water_ml)
+    tds_target = cl1["tds"]
+    ey_target = cl1["ey"]
+
+    brewed_ids = {
+        e.get("recipe_id") for e in read_all_feedback() if e.get("recipe_id")
+    }
+    excluded = brewed_ids | set(extra_excluded_ids)
+
+    dose_step = 1.0 if brewer == "xl" else 0.5
+    doses = _optimizer_dose_values(roast, brewer, water_ml, None, None, None)
+
+    def _normed_l1(k):
+        return (
+            abs(k["dial"] - champ_knobs["dial"]) / constants.DIAL_STEP
+            + abs(k["steep_sec"] - champ_knobs["steep_sec"]) / constants.STEEP_STEP
+            + abs(k["dose"] - champ_knobs["dose"]) / dose_step
+        )
+
+    steep_cap = STEEP_MAX_BY_ROAST.get(roast, _STEEP_MAX_FALLBACK)
+    candidates = []
+    for dial_x10 in range(30, 76):
+        dial = dial_x10 / 10
+        for steep in range(30, steep_cap + 1, constants.STEEP_STEP):
+            for dose in doses:
+                l1 = _layer1_brew(roast, temp, dial, steep, dose, water_ml)
+                if abs(l1["tds"] - tds_target) > ISO_TDS_TOL:
+                    continue
+                if abs(l1["ey"] - ey_target) > ISO_EY_TOL:
+                    continue
+                k = {"dial": dial, "steep_sec": steep, "dose": dose}
+                if k == champ_knobs:
+                    continue
+                knob_diffs = sum(1 for x in _KNOBS if k[x] != champ_knobs[x])
+                if knob_diffs < LEAP_KNOB_DIFF_MIN:
+                    continue
+                rid = compute_recipe_id(
+                    roast=roast, brewer=brewer, dial=dial,
+                    steep_sec=steep, temp=temp, dose=dose,
+                )
+                if rid in excluded:
+                    continue
+                candidates.append(k)
+
+    if not candidates:
+        return None
+    candidates.sort(key=_normed_l1, reverse=True)
+    return candidates[0]
+
+
+def override_to_single_knob(roast: str, recipe_id: str, knob: str,
+                            sign: int) -> dict:
+    """User-triggered single-knob override: replace a slot's recipe with a
+    single-knob perturbation of the CHAMPION along (knob, sign). Used when
+    the user has a specific hypothesis ("what does dial +1 do here?") that
+    the automatic iso / leap can't answer. Attribution stays clean — the
+    slot's `kind` becomes "single" and `move` records the (knob, sign).
+
+    Constraints: the slot must be pending (not yet brewed); the champion
+    re-brew slot can't be overridden; the move must not be a no-op at the
+    grid edge.
+    """
+    if knob not in _KNOBS:
+        return {"overridden": False, "reason": f"unknown knob: {knob}"}
+    if sign not in (-1, 1):
+        return {"overridden": False, "reason": "sign must be +1 or -1"}
+
+    state = _load()
+    loop = state.get(roast)
+    if loop is None:
+        return {"overridden": False, "reason": "no active loop", "loop": None}
+
+    slot = next(
+        (s for s in loop["cycle"]["slots"] if s["recipe_id"] == recipe_id), None
+    )
+    if slot is None:
+        return {"overridden": False, "reason": "recipe not in current cycle",
+                "loop": loop}
+    if slot["role"] == "champion":
+        return {"overridden": False, "reason": "cannot override champion slot",
+                "loop": loop}
+    if slot["status"] == "brewed":
+        return {"overridden": False, "reason": "slot already brewed",
+                "loop": loop}
+
+    new_recipe = _apply_move(
+        loop["champion"], knob, sign, loop["generation"],
+        loop["roast"], loop["brewer"], loop["water_ml"],
+    )
+    if new_recipe is None:
+        return {"overridden": False,
+                "reason": f"{knob} {sign:+d} is a no-op (champion at grid edge)",
+                "loop": loop}
+
+    slot["recipe"] = new_recipe
+    slot["move"] = [knob, sign]
+    slot["kind"] = "single"
+    slot["recipe_id"] = compute_recipe_id(
+        roast=loop["roast"], brewer=loop["brewer"], dial=new_recipe["dial"],
+        steep_sec=new_recipe["steep_sec"], temp=loop["temp"],
+        dose=new_recipe["dose"],
+    )
+    loop["updated_at"] = _now_iso()
+    state[roast] = loop
+    _save(state)
+    return {"overridden": True, "loop": loop}
+
+
 def _build_cycle(loop: dict, cycle_index: int) -> dict:
     """Build a fresh three-slot cycle: two champion perturbations + a champion
     re-brew. exp1 / exp2 perturb different knobs where possible."""
@@ -384,34 +553,45 @@ def _build_cycle(loop: dict, cycle_index: int) -> dict:
     moves = _valid_moves(champion, generation, roast, brewer, water_ml)
     slots: list[dict] = []
 
-    # exp1 — single-knob local refine (attribution stays clean).
-    pick1 = _pick_experiment(moves, rng, set(), set())
-    if pick1 is None:  # champion boxed into a corner — degenerate, re-brew it
-        pick1 = ((None, 0), _knob_recipe(champion))
-    exp1_recipe = pick1[1]
+    # exp1 — iso-(TDS,EY) jump: same model-predicted TDS/EY as champion but
+    # structurally different (≥ LEAP_KNOB_DIFF_MIN knobs). Probes the model's
+    # weakest assumption (b_temp=0 + weak _GRIND_SLOPE). Falls back to single-
+    # knob if no iso candidate qualifies (very tight grid / corner champion).
+    iso_recipe = _iso_tds_ey_candidate(loop)
+    if iso_recipe is not None:
+        exp1_recipe = iso_recipe
+        exp1_move = None        # iso has no single (knob, sign)
+        exp1_kind = "iso"
+    else:
+        pick1 = _pick_experiment(moves, rng, set(), set())
+        if pick1 is None:   # champion boxed into a corner — degenerate, re-brew
+            pick1 = ((None, 0), _knob_recipe(champion))
+        exp1_recipe = pick1[1]
+        exp1_move = pick1[0]
+        exp1_kind = "single"
 
     # exp2 — informed leap (Iterated Local Search "kick", multi-knob from the
-    # surrogate's Top-N). Falls back to single-knob when the model thinks the
-    # whole Top-N is cup-adjacent to the champion.
+    # surrogate's Top-N, gated by extended Gold Cup). Falls back to single-knob
+    # when no Gold-Cup-compliant far candidate exists.
     leap_recipe = _informed_leap_candidate(loop, exp1_recipe)
     if leap_recipe is not None:
         exp2_recipe = leap_recipe
-        exp2_move = None        # leap has no single (knob, sign)
+        exp2_move = None
         exp2_kind = "leap"
     else:
-        pick2 = _pick_experiment(
-            moves, rng, {pick1[0][0]} if pick1[0][0] else set(), {pick1[0]},
-        )
+        excl_knob = ({exp1_move[0]} if exp1_move and exp1_move[0] else set())
+        excl_move = ({tuple(exp1_move)} if exp1_move else set())
+        pick2 = _pick_experiment(moves, rng, excl_knob, excl_move)
         if pick2 is None:
-            pick2 = pick1
+            pick2 = ((None, 0), _knob_recipe(champion))
         exp2_recipe = pick2[1]
         exp2_move = pick2[0]
         exp2_kind = "single"
 
     # Brew order [exp1, champion, exp2] — champion in the middle so BOTH
     # experiments are cup-adjacent to it (direct exp↔champion edges, every cycle).
-    slots.append(_new_slot("exp1", exp1_recipe, pick1[0], roast, brewer, temp,
-                           kind="single"))
+    slots.append(_new_slot("exp1", exp1_recipe, exp1_move, roast, brewer, temp,
+                           kind=exp1_kind))
     slots.append(_new_slot("champion", _knob_recipe(champion), None,
                            roast, brewer, temp))
     slots.append(_new_slot("exp2", exp2_recipe, exp2_move, roast, brewer, temp,

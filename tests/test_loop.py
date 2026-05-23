@@ -71,16 +71,35 @@ def test_proposal_is_first_pending_slot(lp):
     assert len(p["attributes"]) == 10 and "distance" in p
 
 
-def test_exp1_is_single_knob_perturbation(lp):
-    """exp1 is always a single-knob local refine (attribution stays clean)."""
+def test_exp1_is_iso_tds_ey_jump_when_available(lp):
+    """exp1 is now the iso-(TDS,EY) probe (test Layer 2's b_temp=0 assumption);
+    falls back to a single-knob perturbation only when no iso candidate
+    qualifies. medium_light + XL has a rich enough grid that iso is essentially
+    always available."""
+    import constants
+    from models.layer1 import brew as layer1_brew
     L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
     slots = {s["role"]: s for s in L["cycle"]["slots"]}
     champ = slots["champion"]["recipe"]
-    assert _knob_diffs(slots["exp1"]["recipe"], champ) == 1
-    assert slots["exp1"]["kind"] == "single"
-    assert slots["exp1"]["recipe"] != slots["exp2"]["recipe"]
+    exp1 = slots["exp1"]
+    assert exp1["kind"] in ("iso", "single")
+    assert exp1["recipe"] != slots["exp2"]["recipe"]
     assert slots["champion"]["recipe"] == champ
-    assert slots["champion"]["kind"] is None    # champion re-brew, not an experiment
+    assert slots["champion"]["kind"] is None
+    if exp1["kind"] == "iso":
+        # iso => >= 2 knob diffs from champion AND TDS/EY within tolerance
+        assert _knob_diffs(exp1["recipe"], champ) >= lp.LEAP_KNOB_DIFF_MIN
+        assert exp1["move"] is None
+        water = constants.BREWER_PRESETS["xl"]["water_ml"]
+        ch = layer1_brew("medium_light", 95.0, champ["dial"],
+                         champ["steep_sec"], champ["dose"], water)
+        ex = layer1_brew("medium_light", 95.0, exp1["recipe"]["dial"],
+                         exp1["recipe"]["steep_sec"], exp1["recipe"]["dose"],
+                         water)
+        assert abs(ex["tds"] - ch["tds"]) <= lp.ISO_TDS_TOL
+        assert abs(ex["ey"] - ch["ey"]) <= lp.ISO_EY_TOL
+    else:  # rare fallback: still useful, just single-knob
+        assert _knob_diffs(exp1["recipe"], champ) == 1
 
 
 def test_exp2_is_informed_leap_when_available(lp):
@@ -122,6 +141,70 @@ def test_leap_respects_sca_gold_cup(lp):
         f"leap TDS {l1['tds']:.3f}% outside Gold Cup [{lo_tds}, {hi_tds}]")
     assert lo_ey <= l1["ey"] <= hi_ey, (
         f"leap EY {l1['ey']:.2f}% outside Gold Cup [{lo_ey}, {hi_ey}]")
+
+
+def test_iso_and_leap_respect_per_roast_steep_cap(lp):
+    """Long immersion is a Layer-1 extrapolation: TDS/EY may match the
+    champion but real flavour diverges (volatile loss, temp decay). Both
+    iso and leap candidates must respect STEEP_MAX_BY_ROAST so the loop
+    never proposes a 420-s steep just because the model says iso-equivalent.
+    Light roast is the most sensitive (Nordic 60–120 s; cap at 180 s)."""
+    L = lp.start_loop("light", brewer="xl", temp=98.0)
+    cap = lp.STEEP_MAX_BY_ROAST["light"]
+    for slot in L["cycle"]["slots"]:
+        if slot["kind"] in ("iso", "leap"):
+            assert slot["recipe"]["steep_sec"] <= cap, (
+                f"{slot['kind']} candidate steep={slot['recipe']['steep_sec']} s "
+                f"exceeds light's cap of {cap} s"
+            )
+
+
+def test_override_to_single_knob_replaces_slot(lp):
+    """User-triggered override replaces a pending experiment slot with a
+    single-knob perturbation of the champion along (knob, sign). The slot's
+    kind becomes 'single', the move is recorded, and the recipe matches a
+    one-grid-step shift on the chosen knob."""
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    exp1 = next(s for s in L["cycle"]["slots"] if s["role"] == "exp1")
+    champ = next(s for s in L["cycle"]["slots"] if s["role"] == "champion")["recipe"]
+
+    result = lp.override_to_single_knob("medium_light", exp1["recipe_id"],
+                                        "dial", -1)
+    assert result["overridden"] is True
+    slot = next(s for s in result["loop"]["cycle"]["slots"]
+                if s["role"] == "exp1")
+    assert slot["kind"] == "single"
+    assert slot["move"] == ["dial", -1]
+    # exactly one knob differs from champion (dial), and dial moved finer
+    assert slot["recipe"]["steep_sec"] == champ["steep_sec"]
+    assert slot["recipe"]["dose"] == champ["dose"]
+    assert slot["recipe"]["dial"] < champ["dial"]
+
+
+def test_override_rejects_champion_slot(lp):
+    """The champion re-brew slot can't be overridden — its purpose is to
+    re-anchor taste memory at the entering champion."""
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    champ_slot = next(s for s in L["cycle"]["slots"] if s["role"] == "champion")
+    result = lp.override_to_single_knob(
+        "medium_light", champ_slot["recipe_id"], "dial", -1,
+    )
+    assert result["overridden"] is False
+    assert "champion" in result.get("reason", "").lower()
+
+
+def test_override_rejects_bad_args(lp):
+    """Unknown knob / invalid sign are refused with a reason."""
+    L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
+    exp1 = next(s for s in L["cycle"]["slots"] if s["role"] == "exp1")
+    bad_knob = lp.override_to_single_knob(
+        "medium_light", exp1["recipe_id"], "altitude", -1,
+    )
+    assert bad_knob["overridden"] is False
+    bad_sign = lp.override_to_single_knob(
+        "medium_light", exp1["recipe_id"], "dial", 0,
+    )
+    assert bad_sign["overridden"] is False
 
 
 def test_leap_excludes_already_brewed_recipes(lp):

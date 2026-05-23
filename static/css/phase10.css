@@ -476,6 +476,89 @@ body[data-mode="loop"] #submit-button { display: none; }
   color: var(--amber-deep);
 }
 .loop-proposal-badge.is-leap strong { color: var(--amber-deep); font-weight: 700; }
+.loop-proposal-badge.is-iso {
+  border-left-color: var(--moss);
+  background: rgba(63, 107, 58, 0.08);   /* moss soft tint */
+  color: var(--moss);
+}
+.loop-proposal-badge.is-iso strong { color: var(--moss); font-weight: 700; }
+.loop-proposal-badge.is-iso code {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  background: var(--paper);
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+}
+.loop-proposal-badge.is-single {
+  border-left-color: var(--cobalt);
+  background: var(--cobalt-soft);
+  color: var(--cobalt-deep);
+}
+.loop-proposal-badge.is-single strong { color: var(--cobalt-deep); font-weight: 700; }
+
+/* User-triggered single-knob override picker (collapsed details block) */
+.single-knob-override {
+  margin: var(--s-3) 0;
+  border: 1px dashed var(--rule-strong);
+}
+.single-knob-toggle {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-2) var(--s-3);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.single-knob-override[open] .single-knob-toggle {
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper-soft);
+}
+.single-knob-picker {
+  padding: var(--s-3);
+  background: var(--paper-soft);
+}
+.single-knob-hint {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  line-height: 1.5;
+  margin: 0 0 var(--s-3);
+}
+.single-knob-hint code {
+  font-family: var(--font-mono);
+  background: var(--paper);
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+}
+.single-knob-rows { display: flex; flex-direction: column; gap: var(--s-2); }
+.single-knob-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr;
+  gap: var(--s-2);
+  align-items: center;
+}
+.single-knob-name {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  color: var(--ink);
+}
+.single-knob-row button {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.single-knob-row button:hover {
+  background: var(--cobalt-soft);
+  border-color: var(--rule-cobalt);
+  color: var(--cobalt-deep);
+}
 .loop-firstcup-hint {
   font-family: var(--font-body);
   font-size: var(--t-2xs);
