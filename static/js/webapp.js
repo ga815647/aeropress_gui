@@ -1079,8 +1079,9 @@
 
   function renderLoopProposal(p) {
     const accent = ROAST_COLOR[p.roast] || "#1d4ed8";
-    const roleText = { 1: "實驗 A · 冠軍的單旋鈕擾動", 2: "實驗 B · 冠軍的單旋鈕擾動",
-                       3: "冠軍重泡 · 重新錨定味覺記憶" }[p.role_index];
+    const roleText = { 1: "實驗 A · 冠軍的單旋鈕擾動",
+                       2: "冠軍重泡 · 重新錨定味覺記憶",
+                       3: "實驗 B · 冠軍的單旋鈕擾動" }[p.role_index];
     const badge = p.is_champion_rebrew
       ? `<div class="loop-proposal-badge is-champ">這是冠軍重泡 — 喝喝看「我宣稱的最佳，舌頭還同意嗎」，順手填「單獨喝」錨點。</div>`
       : `<div class="loop-proposal-badge">這是冠軍的擾動實驗 — 靠喝評判，別靠讀數字挑。距離只是參考。</div>`;

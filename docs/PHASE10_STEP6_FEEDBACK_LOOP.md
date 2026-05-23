@@ -43,6 +43,14 @@
 
 ## 3. 三杯循環 `[實驗1, 實驗2, 最佳]`
 
+> **Phase 11 修訂（2026-05-23）：實作的順序改為 `[實驗1, 冠軍重泡, 實驗2]`** ——
+> 冠軍夾在兩個實驗中間,讓 exp1↔champion 與 exp2↔champion 兩條邊都 cup-adjacent
+> 直接取得（每個循環一致，含 cycle 1）。舊順序 `[實驗1, 實驗2, 最佳]` 下 cycle 1 的
+> exp1↔champion 邊得靠 `exp1↔exp2` × `exp2↔champion` 轉移合成（方向相反就模糊），
+> 且狀態機在 cycle 1 vs cycle ≥2 行為不一致。新順序消掉這兩個問題。下方原始文字
+> 保留為設計演進紀錄；落地細節以 [`PHASE11_LOOP_ENGINE.md`](PHASE11_LOOP_ENGINE.md) §3
+> 為準。
+
 每 3 杯一個循環:
 
 1. **實驗1** —— 冠軍的擾動 A

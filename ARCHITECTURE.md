@@ -118,12 +118,12 @@ medium_light 參考點 + roast offset 推得，待該焙度有 feedback 才真�
 
 ```
 冠軍（第 0 代 = optimizer Top-1 model-seed）
-  └─ 三杯循環 [exp1, exp2, champion]
+  └─ 三杯循環 [exp1, champion, exp2]   ← 冠軍夾在中間：兩個實驗都 cup-adjacent
        exp1, exp2 = 冠軍的單旋鈕擾動（半徑照排程早大後細，溫度不搜）
-       champion   = 進來時的冠軍，原樣重泡（重新錨定味覺、絕對錨點檢查）
+       champion   = 進來時的冠軍，在中間重泡（兩個實驗的味覺記憶錨點）
   └─ 三杯各走 §4 問卷 → 三杯到齊 → digest
-       從成對 overall 比較选 {冠軍,exp1,exp2} 勝者；明確 > 才換、平手守成
-       勝者 = 下一循環的冠軍；generation++
+       cup 2 的 overall → exp1 vs champion（invert）；cup 3 的 overall → exp2 vs champion
+       明確 > 才換、平手守成；勝者 = 下一循環的冠軍；generation++
 ```
 
 - 狀態存 `data/loop_state.json`（per-roast，lazy 產生）。

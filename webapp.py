@@ -86,6 +86,7 @@ def _serialize_loop(loop: dict) -> dict:
             for s in loop["cycle"]["slots"]
         ],
         "history": loop.get("history", []),
+        "last_cup": loop.get("last_cup"),
         "started_at": loop.get("started_at"),
         "updated_at": loop.get("updated_at"),
     }

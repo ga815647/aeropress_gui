@@ -1,6 +1,6 @@
 """Phase 11 — loop engine (models/loop.py) + named recipes (models/saved.py).
 
-The loop is a (1+lambda) search over the three-cup cycle [exp1, exp2, champion];
+The loop is a (1+lambda) search over the three-cup cycle [exp1, champion, exp2];
 see docs/PHASE11_LOOP_ENGINE.md. Each test redirects the loop-state and feedback
 JSON paths to a tmp dir so the real files are untouched.
 """
@@ -113,8 +113,10 @@ def test_digest_champion_holds_on_all_ties(lp):
 
 
 def test_digest_promotes_a_winning_experiment(lp):
-    """exp1 `>` champion, exp2 `<` exp1, champion `=` exp2 -> exp1 is the winner
-    and becomes the next cycle's champion (the recipe exp1 was brewed at)."""
+    """Brew order is [exp1, champion, exp2]. Cup 2's `overall` is champion vs
+    exp1; cup 3's `overall` is exp2 vs champion. So (cup1 unused, `<`, `=`)
+    means exp1 beats champion (cup 2 `<` = champ worse than exp1) and exp2
+    ties champion -> exp1 is the cycle winner."""
     lp.start_loop("medium_light", brewer="xl", temp=95.0)
     L0 = lp.get_loop("medium_light")
     exp1_recipe = next(s["recipe"] for s in L0["cycle"]["slots"] if s["role"] == "exp1")
@@ -124,17 +126,24 @@ def test_digest_promotes_a_winning_experiment(lp):
     for k in ("dial", "steep_sec", "dose"):
         assert L["champion"][k] == exp1_recipe[k]
     assert L["champion"]["source"] == "cycle"
+    # exp1↔exp2 is never a within-cycle edge in [exp1, champion, exp2] order
+    assert L["history"][0]["edges"]["exp1_vs_exp2"] is None
 
 
-def test_two_cycles_use_direct_champion_edge(lp):
-    """From cycle 2 on, exp1 is compared to the prior champion cup directly —
-    the loop must keep advancing the generation each completed cycle."""
+def test_two_cycles_advance_generation(lp):
+    """With [exp1, champion, exp2] order, every cycle's exp1↔champion and
+    exp2↔champion edges are DIRECT (no cycle-1 vs cycle-N special case).
+    Brew two cycles of all ties — champion holds both times, generation
+    advances each completed cycle."""
     lp.start_loop("medium_light", brewer="xl", temp=95.0)
     _brew_cycle(lp, "medium_light", ("=", "=", "="), 0)
     _brew_cycle(lp, "medium_light", ("=", "=", "="), 10)
     L = lp.get_loop("medium_light")
     assert L["generation"] == 2 and L["cycle"]["index"] == 3
     assert len(L["history"]) == 2
+    # cross-cycle anchor: next cycle's exp1 suggested_compared_to == prev
+    # cycle's final cup (exp2), not prev champion as in the old ordering.
+    assert L["last_cup"] is not None
 
 
 # ── skip ─────────────────────────────────────────────────────────────────────

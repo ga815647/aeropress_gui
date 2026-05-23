@@ -12,28 +12,44 @@ The user brews them, answers the §4 pairwise questionnaire, and the loop advanc
 the champion toward whatever the user actually prefers — the per-roast IDEAL is a
 moving target the loop is searching for (blueprint §1), not a fixed bullseye.
 
-THE THREE-CUP CYCLE  [exp1, exp2, champion]
+THE THREE-CUP CYCLE  [exp1, champion, exp2]
 -------------------------------------------
 Each cycle is three cups, brewed in order:
 
   1. exp1      — a champion perturbation (one knob moved).
-  2. exp2      — a second, different champion perturbation.
-  3. champion  — the cycle's *entering* champion, re-brewed.
+  2. champion  — the cycle's *entering* champion, re-brewed in the middle.
+  3. exp2      — a second, different champion perturbation.
 
-Cup 3 is always the entering champion re-brewed (NOT a post-digest winner): this
-is textbook (1+lambda) — the parent is fixed for the whole generation, selection
-is a discrete between-generation step. It re-anchors taste memory (blueprint §3
-"重泡冠軍取代記住冠軍"), gives a good cup to drink, and an absolute-anchor check.
+The champion is re-brewed in cup 2 (NOT a post-digest winner): this is textbook
+(1+lambda) — the parent is fixed for the whole generation; selection is a
+discrete between-generation step. Brewing the champion in the MIDDLE re-anchors
+taste memory between the two experiments — both experiments thus get compared
+(via cup-adjacent memory) to a fresh champion taste:
+
+  cup 1 (exp1)  ── memory adjacent ──>  cup 2 (champ)  =>  exp1 vs champ direct
+  cup 2 (champ) ── memory adjacent ──>  cup 3 (exp2)   =>  exp2 vs champ direct
+
+Both experiment↔champion edges are direct in EVERY cycle (including cycle 1) —
+no transitive composition. (This was the revision over blueprint §3's original
+[exp1, exp2, champion] ordering, which left the cycle-1 exp1↔champion edge to
+composition.)
 
 DIGEST
 ------
-Once all three cups carry feedback, the digest reads the pairwise `overall` edges
-and picks the winner of {champion, exp1, exp2}. That winner becomes the NEXT
-cycle's champion (a winning experiment is re-brewed one cycle later, as the next
-cycle's cup 3). An experiment displaces the champion ONLY on a clear `>` win —
-ties / missing edges keep the incumbent (blueprint §6 discipline 2: a single
-memory-based comparison is noisy, do not over-trust it). Step size is set by an
-annealing schedule, not by the data (blueprint §5).
+Once all three cups carry feedback, the digest reads the two within-cycle
+pairwise `overall` edges:
+
+  cup 2's `overall` (champion vs exp1)  -- invert -->  exp1 vs champion
+  cup 3's `overall` (exp2 vs champion)  ----------->   exp2 vs champion
+
+Both edges are direct in every cycle. An experiment displaces the champion ONLY
+on a clear `>` win; ties / missing edges keep the incumbent (blueprint §6
+discipline 2: a single memory-based comparison is noisy, do not over-trust it).
+When both experiments beat the champion, the within-cycle exp1↔exp2 edge is not
+available in this ordering — `_select_winner` falls back to picking exp1
+deterministically (rare case; conservative). The winner becomes the NEXT cycle's
+champion (a winning experiment is re-brewed one cycle later as the next cycle's
+cup 2). Step size is set by an annealing schedule, not by data (blueprint §5).
 
 SKIP
 ----
@@ -79,7 +95,7 @@ DOSE_RADIUS_0_STD = 1.5        # grams, generation 0 (standard)
 FLAG_REPEAT_THRESHOLD = 2
 
 _KNOBS = ("dial", "steep_sec", "dose")
-_SLOT_ROLES = ("exp1", "exp2", "champion")
+_SLOT_ROLES = ("exp1", "champion", "exp2")  # brew order — see module doc
 
 
 # ── persistence ──────────────────────────────────────────────────────────────
@@ -239,17 +255,18 @@ def _build_cycle(loop: dict, cycle_index: int) -> dict:
     pick1 = _pick_experiment(moves, rng, set(), set())
     if pick1 is None:  # champion boxed into a corner — degenerate, re-brew it
         pick1 = ((None, 0), _knob_recipe(champion))
-    slots.append(_new_slot("exp1", pick1[1], pick1[0], roast, brewer, temp))
-
     pick2 = _pick_experiment(
         moves, rng, {pick1[0][0]} if pick1[0][0] else set(), {pick1[0]},
     )
     if pick2 is None:
         pick2 = pick1
-    slots.append(_new_slot("exp2", pick2[1], pick2[0], roast, brewer, temp))
 
+    # Brew order [exp1, champion, exp2] — champion in the middle so BOTH
+    # experiments are cup-adjacent to it (direct exp↔champion edges, every cycle).
+    slots.append(_new_slot("exp1", pick1[1], pick1[0], roast, brewer, temp))
     slots.append(_new_slot("champion", _knob_recipe(champion), None,
                            roast, brewer, temp))
+    slots.append(_new_slot("exp2", pick2[1], pick2[0], roast, brewer, temp))
     return {"index": cycle_index, "slots": slots}
 
 
@@ -292,36 +309,31 @@ def _select_winner(exp1_vs_champ, exp2_vs_champ, exp1_vs_exp2) -> str:
 
 def _digest(loop: dict) -> dict:
     """Resolve a fully-brewed cycle: pick the winner, promote it to the next
-    cycle's champion, archive the cycle, advance the generation."""
+    cycle's champion, archive the cycle, advance the generation.
+
+    With the [exp1, champion, exp2] brew order, both experiment↔champion edges
+    are direct within the cycle — no composition needed (uniform cycle 1+).
+    """
     slots = {s["role"]: s for s in loop["cycle"]["slots"]}
-    exp1, exp2, champ = slots["exp1"], slots["exp2"], slots["champion"]
+    exp1, champ, exp2 = slots["exp1"], slots["champion"], slots["exp2"]
 
-    # exp1 vs exp2 — from exp2's feedback, compared to exp1
-    e_exp2_vs_exp1 = (
-        exp2["feedback_overall"]
-        if exp2["feedback_compared_to"] == exp1["feedback_timestamp"]
-        else None
-    )
-    # champion vs exp2 — from the champion slot's feedback, compared to exp2
-    e_champ_vs_exp2 = (
+    # cup 2: champion compared to exp1 -> champion vs exp1 (-> invert for exp1)
+    e_champ_vs_exp1 = (
         champ["feedback_overall"]
-        if champ["feedback_compared_to"] == exp2["feedback_timestamp"]
+        if champ["feedback_compared_to"] == exp1["feedback_timestamp"]
         else None
     )
-    # exp1 vs champion — DIRECT when exp1 was compared to the prior champion cup
-    e_exp1_vs_champ = (
-        exp1["feedback_overall"]
-        if exp1["feedback_compared_to"]
-        and exp1["feedback_compared_to"] == loop.get("last_champion_cup")
+    # cup 3: exp2 compared to champion -> exp2 vs champion (direct)
+    e_exp2_vs_champ = (
+        exp2["feedback_overall"]
+        if exp2["feedback_compared_to"] == champ["feedback_timestamp"]
         else None
     )
-
-    exp1_vs_exp2 = _invert(e_exp2_vs_exp1)
-    exp2_vs_champ = _invert(e_champ_vs_exp2)
-    if e_exp1_vs_champ is not None:
-        exp1_vs_champ = e_exp1_vs_champ
-    else:  # no direct edge (e.g. cycle 1) — chain exp1 -> exp2 -> champion
-        exp1_vs_champ = _compose(exp1_vs_exp2, exp2_vs_champ)
+    exp1_vs_champ = _invert(e_champ_vs_exp1)
+    exp2_vs_champ = e_exp2_vs_champ
+    # exp1↔exp2 is not within-cycle in this ordering — _select_winner falls
+    # back to "exp1 wins" deterministically when both beat the champion.
+    exp1_vs_exp2 = None
 
     winner_role = _select_winner(exp1_vs_champ, exp2_vs_champ, exp1_vs_exp2)
     winner_slot = slots[winner_role]
@@ -345,7 +357,7 @@ def _digest(loop: dict) -> dict:
         "edges": {
             "exp1_vs_champ": exp1_vs_champ,
             "exp2_vs_champ": exp2_vs_champ,
-            "exp1_vs_exp2": exp1_vs_exp2,
+            "exp1_vs_exp2": exp1_vs_exp2,   # always None in this brew order
         },
         "champion_before": champion_before,
         "champion_after": {k: new_champion[k] for k in (*_KNOBS, "recipe_id")},
@@ -354,7 +366,9 @@ def _digest(loop: dict) -> dict:
 
     loop["champion"] = new_champion
     loop["generation"] += 1
-    loop["last_champion_cup"] = champ["feedback_timestamp"]
+    # last_cup: the just-finished cycle's *final* cup, suggested as next cycle's
+    # exp1 compared_to for taste-memory continuity. In this order that is exp2.
+    loop["last_cup"] = exp2["feedback_timestamp"]
     loop["cycle"] = _build_cycle(loop, loop["cycle"]["index"] + 1)
     loop["updated_at"] = _now_iso()
     return loop
@@ -397,7 +411,7 @@ def start_loop(roast: str, brewer: str = "xl", temp: float | None = None) -> dic
         "water_ml": water_ml,
         "generation": 0,
         "champion": champion,
-        "last_champion_cup": None,
+        "last_cup": None,           # prev cycle's final cup ts (cross-cycle anchor)
         "history": [],
         "started_at": _now_iso(),
         "updated_at": _now_iso(),
@@ -431,12 +445,18 @@ def _current_slot(loop: dict) -> dict | None:
 
 def _suggested_compared_to(loop: dict, slot: dict) -> str | None:
     """Timestamp of the cup this slot should be tasted against — the previous
-    cup in brew order (blueprint §4: judge vs the previous cup)."""
+    cup in brew order (blueprint §4: judge vs the previous cup).
+
+    Brew order is [exp1, champion, exp2]: cup 2 (champion) compares to cup 1
+    (exp1), cup 3 (exp2) compares to cup 2 (champion). Cup 1 (exp1) compares
+    cross-cycle to the prior cycle's final cup (= prev exp2) — recorded as
+    bonus signal, not used in this cycle's digest.
+    """
     slots = loop["cycle"]["slots"]
     role = slot["role"]
     if role == "exp1":
-        return loop.get("last_champion_cup")  # cross-cycle: prior champion cup
-    prev = {"exp2": "exp1", "champion": "exp2"}[role]
+        return loop.get("last_cup")  # cross-cycle: prev cycle's final cup
+    prev = {"champion": "exp1", "exp2": "champion"}[role]
     prev_slot = next(s for s in slots if s["role"] == prev)
     return prev_slot["feedback_timestamp"]
 
@@ -460,7 +480,7 @@ def current_proposal(roast: str) -> dict | None:
         dial=slot["recipe"]["dial"], steep_sec=slot["recipe"]["steep_sec"],
         dose=slot["recipe"]["dose"],
     )
-    role_index = {"exp1": 1, "exp2": 2, "champion": 3}[slot["role"]]
+    role_index = {"exp1": 1, "champion": 2, "exp2": 3}[slot["role"]]
     return {
         **evaluated,
         "role": slot["role"],
