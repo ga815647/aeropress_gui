@@ -106,15 +106,18 @@ FLAG_REPEAT_THRESHOLD = 2
 LEAP_TOP_N = 30
 LEAP_KNOB_DIFF_MIN = 2
 
-# SCA Gold Cup sanity gate — don't let the surrogate's far-Top-N leap land
-# at an under-extracted / over-concentrated cup just because the model
-# *thinks* its predicted attributes look fine. The "Gold Cup" box is the
-# universally-accepted "well-brewed" region; a leap that proposes outside
-# it is asking the user to brew an obviously dud cup. Anchors slightly
-# outside (e.g. medium_light IDEAL at TDS≈1.37) are explicitly fine for
-# the *champion* to sit at — the gate only constrains the *leap proposal*.
-GOLD_CUP_TDS_RANGE = (1.15, 1.35)   # SCA Gold Cup brew strength, %
-GOLD_CUP_EY_RANGE = (18.0, 22.0)    # SCA Gold Cup extraction yield, %
+# Extended Gold Cup sanity gate — don't let the surrogate's far-Top-N leap
+# land at an under-extracted / over-concentrated cup just because the model
+# *thinks* its predicted attributes look fine. Strict SCA is TDS 1.15–1.35
+# / EY 18–22; we extend the TDS upper bound to 1.40 and the EY lower bound
+# to 17.0 so the leap can move within BOTH project anchors' known-good
+# regions (medium_light ⭐5 at TDS≈1.37 and light tim ⭐4 at EY≈17.1 each
+# sit just outside strict SCA in a different axis). Universal sanity
+# guards still hold: TDS < 1.15 (under-concentrated weak cup) / TDS > 1.40
+# (over-concentrated muddy cup) / EY < 17 (severely under-extracted sour) /
+# EY > 22 (over-extracted bitter/astringent) all still excluded.
+GOLD_CUP_TDS_RANGE = (1.15, 1.40)   # extended Gold Cup brew strength, %
+GOLD_CUP_EY_RANGE = (17.0, 22.0)    # extended Gold Cup extraction yield, %
 
 _KNOBS = ("dial", "steep_sec", "dose")
 _SLOT_ROLES = ("exp1", "champion", "exp2")  # brew order — see module doc

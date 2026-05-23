@@ -101,10 +101,11 @@ def test_exp2_is_informed_leap_when_available(lp):
 
 
 def test_leap_respects_sca_gold_cup(lp):
-    """Every leap exp2 candidate must land in the SCA Gold Cup box
-    (TDS 1.15–1.35%, EY 18–22%) — sanity filter on the surrogate's far-Top-N
-    proposals so a leap never asks the user to brew an under- or over-
-    extracted cup just because predicted attributes look model-good."""
+    """Every leap exp2 candidate must land in the extended Gold Cup box
+    (TDS 1.15–1.40%, EY 17–22% — strict SCA widened to cover both project
+    anchors). Sanity filter on the surrogate's far-Top-N proposals so a
+    leap never asks the user to brew a universally-dud cup just because
+    predicted attributes look model-good."""
     import constants
     from models.layer1 import brew as layer1_brew
     L = lp.start_loop("medium_light", brewer="xl", temp=95.0)
