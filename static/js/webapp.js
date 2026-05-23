@@ -30,6 +30,54 @@
   let loopData = null;          // last /api/loop payload
   let loopProposal = null;      // the current proposed cup (a result-shaped dict)
 
+  // Grinder switcher (display-only translation, model uses ZP6 axis natively).
+  // forte_bg => translate dial via extraction-match (Sauter mean ~D[3,2]) bridge.
+  // Doc: ARCHITECTURE.md "Grinder Dial Reference" section.
+  let currentGrinder = "zp6";
+  const FB = { MIN_UM: 230, MAX_UM: 1150, MACROS: 10, MICROS: 26, UM_STEP: 3.54 };
+  const ZP6_RANGE = { MIN_UM: 240, MAX_UM: 1050, MAX_DIAL: 9 };
+  const EXTRACTION_MATCH_RATIO = 0.9;   // Forte BG D[50] ≈ ZP6 D[50] × 0.9 to match D[3,2]
+
+  function zp6DialToUm(dial) {
+    return ZP6_RANGE.MIN_UM + (Number(dial) / ZP6_RANGE.MAX_DIAL) *
+      (ZP6_RANGE.MAX_UM - ZP6_RANGE.MIN_UM);
+  }
+  function umToFB(um) {
+    const total = FB.MACROS * FB.MICROS;
+    const idx = Math.max(0, Math.min(total - 1,
+      Math.round((um - FB.MIN_UM) / FB.UM_STEP)));
+    const macro = Math.floor(idx / FB.MICROS) + 1;
+    const letter = String.fromCharCode(65 + (idx % FB.MICROS));
+    return `${macro}${letter}`;
+  }
+  // Forward-looking dial display (proposals, champion, optimizer Top-N, saved).
+  // Historical entries (logbook) keep raw ZP6 — that's what was actually brewed.
+  function formatDial(zp6Dial) {
+    if (currentGrinder === "zp6") return String(zp6Dial);
+    const um = zp6DialToUm(zp6Dial);
+    const fb = umToFB(um * EXTRACTION_MATCH_RATIO);
+    return `${fb} <span class="dial-zp6-ref">(ZP6 ${zp6Dial})</span>`;
+  }
+
+  function switchGrinder(g) {
+    if (g !== "zp6" && g !== "forte_bg") return;
+    currentGrinder = g;
+    document.body.dataset.grinder = g;
+    document.querySelectorAll("[data-grinder-tab]").forEach((btn) => {
+      const on = btn.dataset.grinderTab === g;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    document.querySelectorAll("[data-grinder-zp6-note]").forEach((n) => { n.hidden = (g !== "zp6"); });
+    document.querySelectorAll("[data-grinder-fb-note]").forEach((n) => { n.hidden = (g !== "forte_bg"); });
+    // Re-render the visible mode with the new dial translation
+    if (document.body.dataset.mode === "loop") {
+      if (loopData) renderLoopView(loopData);
+    } else if (latestPayload && latestPayload.results) {
+      renderResultContent(latestPayload.results, latestPayload.meta);
+    }
+  }
+
   // ── attribute / group display labels ────────────────────────────────
   const ATTR_ZH = {
     "Sour": "酸", "Citrus": "柑橘", "Tea.floral": "花茶香", "Sweet": "甜",
@@ -592,7 +640,7 @@
           <div class="master-card-rank">Rank ${i + 1}${tag}</div>
           <div class="master-card-score">${r.distance.toFixed(4)}</div>
           <div class="master-card-scorelabel">距 IDEAL</div>
-          <div class="master-card-meta">${r.temp}°C · dial ${r.dial} · ${r.dose}g<br>steep ${formatTime(r.steep_sec)}</div>
+          <div class="master-card-meta">${r.temp}°C · dial ${formatDial(r.dial)} · ${r.dose}g<br>steep ${formatTime(r.steep_sec)}</div>
         </div>`;
     }).join("");
     return `<div class="master-strip">${cards}</div>`;
@@ -643,7 +691,7 @@
 
         <div class="vector-grid">
           <div class="vector-cell"><span class="vector-label">TEMP · 水溫</span><span class="vector-value">${result.temp}<span class="vector-unit">°C</span></span></div>
-          <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${result.dial}</span></div>
+          <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${formatDial(result.dial)}</span></div>
           <div class="vector-cell"><span class="vector-label">DOSE · 粉量</span><span class="vector-value">${result.dose}<span class="vector-unit">g</span></span></div>
           <div class="vector-cell"><span class="vector-label">STEEP · 浸泡</span><span class="vector-value">${formatTime(result.steep_sec)}</span></div>
         </div>
@@ -1007,6 +1055,25 @@
       return;
     }
     const loop = data.loop;
+
+    // Forte BG mode — loop is "champion-only": no experiments / skip /
+    // questionnaire / reset (don't risk feeding grinder bias into the loop's
+    // search; see ARCHITECTURE.md "Grinder Dial Reference").
+    if (currentGrinder === "forte_bg") {
+      loopViewNode.innerHTML = `
+        ${flags}
+        <div class="loop-panel">
+          ${renderLoopHeader(loop)}
+          <div class="loop-fortebg-note">📍 <strong>Forte BG 模式 · 只看冠軍</strong> ——
+            迴圈本身仍在 ZP6 上跑，這裡只顯示當前冠軍的 Forte BG dial
+            （extraction-match 估算）。要繼續迴圈精修（實驗 / 問卷 / 跳過）請切回 ZP6。</div>
+          ${renderLoopChampion(loop)}
+          ${renderLoopHistory(loop)}
+        </div>
+        <div id="saved-panel"></div>`;
+      return;
+    }
+
     const proposal = data.proposal;
     loopViewNode.innerHTML = `
       ${flags}
@@ -1053,7 +1120,7 @@
           <span class="loop-champion-tag">CHAMPION · 當前冠軍</span>
           <span class="loop-champion-src">${escapeHtml(src)}</span>
         </div>
-        <div class="loop-champion-recipe">${loop.temp}°C · dial ${c.dial} ·
+        <div class="loop-champion-recipe">${loop.temp}°C · dial ${formatDial(c.dial)} ·
           ${c.dose}g · steep ${formatTime(c.steep_sec)}</div>
         ${saveControlHtml({
           roast: loop.roast, brewer: loop.brewer, temp: loop.temp,
@@ -1111,7 +1178,7 @@
         </div>
         <div class="vector-grid">
           <div class="vector-cell"><span class="vector-label">TEMP · 水溫</span><span class="vector-value">${p.temp}<span class="vector-unit">°C</span></span></div>
-          <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${p.dial}</span></div>
+          <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${formatDial(p.dial)}</span></div>
           <div class="vector-cell"><span class="vector-label">DOSE · 粉量</span><span class="vector-value">${p.dose}<span class="vector-unit">g</span></span></div>
           <div class="vector-cell"><span class="vector-label">STEEP · 浸泡</span><span class="vector-value">${formatTime(p.steep_sec)}</span></div>
         </div>
@@ -1143,7 +1210,7 @@
       return `<div class="loop-history-row">
         <span class="loop-history-gen">gen ${h.generation} · #${h.cycle_index}</span>
         <span class="loop-history-win loop-history-win-${kind}">${win}</span>
-        <span class="loop-history-recipe">dial ${a.dial} · ${a.dose}g · ${formatTime(a.steep_sec)}</span>
+        <span class="loop-history-recipe">dial ${formatDial(a.dial)} · ${a.dose}g · ${formatTime(a.steep_sec)}</span>
       </div>`;
     }).join("");
     return `<details class="loop-history"><summary>冠軍演進 · ${loop.history.length} 次結算</summary>${rows}</details>`;
@@ -1354,7 +1421,7 @@
         <div class="saved-item-main">
           <div class="saved-item-name">${escapeHtml(r.name)}</div>
           <div class="saved-item-recipe">${escapeHtml(roastName)} · ${escapeHtml(r.brewer)} ·
-            ${r.temp}°C · dial ${r.dial} · ${r.dose}g · ${formatTime(r.steep_sec)}</div>
+            ${r.temp}°C · dial ${formatDial(r.dial)} · ${r.dose}g · ${formatTime(r.steep_sec)}</div>
           ${r.note ? `<div class="saved-item-note">${escapeHtml(r.note)}</div>` : ""}
         </div>
         <div class="saved-item-actions">
@@ -1413,6 +1480,11 @@
   // mode tabs — optimizer (Top-N menu) vs loop (single-cup refinement)
   document.querySelectorAll("[data-mode-tab]").forEach((tab) => {
     tab.addEventListener("click", () => switchMode(tab.dataset.modeTab));
+  });
+
+  // grinder tabs — ZP6 native vs Baratza Forte BG (display-only translation)
+  document.querySelectorAll("[data-grinder-tab]").forEach((tab) => {
+    tab.addEventListener("click", () => switchGrinder(tab.dataset.grinderTab));
   });
 
   // loop-view delegated clicks — start / reset / skip / saved actions + timer

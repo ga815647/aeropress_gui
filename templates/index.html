@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/webapp.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/phase10.css') }}">
   </head>
-  <body data-mode="optimizer">
+  <body data-mode="optimizer" data-grinder="zp6">
 
     <main class="ledger">
 
@@ -136,6 +136,14 @@
         <!-- ────── SPECIMEN SHEET / right ────── -->
         <section class="specimen-sheet">
           <div class="sheet-rule sheet-rule-top" aria-hidden="true"></div>
+
+          <div class="grinder-selector" role="tablist" aria-label="磨豆機">
+            <span class="grinder-label">GRINDER · 磨豆機</span>
+            <button type="button" class="grinder-tab is-active" data-grinder-tab="zp6" role="tab" aria-selected="true">1Zpresso ZP6</button>
+            <button type="button" class="grinder-tab" data-grinder-tab="forte_bg" role="tab" aria-selected="false">Baratza Forte BG</button>
+            <span class="grinder-note" data-grinder-zp6-note>模型原生軸</span>
+            <span class="grinder-note" data-grinder-fb-note hidden>Forte BG 模式 — dial 用 extraction-match 估算翻譯;迴圈只顯示冠軍杯</span>
+          </div>
 
           <div class="mode-tabs" role="tablist" aria-label="模式">
             <button type="button" class="mode-tab is-active" data-mode-tab="optimizer" role="tab" aria-selected="true">

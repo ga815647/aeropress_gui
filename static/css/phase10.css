@@ -292,6 +292,70 @@
 /* in loop mode the optimizer RUN button is irrelevant — hide it */
 body[data-mode="loop"] #submit-button { display: none; }
 
+/* ── grinder selector (display-only dial translation) ─────────── */
+.grinder-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  margin-bottom: var(--s-3);
+}
+.grinder-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  color: var(--ink-mute);
+  text-transform: uppercase;
+}
+.grinder-tab {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  padding: 2px var(--s-3);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.grinder-tab:hover { background: var(--paper-shade); }
+.grinder-tab.is-active {
+  background: var(--cobalt);
+  border-color: var(--cobalt);
+  color: var(--paper);
+}
+.grinder-note {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--ink-mute);
+  margin-left: auto;
+}
+.grinder-note[hidden] { display: none; }
+
+/* small ZP6 reference next to a translated Forte BG dial value */
+.dial-zp6-ref {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  font-weight: 400;
+  color: var(--ink-faint);
+  margin-left: 4px;
+}
+
+/* Forte BG mode "champion only" notice in loop view */
+.loop-fortebg-note {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  line-height: 1.6;
+  padding: var(--s-3);
+  margin-bottom: var(--s-4);
+  background: var(--amber-soft);
+  border-left: 3px solid var(--amber);
+  color: var(--amber-deep);
+}
+
 /* ── loop banner (transient notice) ──────────────────────────── */
 .loop-banner {
   font-family: var(--font-mono);
