@@ -1,0 +1,160 @@
+{
+  "medium_light": {
+    "roast": "medium_light",
+    "brewer": "xl",
+    "temp": 95.0,
+    "water_ml": 400,
+    "generation": 0,
+    "champion": {
+      "dial": 4.5,
+      "steep_sec": 150,
+      "dose": 24.0,
+      "recipe_id": "a3f899075d3d",
+      "source": "seed"
+    },
+    "last_cup": null,
+    "history": [],
+    "stall_counter": 0,
+    "stall_rotation_idx": 0,
+    "started_at": "2026-05-25T09:11:41+08:00",
+    "updated_at": "2026-05-25T09:11:41+08:00",
+    "cycle": {
+      "index": 1,
+      "slots": [
+        {
+          "role": "exp1",
+          "recipe": {
+            "dial": 6.2,
+            "steep_sec": 240,
+            "dose": 25.0
+          },
+          "recipe_id": "b1e41d30dd3f",
+          "move": null,
+          "kind": "iso",
+          "stall": false,
+          "status": "pending",
+          "skips": 0,
+          "skipped": [],
+          "feedback_timestamp": null,
+          "feedback_overall": null,
+          "feedback_compared_to": null
+        },
+        {
+          "role": "champion",
+          "recipe": {
+            "dial": 4.5,
+            "steep_sec": 150,
+            "dose": 24.0
+          },
+          "recipe_id": "a3f899075d3d",
+          "move": null,
+          "kind": null,
+          "stall": false,
+          "status": "pending",
+          "skips": 0,
+          "skipped": [],
+          "feedback_timestamp": null,
+          "feedback_overall": null,
+          "feedback_compared_to": null
+        },
+        {
+          "role": "exp2",
+          "recipe": {
+            "dial": 3.1,
+            "steep_sec": 90,
+            "dose": 24.0
+          },
+          "recipe_id": "354c43f08ddc",
+          "move": null,
+          "kind": "leap",
+          "stall": false,
+          "status": "pending",
+          "skips": 0,
+          "skipped": [],
+          "feedback_timestamp": null,
+          "feedback_overall": null,
+          "feedback_compared_to": null
+        }
+      ]
+    }
+  },
+  "light": {
+    "roast": "light",
+    "brewer": "xl",
+    "temp": 98.0,
+    "water_ml": 400,
+    "generation": 0,
+    "champion": {
+      "dial": 3.5,
+      "steep_sec": 60,
+      "dose": 25.0,
+      "recipe_id": "2d2c986d51e9",
+      "source": "seed"
+    },
+    "last_cup": null,
+    "history": [],
+    "stall_counter": 0,
+    "stall_rotation_idx": 0,
+    "started_at": "2026-05-25T09:38:39+08:00",
+    "updated_at": "2026-05-26T11:40:58+08:00",
+    "cycle": {
+      "index": 1,
+      "slots": [
+        {
+          "role": "exp1",
+          "recipe": {
+            "dial": 6.8,
+            "steep_sec": 180,
+            "dose": 26.0
+          },
+          "recipe_id": "3bb46b5f5fdc",
+          "move": null,
+          "kind": "iso",
+          "stall": false,
+          "status": "brewed",
+          "skips": 0,
+          "skipped": [],
+          "feedback_timestamp": "2026-05-25T15:33:46+08:00",
+          "feedback_overall": null,
+          "feedback_compared_to": null
+        },
+        {
+          "role": "champion",
+          "recipe": {
+            "dial": 3.5,
+            "steep_sec": 60,
+            "dose": 25.0
+          },
+          "recipe_id": "2d2c986d51e9",
+          "move": null,
+          "kind": null,
+          "stall": false,
+          "status": "brewed",
+          "skips": 0,
+          "skipped": [],
+          "feedback_timestamp": "2026-05-26T11:40:58+08:00",
+          "feedback_overall": null,
+          "feedback_compared_to": "2026-05-25T15:33:46+08:00"
+        },
+        {
+          "role": "exp2",
+          "recipe": {
+            "dial": 5.5,
+            "steep_sec": 120,
+            "dose": 25.0
+          },
+          "recipe_id": "c78343f7568c",
+          "move": null,
+          "kind": "leap",
+          "stall": false,
+          "status": "pending",
+          "skips": 0,
+          "skipped": [],
+          "feedback_timestamp": null,
+          "feedback_overall": null,
+          "feedback_compared_to": null
+        }
+      ]
+    }
+  }
+}
