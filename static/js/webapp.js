@@ -22,8 +22,6 @@
 
   let currentDetailIndex = 0;
   let latestPayload = null;
-  let steepTimer = null;        // { index, elapsedMs, running, lastTick, target }
-  let steepInterval = null;
   // fb form state, keyed by slot — prefill + comparison context
   const fbState = {};
   // Phase 11 loop mode
@@ -547,88 +545,6 @@
     if (e.key === "Escape" && document.getElementById("history-modal")) closeHistoryModal();
   });
 
-  // ════════════════ STEEP TIMER ════════════════
-  function renderSteepTimer(result, index) {
-    return `
-      <div class="specimen-section">
-        <span class="specimen-section-title">STEEP TIMER · 浸泡計時</span>
-        <span class="specimen-section-aside">目標浸泡 ${formatTime(result.steep_sec)}</span>
-      </div>
-      <div class="timer">
-        <div class="timer-display" id="timer-display-${index}">0:00</div>
-        <div class="timer-status" id="timer-status-${index}">注水 → 插活塞 1cm → 按下開始</div>
-        <div class="timer-controls">
-          <button class="timer-btn timer-btn-primary" type="button" data-timer-toggle="${index}">▶ 開始</button>
-          <button class="timer-btn" type="button" data-timer-reset="${index}">↻ 重置</button>
-        </div>
-      </div>`;
-  }
-
-  function syncSteepTimerUI() {
-    if (!steepTimer) return;
-    const { index, target } = steepTimer;
-    const display = document.getElementById(`timer-display-${index}`);
-    const status = document.getElementById(`timer-status-${index}`);
-    if (!display || !status) return;
-    const elapsedSec = steepTimer.elapsedMs / 1000;
-    display.textContent = formatTime(elapsedSec);
-    status.classList.toggle("is-running", steepTimer.running);
-    if (elapsedSec >= target) {
-      display.textContent = formatTime(target);
-      status.textContent = "浸泡完成 — 旋轉後穩定下壓";
-      status.classList.add("is-done");
-    } else {
-      status.classList.remove("is-done");
-      const left = Math.ceil(target - elapsedSec);
-      status.textContent = steepTimer.running ? `浸泡中 · 剩餘 ${left}s` : `已暫停 · 剩餘 ${left}s`;
-    }
-  }
-
-  function tickSteep() {
-    if (!steepTimer || !steepTimer.running) return;
-    const now = Date.now();
-    steepTimer.elapsedMs += now - steepTimer.lastTick;
-    steepTimer.lastTick = now;
-    if (steepTimer.elapsedMs >= steepTimer.target * 1000) {
-      steepTimer.elapsedMs = steepTimer.target * 1000;
-      steepTimer.running = false;
-      const btn = document.querySelector(`[data-timer-toggle="${steepTimer.index}"]`);
-      if (btn) btn.textContent = "↻ 重新開始";
-      clearInterval(steepInterval);
-      steepInterval = null;
-    }
-    syncSteepTimerUI();
-  }
-
-  function toggleSteepTimer(index, result) {
-    if (!steepTimer || steepTimer.index !== index) {
-      steepTimer = { index, elapsedMs: 0, running: false, lastTick: 0, target: result.steep_sec };
-    }
-    const btn = document.querySelector(`[data-timer-toggle="${index}"]`);
-    if (steepTimer.running) {
-      steepTimer.running = false;
-      if (btn) btn.textContent = "▶ 繼續";
-      clearInterval(steepInterval);
-      steepInterval = null;
-    } else {
-      if (steepTimer.elapsedMs >= steepTimer.target * 1000) steepTimer.elapsedMs = 0;
-      steepTimer.running = true;
-      steepTimer.lastTick = Date.now();
-      if (btn) btn.textContent = "‖ 暫停";
-      steepInterval = setInterval(tickSteep, 100);
-    }
-    syncSteepTimerUI();
-  }
-
-  function resetSteepTimer(index, result) {
-    clearInterval(steepInterval);
-    steepInterval = null;
-    steepTimer = { index, elapsedMs: 0, running: false, lastTick: 0, target: result.steep_sec };
-    const btn = document.querySelector(`[data-timer-toggle="${index}"]`);
-    if (btn) btn.textContent = "▶ 開始";
-    syncSteepTimerUI();
-  }
-
   // ════════════════ RESULT CARDS ════════════════
   function renderMasterCards(results) {
     if (!results || results.length <= 1) return "";
@@ -701,8 +617,6 @@
           <span class="brew-meta-latent">內部估值 TDS ${result.tds.toFixed(2)}% · EY ${result.ey.toFixed(1)}%（粗估，非評分依據）</span>
         </div>
 
-        ${renderSteepTimer(result, index)}
-
         <div class="specimen-section">
           <span class="specimen-section-title">SENSORY PROFILE · 10 感官屬性</span>
           <span class="specimen-section-aside">實線=預測 · ◆=IDEAL</span>
@@ -722,17 +636,11 @@
     resultsNode.innerHTML = `
       <div id="master-view">${renderMasterCards(results)}</div>
       <div id="detail-view">${results[currentDetailIndex] ? renderSingleDetail(results[currentDetailIndex], meta, currentDetailIndex) : ""}</div>`;
-    if (results[currentDetailIndex]) {
-      resetSteepTimer(currentDetailIndex, results[currentDetailIndex]);
-    }
     attachFeedbackHandlers();
   }
 
   function renderResults(payload) {
     latestPayload = payload;
-    clearInterval(steepInterval);
-    steepInterval = null;
-    steepTimer = null;
     const { meta, results } = payload || {};
     if (payload && payload.error) {
       resultsNode.innerHTML = `<div class="empty-state"><div class="empty-title">計算失敗</div><p class="empty-instructions">${escapeHtml(payload.error)}</p></div>`;
@@ -1023,9 +931,6 @@
     });
     resultsNode.hidden = mode !== "optimizer";
     loopViewNode.hidden = mode !== "loop";
-    clearInterval(steepInterval);
-    steepInterval = null;
-    steepTimer = null;
     if (mode === "loop") loadLoop();
   }
 
@@ -1087,7 +992,6 @@
       </div>
       <div id="saved-panel"></div>`;
     if (proposal) {
-      resetSteepTimer("loop", proposal);
       attachFeedbackHandlers();
       // preselect the loop's suggested compared-to cup, then recompute prefill
       const sel = loopViewNode.querySelector('.q-compared[data-q-slot="loop"]');
@@ -1257,7 +1161,6 @@
           注水 ${p.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(p.steep_sec)} → 旋轉 → 穩定下壓
           <span class="brew-meta-latent">內部估值 TDS ${p.tds.toFixed(2)}% · EY ${p.ey.toFixed(1)}%（粗估）</span>
         </div>
-        ${renderSteepTimer(p, "loop")}
         <div class="specimen-section">
           <span class="specimen-section-title">SENSORY PROFILE · 10 感官屬性</span>
           <span class="specimen-section-aside">實線=預測 · ◆=IDEAL</span>
@@ -1583,7 +1486,7 @@
     tab.addEventListener("click", () => switchGrinder(tab.dataset.grinderTab));
   });
 
-  // loop-view delegated clicks — start / reset / skip / saved actions + timer
+  // loop-view delegated clicks — start / reset / skip / saved actions
   loopViewNode.addEventListener("click", (event) => {
     if (event.target.closest("[data-loop-start]")) { startLoop(); return; }
     if (event.target.closest("[data-loop-reset]")) { resetLoop(); return; }
@@ -1601,13 +1504,6 @@
     if (apply) { applySaved(apply.dataset.savedApply); return; }
     const del = event.target.closest("[data-saved-del]");
     if (del) { deleteSaved(del.dataset.savedDel); return; }
-    if (event.target.closest("[data-timer-toggle]") && loopProposal) {
-      toggleSteepTimer("loop", loopProposal);
-      return;
-    }
-    if (event.target.closest("[data-timer-reset]") && loopProposal) {
-      resetSteepTimer("loop", loopProposal);
-    }
   });
 
   // named-recipe save controls appear in BOTH views — one document delegation
@@ -1643,20 +1539,6 @@
         const dv = document.getElementById("detail-view");
         if (dv) window.scrollTo({ top: dv.getBoundingClientRect().top + window.scrollY - 20, behavior: "smooth" });
       }
-      return;
-    }
-    const toggle = event.target.closest("[data-timer-toggle]");
-    if (toggle) {
-      const idx = Number(toggle.dataset.timerToggle);
-      const r = latestPayload && latestPayload.results ? latestPayload.results[idx] : null;
-      if (r) toggleSteepTimer(idx, r);
-      return;
-    }
-    const reset = event.target.closest("[data-timer-reset]");
-    if (reset) {
-      const idx = Number(reset.dataset.timerReset);
-      const r = latestPayload && latestPayload.results ? latestPayload.results[idx] : null;
-      if (r) resetSteepTimer(idx, r);
     }
   });
 
