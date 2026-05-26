@@ -808,10 +808,10 @@ a:hover { color: var(--cobalt-deep); border-bottom-color: var(--cobalt); }
   font-weight: 600;
 }
 
-/* ── Vector grid — 4 measured parameters ──────── */
+/* ── Vector grid — 5 measured parameters (TEMP / DIAL / DOSE / STEEP / TOTAL) ── */
 .vector-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   padding: var(--s-5) 0;
   border-top: 1px solid var(--rule);
@@ -852,6 +852,19 @@ a:hover { color: var(--cobalt-deep); border-bottom-color: var(--cobalt); }
   margin-left: 2px;
   font-weight: 400;
 }
+.vector-sub {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  color: var(--ink-mute);
+  margin-top: 2px;
+  font-weight: 500;
+}
+.vector-cell-total {
+  background: var(--cobalt-soft);
+}
+.vector-cell-total .vector-label,
+.vector-cell-total .vector-value { color: var(--cobalt); }
 
 /* ── Section heading — § divider ──────────────── */
 .specimen-section {
@@ -1934,9 +1947,10 @@ a:hover { color: var(--cobalt-deep); border-bottom-color: var(--cobalt); }
    ═══════════════════════════════════════════════════════════════════ */
 @media (max-width: 1240px) {
   .vector-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4) 0; }
-  .vector-cell:nth-child(2) { border-right: none; }
-  .vector-cell:nth-child(3) { padding-left: 0; border-top: 1px dashed var(--rule); padding-top: var(--s-4); }
-  .vector-cell:nth-child(4) { border-top: 1px dashed var(--rule); padding-top: var(--s-4); }
+  .vector-cell:nth-child(2n) { border-right: none; }
+  .vector-cell:nth-child(2n+1) { padding-left: 0; }
+  .vector-cell:nth-child(n+3) { border-top: 1px dashed var(--rule); padding-top: var(--s-4); }
+  .vector-cell:nth-child(5) { grid-column: 1 / -1; }
   .score-display { font-size: 5rem; }
 }
 

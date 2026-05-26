@@ -29,10 +29,14 @@ def _print_single(result: dict, index: int) -> None:
         f"第 {index} 名   距目標 {result['distance']:.4f}"
         + (f"   recipe_id={rid}" if rid else "")
     )
+    total_sec = result['steep_sec'] + 65  # 旋轉 5s + 靜置 30s + 穩定下壓 30s (固定，std/XL 相同)
     print(
         f"  {result['temp']:g}°C · 刻度 {result['dial']:.1f} · "
-        f"浸泡 {_fmt_mmss(result['steep_sec'])} · 豆量 {result['dose']:.1f}g · "
-        f"注水後插活塞 1cm → 浸泡 → 旋轉 → 下壓"
+        f"浸泡 {_fmt_mmss(result['steep_sec'])} · 總時長 {_fmt_mmss(total_sec)} · "
+        f"豆量 {result['dose']:.1f}g"
+    )
+    print(
+        f"  注水後插活塞 1cm → 浸泡 → 旋轉 5s → 靜置 30s → 穩定下壓 30s"
     )
     print(
         f"  預測 TDS {result['tds']:.3f}% · EY {result['ey']:.2f}% · "

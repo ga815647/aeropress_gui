@@ -17,6 +17,14 @@
 
 ## 1. 時間參數總表
 
+> 🔧 **Phase 11 現行操作協議（2026-05-26 統一）—— 對 standard 200ml 與 XL 400ml 完全相同：**
+> ```
+> 注水 → 插活塞 1cm → 浸泡 steep_sec → 旋轉 5s → 靜置 30s → 穩定下壓 30s
+> ```
+> - 「旋轉 + 靜置 + 下壓」固定為 **65s**（與容器無關）。
+> - **總時長（wall-clock）= `steep_sec + 65`**，由 webapp 向量列、CLI 與 loop card 同步顯示。
+> - 下表第 32 / 33 列的 `swirl_wait_sec` / `press_sec` std30/XL40 differential 是 **compound-era 歷史值**（與 `compound-model-legacy` branch 上 `calc_press_time()` 綁定）；Phase 10/11 已統一為 30/30，差值留作歷史對照。
+
 所有時間單位為秒。「起算點」欄位指的是 **wall-clock t=0 = 開始注水**。
 
 | 參數 | 來源 | 起算點 | 終點 | 用途 |
@@ -28,9 +36,9 @@
 | `drip_time` | 計算 `pour_time + seal_delay` | 開始注水 | 活塞密封 | `calc_drip_volume()` 輸入 |
 | `partial_seal_sec` | 食譜參數（April 用） | 開始注水 | 半密封結束 | 活塞先插 1cm 形成受控滲流 |
 | `pre_pour_sec` | 食譜參數（April 用） | 開始注水 | 預先注水結束 | bloom 階段時長 |
-| `swirl_time_sec` | 常數 `SWIRL_TIME_SEC=5` | swirl 啟動 | swirl 結束 | 旋轉持續時長 |
-| `swirl_wait_sec` | 常數（std 30 / XL 40） | swirl 結束 | 開始下壓 | 等粉渣沉底 |
-| `press_sec` | 常數（std 30 / XL 40，固定） | 開始下壓 | 壓到底 | 由 `calc_press_time()` 回傳 |
+| `swirl_time_sec` | 常數 `SWIRL_TIME_SEC=5` | swirl 啟動 | swirl 結束 | 旋轉持續時長（v phase11: std=XL=5）|
+| `swirl_wait_sec` | 常數 std30/XL40 (compound-era) / **v phase11 統一 30s** | swirl 結束 | 開始下壓 | 等粉渣沉底 |
+| `press_sec` | 常數 std30/XL40 (compound-era) / **v phase11 統一 30s** | 開始下壓 | 壓到底 | compound-era: `calc_press_time()`；現行操作: 固定 30s |
 | `press_equiv` | 計算 `collapsed_press × 0.15` | — | — | 下壓階段算入有效萃取時間的部分；當 press_sec ≤ 60 時 `collapsed_press = press_sec`，超過 60 觸發 channeling collapse 才會壓縮 |
 | `extra_swirl_time` | 計算 `SWIRL_TIME_SEC × max(n_swirls−1, 0)` | — | — | **只用於 compounds.py 的 `effective_steep`**；calc_ey 走另一條 swirl scaling（見下方 ⚠️）|
 | `effective_steep` | 計算（**送進 compounds.py 一階反應**）| — | — | `softplus(steep_sec − pour_offset, k=5) + press_equiv + extra_swirl_time` |

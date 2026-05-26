@@ -17,6 +17,8 @@
   const ATTRIBUTES = window.APP_ATTRIBUTES || [];
   const AXIS_VIEW = window.APP_AXIS_VIEW || {};
   const DEADBAND = window.APP_ORDINAL_DEADBAND || 0.01;
+  // Fixed post-steep wall-clock: 旋轉 5s + 靜置 30s + 穩定下壓 30s — identical for std and XL.
+  const POST_STEEP_SEC = 65;
   const mobileControlsQuery = window.matchMedia("(max-width: 640px)");
   const mobileLayoutQuery = window.matchMedia("(max-width: 880px)");
 
@@ -610,10 +612,11 @@
           <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${formatDial(result.dial)}</span></div>
           <div class="vector-cell"><span class="vector-label">DOSE · 粉量</span><span class="vector-value">${result.dose}<span class="vector-unit">g</span></span></div>
           <div class="vector-cell"><span class="vector-label">STEEP · 浸泡</span><span class="vector-value">${formatTime(result.steep_sec)}</span></div>
+          <div class="vector-cell vector-cell-total"><span class="vector-label">TOTAL · 總時長</span><span class="vector-value">${formatTime(result.steep_sec + POST_STEEP_SEC)}</span><span class="vector-sub">= STEEP + 65s</span></div>
         </div>
 
         <div class="brew-meta">
-          注水 ${result.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(result.steep_sec)} → 旋轉 → 穩定下壓
+          注水 ${result.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(result.steep_sec)} → 旋轉 5s → 靜置 30s → 穩定下壓 30s
           <span class="brew-meta-latent">內部估值 TDS ${result.tds.toFixed(2)}% · EY ${result.ey.toFixed(1)}%（粗估，非評分依據）</span>
         </div>
 
@@ -1156,9 +1159,10 @@
           <div class="vector-cell"><span class="vector-label">DIAL · 研磨</span><span class="vector-value">${formatDial(p.dial)}</span></div>
           <div class="vector-cell"><span class="vector-label">DOSE · 粉量</span><span class="vector-value">${p.dose}<span class="vector-unit">g</span></span></div>
           <div class="vector-cell"><span class="vector-label">STEEP · 浸泡</span><span class="vector-value">${formatTime(p.steep_sec)}</span></div>
+          <div class="vector-cell vector-cell-total"><span class="vector-label">TOTAL · 總時長</span><span class="vector-value">${formatTime(p.steep_sec + POST_STEEP_SEC)}</span><span class="vector-sub">= STEEP + 65s</span></div>
         </div>
         <div class="brew-meta">
-          注水 ${p.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(p.steep_sec)} → 旋轉 → 穩定下壓
+          注水 ${p.water_ml}ml · 插活塞 1cm → 浸泡 ${formatTime(p.steep_sec)} → 旋轉 5s → 靜置 30s → 穩定下壓 30s
           <span class="brew-meta-latent">內部估值 TDS ${p.tds.toFixed(2)}% · EY ${p.ey.toFixed(1)}%（粗估）</span>
         </div>
         <div class="specimen-section">
