@@ -24,11 +24,11 @@
         {
           "role": "exp1",
           "recipe": {
-            "dial": 6.2,
-            "steep_sec": 240,
-            "dose": 25.0
+            "dial": 3.0,
+            "steep_sec": 90,
+            "dose": 24.0
           },
-          "recipe_id": "b1e41d30dd3f",
+          "recipe_id": "77be2fb2631a",
           "move": null,
           "kind": "iso",
           "stall": false,
@@ -129,11 +129,11 @@
         {
           "role": "exp1",
           "recipe": {
-            "dial": 6.7,
-            "steep_sec": 180,
+            "dial": 4.8,
+            "steep_sec": 90,
             "dose": 26.0
           },
-          "recipe_id": "0ef1252f47f3",
+          "recipe_id": "2c0710b24f8d",
           "move": null,
           "kind": "iso",
           "stall": false,
@@ -165,11 +165,11 @@
         {
           "role": "exp2",
           "recipe": {
-            "dial": 5.4,
+            "dial": 5.0,
             "steep_sec": 120,
-            "dose": 25.0
+            "dose": 24.0
           },
-          "recipe_id": "76fcd8d75521",
+          "recipe_id": "e0ae782b5862",
           "move": null,
           "kind": "leap",
           "stall": false,

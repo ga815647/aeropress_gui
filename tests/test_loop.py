@@ -159,6 +159,23 @@ def test_iso_and_leap_respect_per_roast_steep_cap(lp):
             )
 
 
+def test_iso_and_leap_respect_per_roast_dial_cap(lp):
+    """Coarse grind drains the AeroPress faster than the requested steep_sec
+    — actual brew time decouples from the parameter, feedback becomes
+    irreproducible. Both iso and leap candidates must respect
+    DIAL_MAX_BY_ROAST so light never proposes a coarse-grind experiment whose
+    real steep time can't be controlled. Stays parallel to the steep-cap
+    contract: optimizer Top-N tab + override + single-knob keep full grid."""
+    L = lp.start_loop("light", brewer="xl", temp=98.0)
+    cap = lp.DIAL_MAX_BY_ROAST["light"]
+    for slot in L["cycle"]["slots"]:
+        if slot["kind"] in ("iso", "leap"):
+            assert slot["recipe"]["dial"] <= cap, (
+                f"{slot['kind']} candidate dial={slot['recipe']['dial']} "
+                f"exceeds light's cap of {cap}"
+            )
+
+
 def _brew_champion_hold(lp, roast, ts_base):
     """Brew a cycle where the champion wins — overalls (=, >, <) means
     cup-2 (champion) > exp1 AND cup-3 (exp2) < champion → champion wins."""

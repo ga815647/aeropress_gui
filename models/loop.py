@@ -152,6 +152,26 @@ STEEP_MAX_BY_ROAST = {
 }
 _STEEP_MAX_FALLBACK = 300
 
+# Per-roast dial upper bound for iso + leap proposals — *controllability*
+# ceiling, not a flavour ceiling. Coarse grind on ZP6 drains the AeroPress
+# puck faster than the requested steep_sec (gravity flow overtakes immersion
+# at ~700µm ≈ ZP6 dial 5.0), so the experiment's *actual* contact time
+# decouples from the input parameter → feedback becomes irreproducible
+# noise. Even if a particular roast might in principle taste fine coarser,
+# the loop can't run a controlled experiment past the drawdown threshold,
+# so the cap applies uniformly. Whether a roast wants to sit near the cap
+# or stay fine is the per-roast IDEAL + feedback's job to decide. Same
+# filter shape as STEEP_MAX_BY_ROAST — only iso/leap candidate scans see
+# it; single-knob, override, and the optimizer's Top-N tab keep the full
+# grid (user-driven exploration outside controlled-experiment context).
+DIAL_MAX_BY_ROAST = {
+    "light":           5.0,
+    "medium_light":    5.0,
+    "medium":          5.0,
+    "moderately_dark": 5.0,
+}
+_DIAL_MAX_FALLBACK = 5.0        # immersion control fails past here on any roast
+
 # ── stall-trigger: 1-knob-off probe when iso/leap can't budge the champion ──
 # Coffee flavor is peak-based (multi-knob co-moves to climb), but there IS a
 # corner case: champion is ONE grid step away from the true peak on a single
@@ -429,6 +449,7 @@ def _informed_leap_candidate(loop: dict, exp1_recipe: dict,
         )
 
     steep_cap = STEEP_MAX_BY_ROAST.get(loop["roast"], _STEEP_MAX_FALLBACK)
+    dial_cap = DIAL_MAX_BY_ROAST.get(loop["roast"], _DIAL_MAX_FALLBACK)
     far = []
     for c in candidates:
         if c["recipe_id"] in excluded:
@@ -437,6 +458,10 @@ def _informed_leap_candidate(loop: dict, exp1_recipe: dict,
         # predicts same TDS/EY at 60 s and 420 s but the cup tastes wildly
         # different (volatile-aromatic loss, temperature decay).
         if c["steep_sec"] > steep_cap:
+            continue
+        # Per-roast dial cap — coarse grind decouples the actual brew time
+        # from `steep_sec` (AeroPress drains too fast to hold immersion).
+        if c["dial"] > dial_cap:
             continue
         # SCA Gold Cup gate: a leap that lands outside the universally-good
         # box is a dud regardless of how good the model says its attributes
@@ -502,8 +527,10 @@ def _iso_tds_ey_candidate(loop: dict, extra_excluded_ids: set = frozenset()):
         )
 
     steep_cap = STEEP_MAX_BY_ROAST.get(roast, _STEEP_MAX_FALLBACK)
+    dial_cap = DIAL_MAX_BY_ROAST.get(roast, _DIAL_MAX_FALLBACK)
+    dial_max_x10 = int(round(dial_cap * 10))
     candidates = []
-    for dial_x10 in range(30, 76):
+    for dial_x10 in range(30, min(76, dial_max_x10 + 1)):
         dial = dial_x10 / 10
         for steep in range(30, steep_cap + 1, constants.STEEP_STEP):
             for dose in doses:
