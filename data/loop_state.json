@@ -83,31 +83,57 @@
     "brewer": "xl",
     "temp": 98.0,
     "water_ml": 400,
-    "generation": 0,
+    "generation": 1,
     "champion": {
-      "dial": 3.6,
-      "steep_sec": 60,
-      "dose": 25.0,
-      "recipe_id": "c4a3abb20a44",
-      "source": "seed"
+      "dial": 4.3,
+      "steep_sec": 120,
+      "dose": 23.0,
+      "recipe_id": "d870243ccdff",
+      "source": "manual-hoffman"
     },
-    "last_cup": null,
-    "history": [],
+    "last_cup": "2026-06-01T14:44:06+08:00",
+    "history": [
+      {
+        "cycle_index": 1,
+        "generation": 0,
+        "winner_role": "champion",
+        "exp2_kind": "temp-pure",
+        "edges": {
+          "exp1_vs_champ": "<",
+          "exp2_vs_champ": "<",
+          "exp1_vs_exp2": null
+        },
+        "champion_before": {
+          "dial": 3.6,
+          "steep_sec": 60,
+          "dose": 25.0,
+          "recipe_id": "c4a3abb20a44",
+          "source": "seed"
+        },
+        "champion_after": {
+          "dial": 3.6,
+          "steep_sec": 60,
+          "dose": 25.0,
+          "recipe_id": "c4a3abb20a44"
+        },
+        "digested_at": "2026-06-01T14:44:06+08:00"
+      }
+    ],
     "stall_counter": 0,
     "stall_rotation_idx": 0,
     "started_at": "2026-05-28T15:44:32+08:00",
-    "updated_at": "2026-05-28T15:44:32+08:00",
+    "updated_at": "2026-06-01T15:05:23+08:00",
     "cycle": {
-      "index": 1,
+      "index": 2,
       "slots": [
         {
           "role": "exp1",
           "recipe": {
-            "dial": 4.9,
+            "dial": 5.0,
             "steep_sec": 120,
-            "dose": 26.0
+            "dose": 25.0
           },
-          "recipe_id": "45cc8fc37e3c",
+          "recipe_id": "402de0e4a2a3",
           "move": null,
           "kind": "iso",
           "stall": false,
@@ -121,11 +147,11 @@
         {
           "role": "champion",
           "recipe": {
-            "dial": 3.6,
-            "steep_sec": 60,
-            "dose": 25.0
+            "dial": 4.3,
+            "steep_sec": 120,
+            "dose": 23.0
           },
-          "recipe_id": "c4a3abb20a44",
+          "recipe_id": "d870243ccdff",
           "move": null,
           "kind": null,
           "stall": false,
