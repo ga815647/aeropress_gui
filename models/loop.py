@@ -921,8 +921,11 @@ def current_proposal(roast: str) -> dict | None:
     if slot is None:  # unreachable — a digest always builds a fresh cycle
         return None
 
+    # A slot may carry a per-slot `temp` override (used by manually-injected
+    # temperature probes); fall back to the loop's default temp otherwise.
+    slot_temp = slot["recipe"].get("temp", loop["temp"])
     evaluated = evaluate_recipe(
-        roast_code=loop["roast"], brewer_size=loop["brewer"], temp=loop["temp"],
+        roast_code=loop["roast"], brewer_size=loop["brewer"], temp=slot_temp,
         dial=slot["recipe"]["dial"], steep_sec=slot["recipe"]["steep_sec"],
         dose=slot["recipe"]["dose"],
     )
@@ -1032,12 +1035,17 @@ def skip_proposal(roast: str, recipe_id: str) -> dict:
     slot["skips"] += 1
 
     move, recipe = pick
+    # Preserve a per-slot temp override (manually-injected temp probe) across skip.
+    prior_temp = slot["recipe"].get("temp")
     slot["recipe"] = recipe
+    if prior_temp is not None:
+        slot["recipe"]["temp"] = prior_temp
     slot["move"] = list(move)
     slot["kind"] = "single"  # skip re-rolls via _pick_experiment (single-knob)
+    slot_temp = slot["recipe"].get("temp", loop["temp"])
     slot["recipe_id"] = compute_recipe_id(
         roast=loop["roast"], brewer=loop["brewer"], dial=recipe["dial"],
-        steep_sec=recipe["steep_sec"], temp=loop["temp"], dose=recipe["dose"],
+        steep_sec=recipe["steep_sec"], temp=slot_temp, dose=recipe["dose"],
     )
     loop["updated_at"] = _now_iso()
     state[roast] = loop
