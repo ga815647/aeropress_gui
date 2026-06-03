@@ -128,14 +128,18 @@ def check_discrimination() -> None:
         f"under {under:.4f} (TDS {ul['tds']:.2f})",
     )
 
-    # tim feedback bracket -- light roast, XL 400 ml (Step 5.5: s4 < s3 < s2)
-    t4, _ = _dist("light", 100.0, 3.7, 60.0, 25.0, 400.0)
-    t3, _ = _dist("light", 100.0, 3.7, 60.0, 24.0, 400.0)
-    t2, _ = _dist("light", 98.0, 3.9, 60.0, 28.0, 400.0)
+    # light good / over / under -- Hoffman archetype is the reference good
+    # (light IDEAL re-anchored to Hoffman 4.3/120/23g/98C on 2026-06-02; the
+    # earlier tim bracket retired because tim is no longer the light reference).
+    good_l, gl_l = _dist("light", 98.0, 4.3, 120.0, 23.0, 400.0)
+    over_l, ol_l = _dist("light", 99.0, 3.0, 360.0, 28.0, 400.0)
+    under_l, ul_l = _dist("light", 93.0, 7.0, 30.0, 16.0, 400.0)
     _check(
-        "tim bracket monotone (star4 < star3 < star2)",
-        t4 < t3 < t2,
-        f"star4 {t4:.4f} < star3 {t3:.4f} < star2 {t2:.4f}",
+        "light good << over-extract << under-extract",
+        good_l < over_l < under_l and good_l < 0.01 and under_l > 0.1,
+        f"good {good_l:.4f} (TDS {gl_l['tds']:.2f}) < "
+        f"over {over_l:.4f} (TDS {ol_l['tds']:.2f}) < "
+        f"under {under_l:.4f} (TDS {ul_l['tds']:.2f})",
     )
     print()
 

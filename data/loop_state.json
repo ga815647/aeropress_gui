@@ -83,66 +83,40 @@
     "brewer": "xl",
     "temp": 98.0,
     "water_ml": 400,
-    "generation": 1,
+    "generation": 0,
     "champion": {
       "dial": 4.3,
       "steep_sec": 120,
       "dose": 23.0,
       "recipe_id": "d870243ccdff",
-      "source": "manual-hoffman"
+      "source": "seed"
     },
-    "last_cup": "2026-06-01T14:44:06+08:00",
-    "history": [
-      {
-        "cycle_index": 1,
-        "generation": 0,
-        "winner_role": "champion",
-        "exp2_kind": "temp-pure",
-        "edges": {
-          "exp1_vs_champ": "<",
-          "exp2_vs_champ": "<",
-          "exp1_vs_exp2": null
-        },
-        "champion_before": {
-          "dial": 3.6,
-          "steep_sec": 60,
-          "dose": 25.0,
-          "recipe_id": "c4a3abb20a44",
-          "source": "seed"
-        },
-        "champion_after": {
-          "dial": 3.6,
-          "steep_sec": 60,
-          "dose": 25.0,
-          "recipe_id": "c4a3abb20a44"
-        },
-        "digested_at": "2026-06-01T14:44:06+08:00"
-      }
-    ],
+    "last_cup": null,
+    "history": [],
     "stall_counter": 0,
     "stall_rotation_idx": 0,
-    "started_at": "2026-05-28T15:44:32+08:00",
-    "updated_at": "2026-06-01T15:05:23+08:00",
+    "started_at": "2026-06-02T10:42:57+08:00",
+    "updated_at": "2026-06-02T11:58:22+08:00",
     "cycle": {
-      "index": 2,
+      "index": 1,
       "slots": [
         {
           "role": "exp1",
           "recipe": {
-            "dial": 5.0,
-            "steep_sec": 120,
-            "dose": 25.0
+            "dial": 3.0,
+            "steep_sec": 60,
+            "dose": 22.0
           },
-          "recipe_id": "402de0e4a2a3",
+          "recipe_id": "da753fd2fdc0",
           "move": null,
           "kind": "iso",
           "stall": false,
-          "status": "pending",
+          "status": "brewed",
           "skips": 0,
           "skipped": [],
-          "feedback_timestamp": null,
+          "feedback_timestamp": "2026-06-02T11:58:22+08:00",
           "feedback_overall": null,
-          "feedback_compared_to": null
+          "feedback_compared_to": "2026-06-01T14:44:06+08:00"
         },
         {
           "role": "champion",
@@ -165,11 +139,11 @@
         {
           "role": "exp2",
           "recipe": {
-            "dial": 4.9,
-            "steep_sec": 150,
-            "dose": 24.0
+            "dial": 3.0,
+            "steep_sec": 60,
+            "dose": 23.0
           },
-          "recipe_id": "62cdc2e5316c",
+          "recipe_id": "da5ed27131e4",
           "move": null,
           "kind": "leap",
           "stall": false,

@@ -63,8 +63,11 @@ def test_fixed_dose_constrains_search():
 
 def test_roast_method_emerges():
     """Not hard-coded: hitting each roast IDEAL should make light come out
-    finer + shorter than a dark roast (blueprint handoff section 8 (f))."""
+    shorter than a dark roast. (The original assertion also expected light to
+    grind finer; that held under the tim-anchored light IDEAL but no longer
+    after the 2026-06-02 re-anchor to the Hoffman archetype, which uses
+    moderate grind. Steep differentiation is the remaining roast-method signal.)
+    """
     light = optimize(roast_code="light", brewer_size="xl", top_n=1)[0]
     dark = optimize(roast_code="moderately_dark", brewer_size="xl", top_n=1)[0]
-    assert light["dial"] < dark["dial"], "light roast should grind finer"
     assert light["steep_sec"] < dark["steep_sec"], "light roast should steep shorter"
