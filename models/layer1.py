@@ -62,8 +62,8 @@ re-grounded by user cup feedback (the relative response is exactly what the
 NOTE below says feedback should fix):
 
   TAU_REF  AeroPress immersion reaches ~93% of equilibrium by 120s. (prior)
-  ALPHA    temperature -> rate, an Arrhenius linearization of Ea~30 kJ/mol
-           (diffusion-controlled extraction) around 98C -> 0.026/degC, Q10~1.3. (prior)
+  ALPHA    temperature -> rate, an Arrhenius linearization of Ea~36 kJ/mol
+           (caffeine-extraction value) around 98C -> 0.031/degC, Q10~1.4. (lit-anchored)
   GAMMA    grind -> rate (finer = faster). Feedback-calibrated 0.32->0.5 (2026-05-28).
   K_RATIO  brew-ratio capacity (a gentle dose term). (prior)
 
@@ -98,8 +98,9 @@ E_MAX_REF = 23.346     # %  — medium_light equilibrium ceiling
 # ── prior parameters (fixed by physical reasoning, not fitted) ───────────────
 TAU_REF = 50.0         # s  — rate constant at T_REF / DIAL_REF.
                        #      AeroPress immersion reaches ~93% of equilibrium by 120s.
-ALPHA = 0.026          # /degC — temperature -> rate. Arrhenius linearization of
-                       #      Ea~30 kJ/mol (diffusion-controlled extraction) at 98C.
+ALPHA = 0.031          # /degC — temperature -> rate. Arrhenius linearization of
+                       #      Ea~36 kJ/mol (caffeine-extraction value) at 98C; raised
+                       #      from 0.026 (Ea~30) 2026-06-03 per round-2 literature.
 GAMMA = 0.5            # /dial-unit — grind -> rate (finer = faster). Raised from
                        #      the 0.32 prior (2026-05-28) after user cup feedback:
                        #      the model under-rated grind, letting a long steep on a
