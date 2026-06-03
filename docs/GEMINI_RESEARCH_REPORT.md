@@ -87,3 +87,86 @@ AeroPress 的手動下壓壓力約為 0.35–1 bar，遠低於義式濃縮 (9 ba
 4. **各焙度的溫度與搜尋範疇 (optimizer.py)**
    - **建議：維持溫度作為輸入常數，不在迴圈中搜尋。**
    - **證據強度：強。** 在浸泡式萃取中，溫度與時間會互相吸收效應（都是用來改變 `tau` 以達到目標萃取率）。維持預設值按照業界慣例（淺焙高溫、深焙低溫）設定，並讓迴圈搜尋 `dial` 和 `steep` 是完全符合萃取物理動力學的最佳做法。
+
+---
+
+# Round 2 —— 量化深度版（2026-06-03）
+
+> 第一輪以「背書架構」為主、缺可校準數字。第二輪依 brief 的升級指令重跑：進原始論文挖數值、主動找反證、區分實測 vs 先驗。
+> **重建說明：** 本節由 Antigravity 研究 session 的 transcript 重建——Gemini 完成研究但 quota 用盡、未能自動覆寫本檔；數值與引用取自其 `transcript.jsonl` + `implementation_plan.md`。
+
+## 引用論文（PMCID）
+
+| PMCID | 論文 | 角色 |
+|---|---|---|
+| **PMC7994670** | Liang, Chan, Ristenpart **2021**, *An equilibrium desorption model for the strength and extraction yield of full immersion brewed coffee* (Sci Rep) | Layer 1 物理主力 |
+| **PMC9407127** | Batali et al. **2022**, *Sensory Analysis of Full Immersion Coffee: Cold Brew Is More Floral, and Less Bitter, Sour, and Rubbery Than Hot Brew* (Foods 11, 2440; doi:10.3390/foods11162440) | **新增**：浸泡式溫度感官 |
+| **PMC7536440** | Batali et al. **2020**, *Brew temperature, at fixed brew strength and extraction, has little impact on the sensory profile of drip brew coffee* (Sci Rep) | `b_temp=0` 原始依據 |
+
+## 主題 1（升級）—— 溫度的感官效應：邊界更清楚，但 `b_temp=0` 站得住
+
+對抗式查證找到了第一輪缺的**浸泡式反例**：
+
+- **Batali 2020（PMC7536440，drip，n=12，87/90/93°C，同時配平 TDS 與 PE/EY）** → 溫度無顯著獨立感官效應。
+- **Batali 2022（PMC9407127，full immersion，n=10，4/22/92°C）** → 三焙度各自煮到平衡、**稀釋到相同 2% TDS**、統一在 4°C 出杯後杯測 → 溫度**確實**顯著改變四個屬性：**floral、rubber、bitter、sour**（PCA 沿溫度分離，且隨焙度/產地不同）。
+
+**判讀（為何不推翻 `b_temp=0`）：** Batali 2022 (a) 跨 **4↔92°C 冷熱全幅**、(b) **只配平 TDS、沒配平 EY/PE**。我們的系統運作在 **85–99°C** 且 **TDS 與 EY 同為中樞潛變數**——它找到的溫度效應大半是「冷熱萃取出不同 EY/揮發物比例」，落在我們操作區外、且部分已由 EY 這條路徑承載。
+**結論：`b_temp=0` 是有效的「熱窗局部先驗」。** 證據強度：強（熱窗內）；跨冷熱有界外反例。
+
+## 主題 2（升級）—— `ALPHA` 取得物理錨點
+
+模型 `τ = TAU_REF·exp(−ALPHA·(T−T_ref))` ⇒ `d(ln τ)/dT = −ALPHA`。Arrhenius 擴散 `τ ∝ exp(Ea/RT)` ⇒ `ALPHA = Ea/(R·T²)`。在 `T_ref = 98°C (371 K)`：
+
+| Ea (kJ/mol) | 推得 ALPHA (/°C) | 來源 |
+|---|---|---|
+| 30 | **0.0262** ← 目前值 | 擴散主導下限 |
+| 36 | 0.0314 | 咖啡因萃取實測 ~36 |
+| 40 | 0.0349 | 較高 Ea 情境 |
+
+**`ALPHA=0.026` ⇔ Ea=30 kJ/mol，恰好對上、但落在文獻區間（30–40）低端。** 若採咖啡因實測 ~36，`ALPHA` 應 ~0.031（對溫度更敏感）。從「合理先驗」升級為「半實測，偏保守端」。證據強度：中–強。
+
+## 主題 4（升級）—— `GAMMA` 取得物理地板
+
+球擴散 `τ ∝ d²`；模型 1 格變細 ⇒ `τ` 比 = `exp(−GAMMA)`。Liang 2021 磨豆設定資料：**1 格變細 ≈ 直徑平方比 0.665** ⇒ 理論 `γ = −ln(0.665) ≈ 0.41`。
+
+- 目前 `GAMMA=0.5`（⇒ τ 比 0.607）**高於純物理地板 0.41 約 22%**，Gemini 歸因於 fines（細粉額外表面/侵蝕，萃取比純直徑縮放更快）。
+- **關鍵佐證：** Liang 2021 在 **579–1311µm** 巨大粒徑範圍內，平衡 TDS = **1.36±0.09%**、E = **19–23%** 幾乎不變 → **研磨只改速率、不改平衡萃取率上限**。這與我們把 GAMMA 放在 `τ`（而非 `E_MAX`）裡完全一致。
+
+證據強度：中（方向 + 地板實測；0.5 vs 0.41 的差仍偏經驗）。
+
+## 主題 5（升級）—— 各焙度溫度：業界慣例，且產率論點被部分推翻
+
+業界/SCA 建議（**非同行評審，rule of thumb**）：
+
+| 焙度 | 建議水溫 | 理由（業界） |
+|---|---|---|
+| Light | 94–96°C | 豆密、較不可溶，需高溫 |
+| Medium | 92–94°C | SCA 標準窗、較寬容 |
+| Dark | 88–92°C | 多孔、易萃，需低溫避焦苦 |
+
+**反證：** Liang 2021 發現 **平衡 TDS 幾乎與焙度無關**（light 到 extra dark 難分辨；只有 decaf 系統性偏低）。⇒「淺焙要高溫」是**速率**論點（淺焙萃得慢、用溫度補速率），**不是產率**論點。我們 `DEFAULT_TEMP["light"]=98°C` 偏業界上緣之上，但因 `b_temp=0`，這純是速率選擇、非風味選擇。`_GRIND_SLOPE` 與 per-roast `DEFAULT_TEMP` **未被同行評審錨定，維持先驗**。
+
+## 主題 6（升級）—— 可移植性
+
+- AeroPress 下壓 ~0.35–1 bar：主要克服流阻、可能帶入微粉增 body，**不主導 EY**；EY 由浸泡時間 × 溫度（經 τ）決定。
+- Batali 2020 雖 drip，但「同 TDS/EY ⇒ 同感官」是結果論，可移植浸泡；Liang 2021 直接是浸泡平衡模型，與 Layer 1 同構。**第二輪新增的 Batali 2022 直接就是浸泡式**，補上了上輪缺的 immersion 感官資料。
+
+---
+
+## 參數校準表（主產物）
+
+| 參數 | 目前值 | 文獻錨定值/範圍 | 落點 | 實測 / 先驗 | 出處 |
+|---|---|---|---|---|---|
+| `b_temp` | 0 | 熱窗 85–99°C：0；跨 4–92°C 僅配平 TDS：非 0 | 熱窗內成立 | 實測（熱窗）；界外有反例 | Batali 2020 / 2022 |
+| `ALPHA` | 0.026 /°C | 0.026–0.035（Ea 30–40 kJ/mol） | **區間低端** | 半實測（物理錨） | Arrhenius；caffeine Ea~36 |
+| `GAMMA` | 0.5 | 物理地板 ≈0.41（+fines 上修） | **略高於地板** | 半實測（地板實測） | Liang 2021 粒徑 |
+| `_GRIND_SLOPE` | TV +0.010 / Astr +0.008 | 方向確認，無斜率數字 | — | 先驗（未錨定） | 業界 PSD |
+| `DEFAULT_TEMP`/焙度 | light98/ml95/m92/md89 | light94–96 / med92–94 / dark88–92 | light 偏上緣外 | 先驗（業界慣例） | SCA + Liang |
+
+## 對模型的具體建議（Round 2）
+
+1. **`b_temp`：維持 0。** 熱窗內有實測支持；界外反例不適用本系統運作區。建議在 `models/sensory.py` 註解補一句「`b_temp=0` 為 85–99°C 熱窗局部先驗；Batali 2022 顯示跨冷熱（僅配平 TDS）時非 0」。
+2. **`ALPHA`：可考慮 0.026 → ~0.031（Ea 30→36）。** 唯一有量化依據的可調點，但幅度小、0.026 仍在區間內——**非 bug，屬可選微調**。改動會讓溫度對萃取率（經 τ）稍敏感，牽動所有焙度，須跑 `diagnose_anchor.py` + pytest 並記 `refine_changelog`。
+3. **`GAMMA`：維持 0.5。** 物理地板 0.41 已確立，0.5 的上修（fines）合理且已由使用者杯子回饋校準過（0.32→0.5），無證據要求回調。
+4. **`_GRIND_SLOPE` / per-roast `DEFAULT_TEMP`：維持先驗。** 無同行評審數據可錨定。
+5. **模型本身不在本報告動任何一行**——以上 2 為唯一候選微調，交使用者決定。
