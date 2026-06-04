@@ -128,10 +128,11 @@ def check_discrimination() -> None:
         f"under {under:.4f} (TDS {ul['tds']:.2f})",
     )
 
-    # light good / over / under -- Hoffman archetype is the reference good
-    # (light IDEAL re-anchored to Hoffman 4.3/120/23g/98C on 2026-06-02; the
-    # earlier tim bracket retired because tim is no longer the light reference).
-    good_l, gl_l = _dist("light", 98.0, 4.3, 120.0, 23.0, 400.0)
+    # light good / over / under -- the user's star-4 archetype is the reference
+    # good (light IDEAL re-anchored 2026-06-04 to the 2026-05-27 star-4 cup
+    # 98C / 4.8 / 26g / 90s, chosen after recomputing every logged cup on one
+    # model scale; the Hoffman 4.3/120/23 it replaced was a star-2 cup).
+    good_l, gl_l = _dist("light", 98.0, 4.8, 90.0, 26.0, 400.0)
     over_l, ol_l = _dist("light", 99.0, 3.0, 360.0, 28.0, 400.0)
     under_l, ul_l = _dist("light", 93.0, 7.0, 30.0, 16.0, 400.0)
     _check(

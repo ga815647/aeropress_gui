@@ -85,18 +85,18 @@
     "water_ml": 400,
     "generation": 0,
     "champion": {
-      "dial": 4.3,
-      "steep_sec": 120,
-      "dose": 23.0,
-      "recipe_id": "d870243ccdff",
+      "dial": 4.8,
+      "steep_sec": 90,
+      "dose": 26.0,
+      "recipe_id": "2c0710b24f8d",
       "source": "seed"
     },
     "last_cup": null,
     "history": [],
     "stall_counter": 0,
     "stall_rotation_idx": 0,
-    "started_at": "2026-06-02T10:42:57+08:00",
-    "updated_at": "2026-06-02T11:58:22+08:00",
+    "started_at": "2026-06-04T12:15:58+08:00",
+    "updated_at": "2026-06-04T12:15:58+08:00",
     "cycle": {
       "index": 1,
       "slots": [
@@ -104,28 +104,28 @@
           "role": "exp1",
           "recipe": {
             "dial": 3.0,
-            "steep_sec": 60,
-            "dose": 22.0
+            "steep_sec": 30,
+            "dose": 27.0
           },
-          "recipe_id": "da753fd2fdc0",
+          "recipe_id": "ded2556b9001",
           "move": null,
           "kind": "iso",
           "stall": false,
-          "status": "brewed",
+          "status": "pending",
           "skips": 0,
           "skipped": [],
-          "feedback_timestamp": "2026-06-02T11:58:22+08:00",
+          "feedback_timestamp": null,
           "feedback_overall": null,
-          "feedback_compared_to": "2026-06-01T14:44:06+08:00"
+          "feedback_compared_to": null
         },
         {
           "role": "champion",
           "recipe": {
-            "dial": 4.3,
-            "steep_sec": 120,
-            "dose": 23.0
+            "dial": 4.8,
+            "steep_sec": 90,
+            "dose": 26.0
           },
-          "recipe_id": "d870243ccdff",
+          "recipe_id": "2c0710b24f8d",
           "move": null,
           "kind": null,
           "stall": false,
@@ -139,11 +139,11 @@
         {
           "role": "exp2",
           "recipe": {
-            "dial": 3.0,
-            "steep_sec": 60,
-            "dose": 23.0
+            "dial": 4.5,
+            "steep_sec": 90,
+            "dose": 25.0
           },
-          "recipe_id": "da5ed27131e4",
+          "recipe_id": "7443599eba63",
           "move": null,
           "kind": "leap",
           "stall": false,
