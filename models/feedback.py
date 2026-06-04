@@ -32,6 +32,11 @@ ALLOWED_ABSOLUTE = {"good", "ok", "bad"}
 # Questionnaire groups: the 7 AXIS_VIEW roll-ups of the 10 model attributes.
 QUESTIONNAIRE_GROUPS = tuple(AXIS_VIEW.keys())
 
+# Group means with |delta| below this read as "?" (no signal) in the model's
+# directional comparison of two cups (questionnaire prefill / flag detection).
+# CATA-frequency units. Mirrored to the webapp client as APP_ORDINAL_DEADBAND.
+ORDINAL_DEADBAND = 0.01
+
 # Optional legacy quick-chips. Kept permissive — tags are not the loop's signal.
 ALLOWED_TAGS = {
     "acidic", "thin", "great-body", "bitter", "muted", "floral",
@@ -81,9 +86,11 @@ def _clean_stars(value) -> int | None:
 
 
 def _clean_recipe(recipe) -> dict | None:
-    """Canonicalise the brew snapshot. tds/ey/distance are optional and
-    stale-able (recompute_entry refreshes them); temp/dial/dose/steep are the
-    durable inputs."""
+    """Canonicalise the brew snapshot to the DURABLE inputs only —
+    temp/dial/dose/steep. tds/ey/distance are deliberately NOT stored: they are
+    a projection of these inputs through the current model, so storing them
+    only invites staleness. They are derived on read (recompute_entry /
+    model_directions) and therefore always reflect the live model."""
     if not recipe:
         return None
     try:
@@ -95,9 +102,6 @@ def _clean_recipe(recipe) -> dict | None:
         }
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"recipe snapshot malformed: {exc}")
-    for opt in ("tds", "ey", "distance"):
-        raw = recipe.get(opt)
-        snapshot[opt] = float(raw) if raw is not None else None
     return snapshot
 
 
@@ -123,9 +127,9 @@ def append_feedback(entry: dict) -> dict:
         raise ValueError(f"absolute must be one of {sorted(ALLOWED_ABSOLUTE)} or null")
 
     attributes_vs = _clean_ordinal_map(entry.get("attributes_vs"), "attributes_vs")
-    model_attributes_vs = _clean_ordinal_map(
-        entry.get("model_attributes_vs"), "model_attributes_vs"
-    )
+    # model_attributes_vs is NOT stored — it is the model's prediction, fully
+    # re-derivable from the recipe inputs (see model_directions). Any sent by a
+    # client is ignored here so it can never go stale on disk.
 
     stars = _clean_stars(entry.get("stars"))
 
@@ -155,7 +159,6 @@ def append_feedback(entry: dict) -> dict:
         "compared_to": compared_to,
         "overall": overall,
         "attributes_vs": attributes_vs,
-        "model_attributes_vs": model_attributes_vs,
         "absolute": absolute,
         "comment": comment,
         "stars": stars,
@@ -230,13 +233,54 @@ def recompute_entry(entry: dict) -> dict | None:
     }
 
 
+def _group_mean(attrs: dict, group: str) -> float | None:
+    """Mean of the AXIS_VIEW members of one questionnaire group."""
+    members = AXIS_VIEW.get(group, ())
+    vals = [attrs[m] for m in members if m in attrs]
+    return sum(vals) / len(vals) if vals else None
+
+
+def _ordinal_sign(delta: float) -> str:
+    """Direction of a group delta, with the dead-band: >/?/< (never '=')."""
+    if delta > ORDINAL_DEADBAND:
+        return ">"
+    if delta < -ORDINAL_DEADBAND:
+        return "<"
+    return "?"
+
+
+def model_directions(entry: dict, prev_entry: dict | None) -> dict | None:
+    """The model's per-group directional comparison of `entry` vs `prev_entry`,
+    recomputed from both cups' recipe inputs through the CURRENT model.
+
+    This is what the old stored `model_attributes_vs` was — but it is no longer
+    persisted; deriving it on demand is the whole point of storing only inputs,
+    so it always reflects the live model. Returns {group: >/?/<}, or None when
+    either cup lacks a recomputable recipe snapshot.
+    """
+    if not prev_entry:
+        return None
+    this = recompute_entry(entry)
+    prev = recompute_entry(prev_entry)
+    if this is None or prev is None:
+        return None
+    a, b = this["attributes"], prev["attributes"]
+    out: dict[str, str] = {}
+    for group in QUESTIONNAIRE_GROUPS:
+        av, bv = _group_mean(a, group), _group_mean(b, group)
+        if av is None or bv is None:
+            continue
+        out[group] = _ordinal_sign(av - bv)
+    return out or None
+
+
 def update_feedback(timestamp: str, updates: dict) -> dict:
     """In-place edit of an existing entry within EDIT_WINDOW_HOURS of creation.
 
     Editable: comment, stars, tags, absolute, overall, attributes_vs — the
     answer fields. Immutable: recipe_id, roast, brewer, recipe snapshot,
-    compared_to, model_attributes_vs — these reflect the brewing context and the
-    model's as-rendered prediction and must not drift.
+    compared_to — these are the brewing context (durable facts). The model's
+    prediction is no longer stored; it is derived on read (model_directions).
 
     Violates the append-only spirit of the JSONL log, but the short window
     confines the damage to the "misclick / UI bug" case. Beyond the window the

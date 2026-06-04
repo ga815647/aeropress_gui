@@ -1,8 +1,9 @@
 """Phase 10 Step 6 feedback log (models/feedback.py).
 
-Pairwise + ordinal schema: compared_to / overall / attributes_vs /
-model_attributes_vs / absolute. overall is >/=/< ; per-attribute is >/?/< (no
-"=" -- "?" = noticed no difference). Legacy pre-Step-6 entries still read.
+Pairwise + ordinal schema: compared_to / overall / attributes_vs / absolute.
+overall is >/=/< ; per-attribute is >/?/< (no "=" -- "?" = noticed no
+difference). Derived fields (tds/ey/distance/model_attributes_vs) are NOT stored
+-- they are recomputed on read. Legacy pre-Step-6 entries still read.
 Each test redirects the JSONL path to a tmp file so the real log is untouched.
 """
 from __future__ import annotations
@@ -34,6 +35,23 @@ def test_append_and_read_round_trip(fb):
     assert len(all_entries) == 1
     assert all_entries[0]["recipe_id"] == "abc123"
     assert all_entries[0]["comment"] == "round trip"
+
+
+def test_append_strips_derived_fields(fb):
+    """Derived projections are never persisted -- only the durable inputs. A
+    client may send tds/ey/distance/model_attributes_vs; they are dropped."""
+    entry = fb.append_feedback({
+        "recipe_id": "abc", "roast": "medium_light", "brewer": "xl",
+        "recipe": _recipe(),  # carries tds/ey/distance
+        "model_attributes_vs": {"sweetness": ">"},
+        "comment": "c",
+    })
+    assert set(entry["recipe"]) == {"temp", "dial", "dose", "steep_sec"}
+    assert "model_attributes_vs" not in entry
+    stored = fb.read_all()[0]
+    assert "tds" not in stored["recipe"] and "ey" not in stored["recipe"]
+    assert "distance" not in stored["recipe"]
+    assert "model_attributes_vs" not in stored
 
 
 def test_required_fields_enforced(fb):
@@ -107,6 +125,26 @@ def test_recompute_entry_none_without_snapshot(fb):
     entry = fb.append_feedback({"recipe_id": "x", "roast": "light",
                                 "brewer": "xl", "comment": "no recipe"})
     assert fb.recompute_entry(entry) is None
+
+
+def test_model_directions_recomputed_from_inputs(fb):
+    """The model's per-group direction is derived from two cups' recipe inputs
+    (it is no longer stored). >/?/< only, keyed by questionnaire groups."""
+    prev = fb.append_feedback({
+        "recipe_id": "p", "roast": "medium_light", "brewer": "xl",
+        "recipe": {"temp": 95, "dial": 4.5, "dose": 24.0, "steep_sec": 150},
+        "comment": "prev",
+    })
+    cur = fb.append_feedback({
+        "recipe_id": "c", "roast": "medium_light", "brewer": "xl",
+        "recipe": {"temp": 95, "dial": 3.0, "dose": 24.0, "steep_sec": 300},
+        "compared_to": prev["timestamp"], "comment": "finer + longer",
+    })
+    directions = fb.model_directions(cur, prev)
+    assert directions is not None
+    assert set(directions).issubset(set(fb.QUESTIONNAIRE_GROUPS))
+    assert all(v in {">", "?", "<"} for v in directions.values())
+    assert fb.model_directions(cur, None) is None  # no prior cup -> no direction
 
 
 def test_update_feedback_within_window(fb):

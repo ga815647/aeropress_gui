@@ -543,39 +543,70 @@ def test_loops_are_per_roast(lp):
 
 
 # ── flag detection ───────────────────────────────────────────────────────────
+# detect_flags recomputes the model direction from recipe inputs (it is no longer
+# stored), so the flag tests log a real coarse->fine+long pair and answer
+# with/against whatever direction the *current* model predicts — no hardcoded
+# coefficients, robust to recalibration.
+def _model_dir_pair(roast: str, prev_ts: str = "2026-06-04T10:00:00+08:00"):
+    """Log a coarse+short `prev` cup; return (prev, cur_recipe, model_dirs) for a
+    fine+long `cur` the model reads as a clear multi-group extraction jump."""
+    prev = feedback.append_feedback({
+        "roast": roast, "brewer": "xl", "recipe_id": "prev", "timestamp": prev_ts,
+        "recipe": {"temp": 95.0, "dial": 6.0, "dose": 24.0, "steep_sec": 60},
+        "comment": "coarse short",
+    })
+    cur_recipe = {"temp": 95.0, "dial": 3.0, "dose": 24.0, "steep_sec": 300}
+    dirs = feedback.model_directions(
+        {"roast": roast, "brewer": "xl", "recipe": cur_recipe}, prev)
+    assert dirs and any(s in (">", "<") for s in dirs.values())
+    return prev, cur_recipe, dirs
+
+
 def test_detect_flags_needs_repeat(lp):
     """One model/user direction contradiction is noise; it must repeat to flag."""
-    base = {"roast": "medium_light", "brewer": "xl"}
-    one = {**base, "recipe_id": "r1",
-           "model_attributes_vs": {"bitterness": ">"},
-           "attributes_vs": {"bitterness": "<"}}
-    feedback.append_feedback(one)
-    assert lp.detect_flags() == []          # single contradiction -> no flag
-    feedback.append_feedback({**one, "recipe_id": "r2"})
+    prev, cur_recipe, dirs = _model_dir_pair("medium_light")
+    group, sign = next((g, s) for g, s in dirs.items() if s in (">", "<"))
+    opposite = "<" if sign == ">" else ">"
+
+    def log(rid, ts):
+        feedback.append_feedback({
+            "roast": "medium_light", "brewer": "xl", "recipe_id": rid,
+            "timestamp": ts, "recipe": cur_recipe,
+            "compared_to": prev["timestamp"], "attributes_vs": {group: opposite},
+        })
+
+    log("r1", "2026-06-04T10:01:00+08:00")
+    assert lp.detect_flags() == []           # single contradiction -> noise
+    log("r2", "2026-06-04T10:02:00+08:00")
     flags = lp.detect_flags()
     assert len(flags) == 1
-    assert flags[0]["group"] == "bitterness"
-    assert flags[0]["direction"] == "model_over"  # model said more, user said less
+    assert flags[0]["group"] == group
+    assert flags[0]["direction"] == ("model_over" if sign == ">" else "model_under")
     assert flags[0]["count"] == 2
 
 
 def test_detect_flags_skips_qmark(lp):
     """`?` on either side is an absence of signal, never a contradiction."""
-    for rid in ("a", "b", "c"):
+    prev, cur_recipe, dirs = _model_dir_pair("light")
+    group = next(g for g, s in dirs.items() if s in (">", "<"))
+    for i, rid in enumerate(("a", "b", "c")):
         feedback.append_feedback({
             "roast": "light", "brewer": "xl", "recipe_id": rid,
-            "model_attributes_vs": {"acidity": ">"},
-            "attributes_vs": {"acidity": "?"},
+            "timestamp": f"2026-06-04T10:0{i + 1}:00+08:00", "recipe": cur_recipe,
+            "compared_to": prev["timestamp"], "attributes_vs": {group: "?"},
         })
     assert lp.detect_flags() == []
 
 
 def test_detect_flags_ignores_agreement(lp):
-    for rid in ("a", "b", "c"):
+    """Model and user agreeing on a direction is never a flag."""
+    prev, cur_recipe, dirs = _model_dir_pair("light")
+    group, sign = next((g, s) for g, s in dirs.items() if s in (">", "<"))
+    for i, rid in enumerate(("a", "b", "c")):
         feedback.append_feedback({
             "roast": "light", "brewer": "xl", "recipe_id": rid,
-            "model_attributes_vs": {"sweetness": ">"},
-            "attributes_vs": {"sweetness": ">"},  # model and user agree
+            "timestamp": f"2026-06-04T10:0{i + 1}:00+08:00", "recipe": cur_recipe,
+            "compared_to": prev["timestamp"], "attributes_vs": {group: sign},
         })
     assert lp.detect_flags() == []
 

@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **管線:** `knobs → models/layer1.py:brew → {TDS, EY} → models/sensory.py:predict_attributes → 10 感官屬性 → models/distance.py:attribute_distance → 距該焙度 IDEAL 的 RMS`。沒有 0–100 評分;排序的數字就是顯示的數字。詳見 [`ARCHITECTURE.md`](ARCHITECTURE.md)。
 - **per-roast IDEAL 信心分層** —— `medium_light` = 使用者 ⭐5 杯(Tier A);`light` = Hoffman 'Brewing for Balance' archetype(2026-06-02 從 tim ⭐4 重錨,XL 縮放 4.3/120s/23g/98°C;暫定—待 ⭐4+ light 杯確認);`medium` / `moderately_dark` = 佔位,待該焙度有 feedback 才真錨定。
 - **Phase 11 迴圈引擎是主要精修機制** —— per-roast (1+λ) 演化搜尋,三杯循環 `[實驗1, 冠軍重泡, 實驗2]`(冠軍夾中間,兩個實驗都 cup-adjacent),使用者用 §4 對照問卷比較,系統往使用者偏好收斂(約 10–30 杯)。webapp 點「迴圈精修」頁籤進入。詳見 [`docs/PHASE11_LOOP_ENGINE.md`](docs/PHASE11_LOOP_ENGINE.md)。
-- **89 pytest PASS;`diagnose_anchor.py` 13/13(exit 0)。**
+- **91 pytest PASS;`diagnose_anchor.py` 13/13(exit 0)。**
 - **舊六化合物模型**(Phase 8 及之前)凍結在 git branch `compound-model-legacy`;舊架構文件凍結在 [`docs/ARCHITECTURE_legacy.md`](docs/ARCHITECTURE_legacy.md)。`main` 上**沒有** `compounds.py` / `scoring.py` / `labels.py` / `ey_model.py` / `tds_model.py` / `water_presets.py`。
 
 ## Commands
@@ -51,7 +51,7 @@ python webapp.py
 python diagnose_anchor.py    # exit 0 = 13/13 PASS
 
 # 測試
-python -m pytest tests/      # 75 PASS
+python -m pytest tests/      # 91 PASS
 ```
 
 **CLI flags:** `--roast`(必填,`light` / `medium_light` / `medium` / `moderately_dark`)、`--brewer`(`standard` / `xl`)、`--temp`(°C,省略則用 `constants.DEFAULT_TEMP[roast]`)、`--top N`、`--output`(`terminal` / `json` / `csv`)、`--radar`。
@@ -74,7 +74,7 @@ python -m pytest tests/      # 75 PASS
 
 ```bash
 python diagnose_anchor.py    # exit 0 = 13/13 PASS
-python -m pytest tests/       # 75 PASS
+python -m pytest tests/       # 91 PASS
 ```
 
 `.claude/hooks/anchor_check.py` hook 會在你 Edit/Write 這些檔案時自動跑 diagnose,exit 非 0 會 block(這修掉了舊版「diagnose 崩潰 → grep 不到 `[ FAIL ]` → 注入假 PASS」的 bug)。

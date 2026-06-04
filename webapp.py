@@ -17,8 +17,10 @@ from models.feedback import (
     ALLOWED_ABSOLUTE,
     ALLOWED_TAGS,
     EDIT_WINDOW_HOURS,
+    ORDINAL_DEADBAND,
     QUESTIONNAIRE_GROUPS,
     append_feedback,
+    model_directions,
     read_all as read_all_feedback,
     read_for_recipe,
     recompute_entry,
@@ -29,10 +31,6 @@ from models.sensory import ATTRIBUTES, AXIS_VIEW
 from optimizer import optimize
 from models import loop as loop_engine
 from models import saved as saved_recipes
-
-# Group means with |delta| below this read as "=" in the model prefill of the
-# §4 questionnaire. CATA-frequency units; tunable. Mirrored to the client.
-ORDINAL_DEADBAND = 0.01
 
 
 def _serialize_result(result: dict, feedback_index: dict[str, list[dict]] | None = None) -> dict:
@@ -128,6 +126,24 @@ def _with_current_derived(entry: dict) -> dict:
     recipe["distance"] = current["distance"]
     recipe["attributes"] = current["attributes"]
     out["recipe"] = recipe
+    return out
+
+
+def _display_entries(entries: list[dict], pool: list[dict] | None = None) -> list[dict]:
+    """Entries with every model-derived field refreshed for display under the
+    CURRENT model: recipe.tds/ey/distance/attributes (recompute_entry) and
+    model_attributes_vs (recomputed direction vs the compared-to cup). None of
+    this is stored — the JSONL holds only inputs + the user's answers. `pool` is
+    the full set used to resolve `compared_to` (defaults to `entries`)."""
+    by_ts = {e.get("timestamp"): e for e in (pool or entries) if e.get("timestamp")}
+    out: list[dict] = []
+    for entry in entries:
+        derived = _with_current_derived(entry)
+        directions = model_directions(entry, by_ts.get(entry.get("compared_to")))
+        if directions:
+            derived = dict(derived)
+            derived["model_attributes_vs"] = directions
+        out.append(derived)
     return out
 
 
@@ -350,12 +366,14 @@ def create_app() -> Flask:
 
     @app.get("/api/feedback/<recipe_id>")
     def feedback_for_recipe(recipe_id: str):
-        entries = [_with_current_derived(e) for e in read_for_recipe(recipe_id)]
+        all_entries = read_all_feedback()
+        subset = [e for e in all_entries if e.get("recipe_id") == recipe_id]
+        entries = _display_entries(subset, all_entries)
         return jsonify({"recipe_id": recipe_id, "entries": entries})
 
     @app.get("/api/feedback")
     def feedback_list():
-        entries = [_with_current_derived(e) for e in read_all_feedback()]
+        entries = _display_entries(read_all_feedback())
         return jsonify({
             "entries": entries,
             "questionnaire_groups": list(QUESTIONNAIRE_GROUPS),

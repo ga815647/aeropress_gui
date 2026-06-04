@@ -854,7 +854,6 @@
       });
       if (!Object.keys(attributesVs).length) attributesVs = null;
     }
-    const modelAttributesVs = comparedTo ? (fbState[slot] && fbState[slot].prefill) || null : null;
 
     if (!comment && !overall && !attributesVs && !absolute && !stars) {
       msg.textContent = "請至少填一項（整體 / 逐屬性 / 單獨喝 / 感想 / 星等）";
@@ -869,13 +868,13 @@
       recipe_id: recipeId,
       roast: result.roast,
       brewer: result.brewer_size,
+      // store inputs only — tds/ey/distance are derived server-side on read
       recipe: {
         temp: result.temp, dial: result.dial, dose: result.dose,
-        steep_sec: result.steep_sec, tds: result.tds, ey: result.ey,
-        distance: result.distance,
+        steep_sec: result.steep_sec,
       },
       compared_to: comparedTo,
-      overall, attributes_vs: attributesVs, model_attributes_vs: modelAttributesVs,
+      overall, attributes_vs: attributesVs,
       absolute, comment, stars,
     };
     try {

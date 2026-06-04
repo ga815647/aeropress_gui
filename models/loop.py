@@ -74,7 +74,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import constants
-from models.feedback import read_all as read_all_feedback
+from models.feedback import model_directions, read_all as read_all_feedback
 from models.ideal import recipe_id as compute_recipe_id
 from optimizer import evaluate_recipe, optimize
 
@@ -1057,18 +1057,26 @@ def skip_proposal(roast: str, recipe_id: str) -> dict:
 def detect_flags() -> list[dict]:
     """Scan feedback.jsonl for repeated model direction-errors.
 
-    A flag = a (roast, questionnaire-group) where the model's prefilled direction
-    (`model_attributes_vs`) and the user's answer (`attributes_vs`) are
-    clear-and-OPPOSITE (`>` vs `<`), and that same contradiction has happened at
-    least FLAG_REPEAT_THRESHOLD times. `?` on either side is skipped — it is an
-    absence of signal, not a contradiction (docs/FEEDBACK_FORMAT.md). The loop
-    only records flags; acting on them is a Claude conversation (§6 tier 3).
+    A flag = a (roast, questionnaire-group) where the model's direction and the
+    user's answer (`attributes_vs`) are clear-and-OPPOSITE (`>` vs `<`), and that
+    same contradiction has happened at least FLAG_REPEAT_THRESHOLD times. `?` on
+    either side is skipped — it is an absence of signal, not a contradiction
+    (docs/FEEDBACK_FORMAT.md). The loop only records flags; acting on them is a
+    Claude conversation (§6 tier 3).
+
+    The model's direction is recomputed here from the cup's (and its compared-to
+    cup's) recipe inputs through the CURRENT model — it is not read from disk, so
+    a flag always reflects today's model, not whatever was prefilled at log time.
     """
+    entries = read_all_feedback()
+    by_ts = {e.get("timestamp"): e for e in entries if e.get("timestamp")}
     buckets: dict[tuple[str, str, str], list[dict]] = {}
-    for entry in read_all_feedback():
-        model = entry.get("model_attributes_vs")
+    for entry in entries:
         user = entry.get("attributes_vs")
-        if not model or not user:
+        if not user:
+            continue
+        model = model_directions(entry, by_ts.get(entry.get("compared_to")))
+        if not model:
             continue
         roast = entry.get("roast", "?")
         for group, user_sign in user.items():

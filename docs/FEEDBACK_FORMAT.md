@@ -30,16 +30,12 @@ One JSON object per line. UTF-8. Newline-terminated.
   "recipe_id": "abc123def456",
   "roast": "medium_light",
   "brewer": "xl",
-  "recipe": {"temp": 95, "dial": 4.4, "dose": 24.0, "steep_sec": 150,
-             "tds": 1.366, "ey": 20.11, "distance": 0.012},
+  "recipe": {"temp": 95, "dial": 4.4, "dose": 24.0, "steep_sec": 150},
   "compared_to": "2026-05-20T14:00:00+08:00",
   "overall": ">",
   "attributes_vs": {"acidity": "?", "sweetness": ">", "body": ">",
                     "bitterness": "<", "astringency": "?", "roast": "?",
                     "character": ">"},
-  "model_attributes_vs": {"acidity": "?", "sweetness": ">", "body": "?",
-                          "bitterness": "?", "astringency": "?", "roast": "?",
-                          "character": "?"},
   "absolute": "good",
   "comment": "比上一杯 body 更扎實，苦味收斂",
   "stars": 5,
@@ -54,11 +50,11 @@ One JSON object per line. UTF-8. Newline-terminated.
 | `recipe_id` | 12-char sha1 hex | yes | from `models.ideal.recipe_id()` — deterministic for `(roast, brewer, dial, steep, temp, dose)` |
 | `roast` | string | yes | a key in `constants.ROAST_TABLE` |
 | `brewer` | string | yes | `standard` / `xl` |
-| `recipe` | object or `null` | optional | brew snapshot `{temp, dial, dose, steep_sec, tds?, ey?, distance?}`. `temp/dial/dose/steep_sec` are durable inputs; `tds/ey/distance` are a model projection — **stale-able**, recompute with the current model on read (see *Recompute* below). |
+| `recipe` | object or `null` | optional | brew snapshot — **durable inputs only**: `{temp, dial, dose, steep_sec}`. `tds`/`ey`/`distance` are **not stored** (they are a model projection of these inputs); they are derived on read with the current model (see *Recompute* below), so they can never go stale. |
 | `compared_to` | string or `null` | optional | `timestamp` of the prior cup this one is judged against. `null` = no comparison (first cup, or skipped). |
 | `overall` | `">"` / `"="` / `"<"` / `null` | optional | this cup vs the `compared_to` cup, **overall preference**. `>` = this one is better. This is the loop's search signal. |
 | `attributes_vs` | object or `null` | optional | per-questionnaire-group `>` / `?` / `<` vs the `compared_to` cup. Keys ⊆ the 7 `AXIS_VIEW` groups (below). `>` = *more* of that attribute, `<` = *less*, **`?` = noticed no difference / unsure**. There is deliberately no `=`: fuzzy 2-cup memory cannot support a confident "exactly equal" per attribute, so the middle answer is honestly "no directional signal". A partial dict is fine — unanswered groups are simply absent. |
-| `model_attributes_vs` | object or `null` | optional | the model's **prefilled prediction** of `attributes_vs` — the `>` / `?` / `<` the Layer 1+2 model expected between the two cups (`?` = within the prefill dead-band, model expects no perceptible change). Stored verbatim so Phase 11 can flag *model direction-errors* without re-deriving a possibly-recalibrated model. |
+| `model_attributes_vs` | — | **not stored** | the model's predicted direction between the two cups (`>` / `?` / `<`). No longer persisted — derived on read from the recipe inputs via `models.feedback.model_directions()`, so it always reflects the **current** model. The logbook and the flag scan recompute it; a client may still compute it live to prefill the questionnaire, but that value is never saved. |
 | `absolute` | `"good"` / `"ok"` / `"bad"` / `null` | optional | the occasional **absolute-anchor** question — "drink it on its own, is it good" — independent of any comparison. Guards against a long chain of "slightly better than last" drifting somewhere globally bad (§4). |
 | `comment` | string | **primary free input** | free-text — the main qualitative signal; LLM-readable. |
 | `stars` | int 1-5 or `null` | optional | quick gut rating. **Not** the loop's signal (the hill-climb uses only the ordinal `overall`); kept for the logbook view + as a legacy-compatible quick check. |
@@ -88,16 +84,21 @@ The model **representation** is the 10 attributes (`models.sensory.ATTRIBUTES`);
 the **questionnaire** asks at this coarser group level — the two are decoupled
 on purpose (§4: ask only what a human can distinguish).
 
-### Model prefill (`model_attributes_vs`)
+### Model direction (`model_attributes_vs`) — derived, not stored
 
-For a cup `R` compared against prior cup `P`, the webapp runs `predict_attributes`
-for both, rolls each 10-attribute vector up to the 7 groups (group value = mean
-of its attributes), and fills each group with `>` / `?` / `<` from the sign of
-`group(R) − group(P)`, with a small dead-band (`|Δ| < ORDINAL_DEADBAND` → `?`).
-That prefill is what the user sees; they only correct the groups the model got
-wrong. Both the prefill (`model_attributes_vs`) and the corrected answer
-(`attributes_vs`) are stored — their disagreement is exactly the Phase 11
-direction-error flag (§6 tier 2).
+For a cup `R` compared against prior cup `P`, the model's predicted direction is:
+run `predict_attributes` for both, roll each 10-attribute vector up to the 7
+groups (group value = mean of its attributes), and fill each group with `>` /
+`?` / `<` from the sign of `group(R) − group(P)`, with a small dead-band
+(`|Δ| < ORDINAL_DEADBAND` → `?`). The webapp computes this live to **prefill**
+the questionnaire (the user only corrects groups the model got wrong), but the
+prefill is **not saved**. The canonical direction is `models.feedback.
+model_directions(entry, prev_entry)`, recomputed from the recipe inputs through
+the **current** model — used by both the logbook and the flag scan. Only the
+user's corrected answer (`attributes_vs`) is stored; its disagreement with the
+freshly-recomputed model direction is the Phase 11 direction-error flag (§6
+tier 2). Recomputing means a flag always reflects today's model, not whatever was
+prefilled at log time.
 
 ### `?` does not feed correction (Phase 11)
 
@@ -132,14 +133,28 @@ logbook renders them as history, and `recompute_entry()` still refreshes their
 `tds`/`ey` (now also `distance`/`attributes`) from the recipe snapshot. The new
 loop simply has no pairwise signal from them — they are gut-rating history.
 
-## Recompute (stale derived fields)
+## Recompute — store inputs, derive views
 
-`recipe.tds` / `ey` / `distance` are the model's projection *at log time*. After
-a model recalibration the snapshot drifts. `models.feedback.recompute_entry()`
-re-derives `ey` / `tds` / `distance` / `attributes` from the durable recipe
-inputs (`temp/dial/dose/steep_sec`) through the **current** model
-(`optimizer.score_logged_recipe`). The on-disk JSONL is never mutated by this —
-the history view displays the recompute, the file stays append-only.
+**The log stores only facts: the recipe inputs (`temp/dial/dose/steep_sec`), the
+user's evaluation (`stars`/`absolute`/`comment`/`tags`), and the comparison
+relationships (`compared_to`/`overall`/`attributes_vs`).** Everything a model can
+compute — `tds`, `ey`, `distance`, `attributes`, `model_attributes_vs` — is
+**never persisted**; it is derived on read through the *current* model. This is
+deliberate: a stored model output goes stale the moment a coefficient changes
+(e.g. GAMMA/ALPHA recalibration), silently poisoning any later cross-cup
+analysis. Deriving on read makes every historical cup automatically re-project
+onto today's model, on one consistent scale.
+
+- `models.feedback.recompute_entry(entry)` → `{ey, tds, distance, attributes}`
+  from the recipe inputs via `optimizer.score_logged_recipe` (the current model).
+- `models.feedback.model_directions(entry, prev_entry)` → the model's `>`/`?`/`<`
+  per group vs the compared-to cup.
+- `models.analysis` builds a recomputed table for ad-hoc "which cups scored X"
+  comparisons without hand-rolling the recompute each time.
+
+Pre-2026-06-04 entries may still carry stale `recipe.tds/ey/distance` /
+`model_attributes_vs` on disk; readers ignore those and recompute. (They were
+stripped from `data/feedback.jsonl` in the 2026-06-04 migration.)
 
 ## Read flow — Claude as the refine layer
 
