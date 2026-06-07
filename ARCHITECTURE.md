@@ -164,8 +164,16 @@ medium_light 參考點 + roast offset 推得，待該焙度有 feedback 才真�
 
 ## Grinder Dial Reference
 
-模型的 `dial` 軸校準在 **1Zpresso ZP6**（使用者主力）。其他磨豆機透過下方的 µm
-橋接，共同錨點是 **Hoffman 點**（ZP6 dial 4.3 ≈ 627µm）。
+模型的 `dial` 軸校準在 **1Zpresso ZP6**（使用者主力）。另外 6 台副磨豆機（Comandante C40、
+Mahlkönig EK43s、Baratza Forte BG、Fellow Opus、Fellow Ode SSP、Fellow Ode Gen 2）透過
+**`docs/刻度比較.xlsx` 的 7 級「泡起來味道對齊」對照表**換算 —— 不是 µm 中位數估算，而是
+同一支豆在各機上泡到口感相當的實測刻度。換算邏輯與這張表的唯一真相源是
+**[`models/grind.py`](models/grind.py)**；CLI（`--grinder`）、webapp（磨豆機頁籤 + 雙向
+換算器）共用它，輸出 **byte-identical**（同一組 half-up 取整在 Python 與 JS 上逐位元對齊）。
+
+> **舊版 µm 橋接 + `EXTRACTION_MATCH_RATIO = 0.9` 已移除。** 那是「median-match 再補
+> conical/flat 表面積差」的兩段估算；現在對照表本身就是味道對齊的（表面積差已內含在
+> 實測刻度裡），所以**不再外加任何修正係數**。
 
 ### 1Zpresso ZP6 — 模型原生軸
 
@@ -196,73 +204,51 @@ medium_light 參考點 + roast offset 推得，待該焙度有 feedback 才真�
 
 來源：[Baratza Forté BG grind settings · Honest Coffee Guide](https://honestcoffeeguide.com/baratza-forte-bg-grind-settings/)、[Baratza Forte AP/BG 原廠手冊 PDF](https://baratza.com/wp-content/uploads/2015/07/Forte-BG-AP-Manual-EN-v2.3-SmallSize.pdf)。
 
-### 對應表（µm 線性中位數估算）
+### 7 級對照表（泡起來味道對齊 · `docs/刻度比較.xlsx`）
 
-| ZP6 dial | ≈ µm | Forte BG | 用途 / 對應狀態 |
-|---|---|---|---|
-| 4.0 | 600 | **5A** | 比 Hoffman 略細 |
-| **4.3** | **627** | **5I** | **Hoffman Layer 1 錨點 · medium_light IDEAL 來源** |
-| 4.5 | 645 | 5N | 模型 `DIAL_REF` |
-| 5.0 | 690 | 6A | 略粗 |
-| 6.0 | 778 | 6Z | 粗磨象限（舊 coarse-modern 區） |
-| 6.75 | 848 | 7S | 真粗（舊 April / Champion 區） |
+每一**列**是同一支豆在各機上泡到口感相當的實測刻度（level 1 = 最細、level 7 = 最粗）。
+`models/grind.py` 在相鄰錨點之間**線性內插 level 軸**做雙向換算；落在 7 個錨點 span 之外
+則由最近段外插，標記 `in_range=False`，顯示時加 `~` 前綴（模型搜尋 ZP6 到 7.5，略過表的
+7.0 粗端錨點，就是用這個旗標）。
 
-**用法：** webapp 顯示 `dial 4.3` → Forte BG 轉到 `5I`；顯示 `dial 4.5` → `5N`；
-依此類推。表的對應 = 兩台磨豆機 µm 範圍的線性中位數估算。
+| level | ZP6 | C40 | EK43s | Forte BG | Fellow Opus | Ode SSP | Ode Gen 2 |
+|---|---|---|---|---|---|---|---|
+| 1（最細）| 1.8 | 14 | 4.4 | 3W | 2.2 | 3.0 | 1.2 |
+| 2 | 2.1 | 15 | 5.0 | 4E | 3.0 | 3.1 | 2.0 |
+| 3 | 2.8 | 17 | 6.3 | 4T | 3.2 | 3.2 | 2.2 |
+| 4 | 3.7 | 20 | 8.1 | 5R | 4.1 | 4.2 | 3.1 |
+| 5 | 4.4 | 22 | 9.3 | 6H | 5.0 | 5.1 | 4.0 |
+| 6 | 5.4 | 25 | 11.2 | 7E | 5.3 | 6.0 | 5.0 |
+| 7（最粗）| 7.0 | 30 | 14.2 | 8S | 7.1 | 7.2 | 6.1 |
 
-### 注：median 中位數 ≠ extraction-match —— 萃取對齊靠表面積
+- **Forte BG 是 mixed-radix 單一線性軸**：`<macro><micro>` 解碼成整數步 index =
+  `(macro−1)×26 + micro`（A=0…Z=25），內插完再編碼回 `<macro><micro>`。10 macro × 26
+  micro，「1 macro = 完整 A–Z micro 掃描」的加法性由原廠手冊 + Honest Coffee Guide 證實，
+  非假設。方向同 ZP6（數字越小越細）。
+- **Fellow 三台的小數其實是分段刻點**（非連續 dial）。內插可能算出落在兩刻點之間的值
+  （如 `4.7`）—— 照最近實體刻點讀即可；**錨點本身是味道對齊的，內插是盡力近似**。
+- **CLI 與 webapp 輸出 byte-identical**：兩邊用同一組 `floor(x·10^d + 0.5)` half-up
+  取整、從整數組字串（刻意不用 Python `round()` 的 banker's rounding）。跨 7×7 全配對 ×
+  細掃 level 軸驗證 0 筆不符。
 
-萃取速率其實取決於**總表面積**（Sauter mean D[3,2]），不只中位數 D[50]。同 D[50] 下：
+> 這張表取代了舊版「µm 中位數對應 + conical/flat 表面積修正（`~0.9`）」的兩段估算 ——
+> 味道對齊已把表面積差內含在實測刻度裡（見本節開頭的移除說明）。
 
-- **ZP6（conical 手磨）**：fines（< 100µm）尾巴較多 → 同 D[50] 下表面積較大 → 萃取較快。
-- **Forte BG（54mm flat）**：分布較單峰、fines 少 → 同 D[50] 下表面積較小 → 萃取較慢。
+### 副磨豆機是「換個地方泡同一個冠軍」，不參與迴圈
 
-**結果：** 用 median-match 的 dial 設 Forte BG，泡出來的杯子會**比 ZP6 上的略淡**
-（相同時間下萃出來的固形物較少）。要對「**喝起來像 ZP6**」的話，Forte BG 該比表上對應
-**再細**一點補表面積。
+**迴圈在 ZP6 上跑**（那是模型校準的軸）。任何**非 ZP6** 磨豆機都**不另外跑迴圈、不餵
+feedback** —— 它們存在的理由是：使用者在副場所想喝目前冠軍時，能查表把 `dial` 翻譯成該機
+刻度，泡來喝就好。
 
-**修正幅度：** Forte BG D[50] ≈ ZP6 D[50] × **0.85–0.95**（套用 conical vs flat 的
-典型 D[3,2]/D[50] 比例 ~0.78–0.88 vs ~0.88–0.92）。中央估計 ratio ≈ 0.9 → 約 50–90µm
-細、0.5–1 macro 步。
-
-| ZP6 dial | median-match | extraction-match 範圍 | 中央估計（~0.9）|
-|---|---|---|---|
-| **4.3（Hoffman）**| **`5I`** | **`4I` – `5A`** | **~`4Q`** |
-| 4.5 | `5N` | `4M` – `5E` | ~`4V` |
-| 5.0 | `6A` | `4X` – `5Q` | ~`5G` |
-| 6.0 | `6Z` | `5S` – `6O` | ~`6D` |
-
-**沒精校** —— 沒有兩台磨豆機在你手上實測的粒徑分布、修正係數靠典型 conical vs flat
-數據估。範圍給足容錯。**因為 Forte BG 不餵迴圈、就是換場所喝，差異靠舌頭微調幾個
-micro 步即可**（每 micro 步 ≈ 3.5µm）。實務動作：**從中央估計起跑**，杯子太淡就再細
-1–2 micro 步、太濃就反向。
-
-> 簡化前提：surface-area 假設萃取由「初始 surface contact」主導，這對 AeroPress 的
-> 短浸泡（~120s）成立；長浸泡（5+ 分鐘）下分布形狀效應更複雜，本估算會略偏。
-
-### 使用情境 — Forte BG 是「換個地方泡同一個冠軍」，不參與迴圈
-
-**迴圈在 ZP6 上跑**（那是模型校準的軸）。Forte BG **不另外跑迴圈、不餵 feedback** —— 它
-存在的理由是：使用者在副場所想喝目前冠軍時，能查表把 `dial` 翻譯成 Forte BG 的
-macro/micro，泡來喝就好。
-
-- **不要為 Forte BG 上的 casual 杯送 §4 問卷的 `overall`**。送了就會把兩台磨豆機的
-  粒徑分布差異混進同一個迴圈的搜尋訊號裡（磨豆機 bias 偽裝成風味漂移、把冠軍往
-  錯誤方向推）。Casual 喝就 casual 喝。
-- 若你純粹想記錄一筆「Forte BG 上的冠軍泡」當日記，可以在 webapp 提交 `comment` +
-  `stars`，但**留空 `overall` 與 `attributes_vs`** —— 那是給味覺比較用的、Forte BG
-  vs ZP6 不該進那條訊號。
-
-### 注意事項（粒徑層面）
-
-- **線性內插忽略分布形狀差異** —— ZP6 是 conical 手磨、Forte BG 是 54mm flat。中位數
-  可能對得上，但**分布寬窄不同**（Forte BG 一般 spread 較窄、fines 較少）。同 dial
-  µm 對應下，Forte BG 上的杯子味道仍可能略不同（正常範圍）。
-- **µm 漂移源** —— 刀盤磨損、豆種、烘焙度、磨機溫度。表上對應是 ±30µm 級的估算，
-  不是精校。若你發現某焙度系統性偏掉，自己微調 1–2 個 micro 步即可（這純粹是 Forte BG
-  端的個人小校準，不動模型）。
-- **BG vs AP 刀盤** —— 本對應假設 **BG**（brewed group，較適合 filter）。若你裝的是
-  **AP**（all-purpose），分布特性略不同，但表仍可當起點。
+- **不要為非 ZP6 磨豆機上的 casual 杯送 §4 問卷的 `overall` / `attributes_vs`**。送了就會
+  把不同磨豆機的粒徑分布差異混進同一條迴圈搜尋訊號裡（磨豆機 bias 偽裝成風味漂移、把
+  冠軍往錯誤方向推）。Casual 喝就 casual 喝。
+- 若你純粹想記一筆「副機上的冠軍泡」當日記，可在 webapp 提交 `comment` + `stars`，但
+  **留空 `overall` 與 `attributes_vs`** —— 那是給味覺比較用的，跨磨豆機不該進那條訊號。
+- **換算是 display-only 近似** —— 對照表對齊「泡起來味道」，但各機刀盤型式（conical /
+  54mm flat / SSP）的分布寬窄仍有差，同一列泡出來仍可能略不同（正常範圍）。刀盤磨損、
+  豆種、焙度、磨機溫度都會讓實際 µm 漂移；發現某機系統性偏掉，自己微調 1–2 步即可
+  （純該機端的個人小校準，不動模型、不動對照表）。
 
 ## 調整方向參考
 

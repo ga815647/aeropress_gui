@@ -4,20 +4,26 @@ import csv
 import json
 
 import constants
+from models import grind
 from models.sensory import ATTRIBUTES
 
 
-def _result_payload(result: dict, rank: int) -> dict:
+def _result_payload(result: dict, rank: int, grinder: str = grind.NATIVE) -> dict:
+    recipe = {
+        "temp_c": result["temp"],
+        "dial": result["dial"],
+        "steep_sec": result["steep_sec"],
+        "dose_g": result["dose"],
+    }
+    if grinder != grind.NATIVE:
+        # additive, ZP6 stays the source of truth; converted unit alongside it.
+        recipe["grinder"] = grinder
+        recipe["dial_display"] = grind.format_dial(grinder, result["dial"])
     return {
         "rank": rank,
         "recipe_id": result.get("recipe_id"),
         "distance": round(result["distance"], 4),
-        "recipe": {
-            "temp_c": result["temp"],
-            "dial": result["dial"],
-            "steep_sec": result["steep_sec"],
-            "dose_g": result["dose"],
-        },
+        "recipe": recipe,
         "metrics": {
             "ey_pct": round(result["ey"], 3),
             "tds_pct": round(result["tds"], 4),
@@ -32,6 +38,7 @@ def export_json(
     roast_code: str,
     temp: float,
     filepath: str = "output.json",
+    grinder: str = grind.NATIVE,
 ) -> None:
     roast_name = constants.ROAST_TABLE[roast_code]["name"]
     first = results[0] if results else None
@@ -44,13 +51,18 @@ def export_json(
             "temp_c": temp,
         },
         "ranking": "distance to the roast's 6-axis sensory IDEAL (smaller = closer)",
-        "results": [_result_payload(r, i) for i, r in enumerate(results, start=1)],
+        "results": [_result_payload(r, i, grinder) for i, r in enumerate(results, start=1)],
     }
     with open(filepath, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
-def export_csv(results, roast_code: str, filepath: str = "output.csv") -> None:
+def export_csv(
+    results,
+    roast_code: str,
+    filepath: str = "output.csv",
+    grinder: str = grind.NATIVE,
+) -> None:
     rows = []
     for rank, result in enumerate(results, start=1):
         row = {
@@ -66,6 +78,9 @@ def export_csv(results, roast_code: str, filepath: str = "output.csv") -> None:
             "tds_pct": round(result["tds"], 4),
             "distance": round(result["distance"], 4),
         }
+        if grinder != grind.NATIVE:
+            row["grinder"] = grinder
+            row["dial_display"] = grind.format_dial(grinder, result["dial"])
         for attr in ATTRIBUTES:
             row[f"attr_{attr}"] = round(result["attributes"][attr], 4)
             row[f"ideal_{attr}"] = round(result["ideal"][attr], 4)

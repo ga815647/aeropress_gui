@@ -29,6 +29,7 @@ from models.feedback import (
 from models.ideal import available_roasts, roast_ideal
 from models.sensory import ATTRIBUTES, AXIS_VIEW
 from optimizer import optimize
+from models import grind
 from models import loop as loop_engine
 from models import saved as saved_recipes
 
@@ -181,6 +182,7 @@ def create_app() -> Flask:
             attributes=list(ATTRIBUTES),
             axis_view=_axis_view_payload(),
             ordinal_deadband=ORDINAL_DEADBAND,
+            grind_table=grind.table_payload(),
         )
 
     @app.get("/api/config")

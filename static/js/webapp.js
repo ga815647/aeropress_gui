@@ -31,36 +31,83 @@
   let loopProposal = null;      // the current proposed cup (a result-shaped dict)
 
   // Grinder switcher (display-only translation, model uses ZP6 axis natively).
-  // forte_bg => translate dial via extraction-match (Sauter mean ~D[3,2]) bridge.
+  // All conversion math + anchors live in models/grind.py and arrive as
+  // APP_GRIND_TABLE; the helpers below mirror that module's trivial
+  // piecewise-linear interp so the browser reads the SAME numbers — no µm
+  // bridge, no 0.9 fudge (the table is already brew-taste matched).
   // Doc: ARCHITECTURE.md "Grinder Dial Reference" section.
   let currentGrinder = "zp6";
-  const FB = { MIN_UM: 230, MAX_UM: 1150, MACROS: 10, MICROS: 26, UM_STEP: 3.54 };
-  const ZP6_RANGE = { MIN_UM: 240, MAX_UM: 1050, MAX_DIAL: 9 };
-  const EXTRACTION_MATCH_RATIO = 0.9;   // Forte BG D[50] ≈ ZP6 D[50] × 0.9 to match D[3,2]
+  const GRIND = window.APP_GRIND_TABLE || null;
+  const GRIND_LEVELS = GRIND ? GRIND.levels.map(Number) : [];
 
-  function zp6DialToUm(dial) {
-    return ZP6_RANGE.MIN_UM + (Number(dial) / ZP6_RANGE.MAX_DIAL) *
-      (ZP6_RANGE.MAX_UM - ZP6_RANGE.MIN_UM);
+  const grinderDef = (key) => (GRIND ? GRIND.grinders[key] : null);
+  const isForte = (key) => !!grinderDef(key) && grinderDef(key).kind === "forte";
+
+  // Forte BG mixed-radix codec (mirror models/grind.py forte_to_index / _from_index)
+  function forteToIndex(label) {
+    const m = String(label).trim().toUpperCase().match(/^(\d+)([A-Z])$/);
+    if (!m) return null;
+    return (parseInt(m[1], 10) - 1) * GRIND.forte_micros + (m[2].charCodeAt(0) - 65);
   }
-  function umToFB(um) {
-    const total = FB.MACROS * FB.MICROS;
-    const idx = Math.max(0, Math.min(total - 1,
-      Math.round((um - FB.MIN_UM) / FB.UM_STEP)));
-    const macro = Math.floor(idx / FB.MICROS) + 1;
-    const letter = String.fromCharCode(65 + (idx % FB.MICROS));
-    return `${macro}${letter}`;
+  function forteFromIndex(index) {
+    const maxIdx = 10 * GRIND.forte_micros - 1;
+    const idx = Math.max(0, Math.min(maxIdx, Math.floor(Number(index) + 0.5)));
+    return `${Math.floor(idx / GRIND.forte_micros) + 1}${String.fromCharCode(65 + (idx % GRIND.forte_micros))}`;
   }
+
+  function settingToValue(key, setting) {
+    return isForte(key) ? forteToIndex(setting) : Number(setting);
+  }
+  // Mirror grind.py:_fmt EXACTLY — format the displayed setting from the
+  // half-up integer m = floor(value*10**d + 0.5) (no second, rule-divergent
+  // rounding). Identical IEEE-754 ops as Python => byte-identical to the CLI.
+  function valueToSetting(key, value) {
+    if (isForte(key)) return forteFromIndex(value);
+    const d = grinderDef(key).decimals || 0;
+    const m = Math.floor(Number(value) * Math.pow(10, d) + 0.5);
+    if (d === 0) return String(m);
+    const s = String(m).padStart(d + 1, "0");
+    return `${s.slice(0, -d)}.${s.slice(-d)}`;
+  }
+
+  // piecewise-linear map x (on xs) -> y (on ys); mirrors grind.py:_interp,
+  // extrapolating the nearest end segment and flagging out-of-range.
+  function grindInterp(x, xs, ys) {
+    const n = xs.length;
+    if (x <= xs[0]) {
+      const t = (x - xs[0]) / (xs[1] - xs[0]);
+      return { y: ys[0] + t * (ys[1] - ys[0]), inRange: x >= xs[0] };
+    }
+    if (x >= xs[n - 1]) {
+      const t = (x - xs[n - 2]) / (xs[n - 1] - xs[n - 2]);
+      return { y: ys[n - 2] + t * (ys[n - 1] - ys[n - 2]), inRange: x <= xs[n - 1] };
+    }
+    for (let i = 0; i < n - 1; i++) {
+      if (xs[i] <= x && x <= xs[i + 1]) {
+        const t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+        return { y: ys[i] + t * (ys[i + 1] - ys[i]), inRange: true };
+      }
+    }
+    return { y: ys[n - 1], inRange: true };
+  }
+
+  // convert a setting on grinder `src` to grinder `dst` via the level axis.
+  function convertGrind(src, setting, dst) {
+    const a = grindInterp(settingToValue(src, setting), grinderDef(src).anchors, GRIND_LEVELS);
+    const b = grindInterp(a.y, GRIND_LEVELS, grinderDef(dst).anchors);
+    return { setting: valueToSetting(dst, b.y), inRange: a.inRange && b.inRange };
+  }
+
   // Forward-looking dial display (proposals, champion, optimizer Top-N, saved).
   // Historical entries (logbook) keep raw ZP6 — that's what was actually brewed.
   function formatDial(zp6Dial) {
-    if (currentGrinder === "zp6") return String(zp6Dial);
-    const um = zp6DialToUm(zp6Dial);
-    const fb = umToFB(um * EXTRACTION_MATCH_RATIO);
-    return `${fb} <span class="dial-zp6-ref">(ZP6 ${zp6Dial})</span>`;
+    if (currentGrinder === "zp6" || !GRIND) return String(zp6Dial);
+    const conv = convertGrind("zp6", zp6Dial, currentGrinder);
+    return `${conv.inRange ? "" : "~"}${conv.setting} <span class="dial-zp6-ref">(ZP6 ${zp6Dial})</span>`;
   }
 
   function switchGrinder(g) {
-    if (g !== "zp6" && g !== "forte_bg") return;
+    if (!grinderDef(g)) return;
     currentGrinder = g;
     document.body.dataset.grinder = g;
     document.querySelectorAll("[data-grinder-tab]").forEach((btn) => {
@@ -68,14 +115,52 @@
       btn.classList.toggle("is-active", on);
       btn.setAttribute("aria-selected", on ? "true" : "false");
     });
-    document.querySelectorAll("[data-grinder-zp6-note]").forEach((n) => { n.hidden = (g !== "zp6"); });
-    document.querySelectorAll("[data-grinder-fb-note]").forEach((n) => { n.hidden = (g !== "forte_bg"); });
+    const native = (g === GRIND.native);
+    document.querySelectorAll("[data-grinder-native-note]").forEach((n) => { n.hidden = !native; });
+    document.querySelectorAll("[data-grinder-conv-note]").forEach((n) => {
+      n.hidden = native;
+      if (!native) {
+        n.textContent = `${grinderDef(g).label} — dial 由刻度對照表換算（~ = 超出對照表外插）；`
+          + `迴圈仍只在 ZP6 上跑，非 ZP6 時只顯示冠軍`;
+      }
+    });
     // Re-render the visible mode with the new dial translation
     if (document.body.dataset.mode === "loop") {
       if (loopData) renderLoopView(loopData);
     } else if (latestPayload && latestPayload.results) {
       renderResultContent(latestPayload.results, latestPayload.meta);
     }
+  }
+
+  // Bidirectional converter widget — any grinder's setting -> all others.
+  function initGrindConverter() {
+    const fromSel = document.getElementById("conv-from");
+    const inputEl = document.getElementById("conv-input");
+    const outEl = document.getElementById("conv-output");
+    if (!fromSel || !inputEl || !outEl || !GRIND) return;
+    // native (zp6) first, then the rest — independent of JSON key ordering.
+    const keys = [GRIND.native, ...Object.keys(GRIND.grinders).filter((k) => k !== GRIND.native)];
+    fromSel.innerHTML = keys.map((k) => `<option value="${k}">${grinderDef(k).label}</option>`).join("");
+    fromSel.value = GRIND.native;
+
+    function render() {
+      const src = fromSel.value;
+      inputEl.placeholder = isForte(src) ? "例 6H" : "刻度";
+      const raw = inputEl.value.trim();
+      if (!raw) { outEl.innerHTML = ""; return; }
+      const valid = isForte(src) ? (forteToIndex(raw) !== null) : isFinite(Number(raw));
+      if (!valid) {
+        outEl.innerHTML = `<span class="conv-err">${isForte(src) ? "格式 &lt;macro&gt;&lt;micro&gt;，例 6H" : "請輸入數字"}</span>`;
+        return;
+      }
+      outEl.innerHTML = keys.filter((k) => k !== src).map((k) => {
+        const c = convertGrind(src, raw, k);
+        return `<span class="conv-chip"><span class="conv-chip-name">${grinderDef(k).label}</span> `
+          + `${c.inRange ? "" : "~"}${c.setting}</span>`;
+      }).join("");
+    }
+    fromSel.addEventListener("change", render);
+    inputEl.addEventListener("input", render);
   }
 
   // ── attribute / group display labels ────────────────────────────────
@@ -963,17 +1048,18 @@
     }
     const loop = data.loop;
 
-    // Forte BG mode — loop is "champion-only": no experiments / skip /
+    // Non-native grinder — loop is "champion-only": no experiments / skip /
     // questionnaire / reset (don't risk feeding grinder bias into the loop's
     // search; see ARCHITECTURE.md "Grinder Dial Reference").
-    if (currentGrinder === "forte_bg") {
+    if (currentGrinder !== "zp6") {
+      const gLabel = grinderDef(currentGrinder) ? grinderDef(currentGrinder).label : currentGrinder;
       loopViewNode.innerHTML = `
         ${flags}
         <div class="loop-panel">
           ${renderLoopHeader(loop)}
-          <div class="loop-fortebg-note">📍 <strong>Forte BG 模式 · 只看冠軍</strong> ——
-            迴圈本身仍在 ZP6 上跑，這裡只顯示當前冠軍的 Forte BG dial
-            （extraction-match 估算）。要繼續迴圈精修（實驗 / 問卷 / 跳過）請切回 ZP6。</div>
+          <div class="loop-fortebg-note">📍 <strong>${gLabel} 模式 · 只看冠軍</strong> ——
+            迴圈本身仍在 ZP6 上跑，這裡只顯示當前冠軍換算後的 dial。
+            要繼續迴圈精修（實驗 / 問卷 / 跳過）請切回 ZP6。</div>
           ${renderLoopChampion(loop)}
           ${renderLoopHistory(loop)}
         </div>
@@ -1484,10 +1570,11 @@
     tab.addEventListener("click", () => switchMode(tab.dataset.modeTab));
   });
 
-  // grinder tabs — ZP6 native vs Baratza Forte BG (display-only translation)
+  // grinder tabs — ZP6 native vs other grinders (display-only translation)
   document.querySelectorAll("[data-grinder-tab]").forEach((tab) => {
     tab.addEventListener("click", () => switchGrinder(tab.dataset.grinderTab));
   });
+  initGrindConverter();
 
   // loop-view delegated clicks — start / reset / skip / saved actions
   loopViewNode.addEventListener("click", (event) => {

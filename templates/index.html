@@ -38,7 +38,7 @@
                  target="_blank" rel="noopener noreferrer">
                 <span class="docs-key">架構總覽</span>
                 <span class="docs-name">ARCHITECTURE.md</span>
-                <span class="docs-desc">兩層模型、grid search、迴圈引擎、key files、調整方向、ZP6↔Forte BG dial</span>
+                <span class="docs-desc">兩層模型、grid search、迴圈引擎、key files、調整方向、ZP6↔多磨豆機刻度換算</span>
               </a>
               <a href="https://github.com/ga815647/aeropress_gui/blob/main/docs/PHASE11_LOOP_ENGINE.md"
                  target="_blank" rel="noopener noreferrer">
@@ -178,9 +178,23 @@
           <div class="grinder-selector" role="tablist" aria-label="磨豆機">
             <span class="grinder-label">GRINDER · 磨豆機</span>
             <button type="button" class="grinder-tab is-active" data-grinder-tab="zp6" role="tab" aria-selected="true">1Zpresso ZP6</button>
+            <button type="button" class="grinder-tab" data-grinder-tab="comandante_c40" role="tab" aria-selected="false">Comandante C40</button>
+            <button type="button" class="grinder-tab" data-grinder-tab="ek43s" role="tab" aria-selected="false">Mahlkönig EK43s</button>
+            <button type="button" class="grinder-tab" data-grinder-tab="fellow_opus" role="tab" aria-selected="false">Fellow Opus</button>
+            <button type="button" class="grinder-tab" data-grinder-tab="fellow_ode_ssp" role="tab" aria-selected="false">Fellow Ode (SSP)</button>
+            <button type="button" class="grinder-tab" data-grinder-tab="fellow_ode_gen2" role="tab" aria-selected="false">Fellow Ode Gen 2</button>
             <button type="button" class="grinder-tab" data-grinder-tab="forte_bg" role="tab" aria-selected="false">Baratza Forte BG</button>
-            <span class="grinder-note" data-grinder-zp6-note>模型原生軸</span>
-            <span class="grinder-note" data-grinder-fb-note hidden>Forte BG 模式 — dial 用 extraction-match 估算翻譯;迴圈只顯示冠軍杯</span>
+            <span class="grinder-note" data-grinder-native-note>模型原生軸</span>
+            <span class="grinder-note" data-grinder-conv-note hidden></span>
+          </div>
+
+          <div class="grind-converter" aria-label="刻度換算器">
+            <span class="grind-converter-label">換算 ⇄</span>
+            <select id="conv-from" class="grind-converter-from" aria-label="來源磨豆機"></select>
+            <input id="conv-input" class="grind-converter-input" type="text" inputmode="decimal"
+                   autocomplete="off" spellcheck="false" placeholder="刻度">
+            <span class="grind-converter-arrow" aria-hidden="true">→</span>
+            <span id="conv-output" class="grind-converter-output"></span>
           </div>
 
           <div class="mode-tabs" role="tablist" aria-label="模式">
@@ -225,6 +239,7 @@
       window.APP_ATTRIBUTES = {{ attributes|tojson }};
       window.APP_AXIS_VIEW = {{ axis_view|tojson }};
       window.APP_ORDINAL_DEADBAND = {{ ordinal_deadband|tojson }};
+      window.APP_GRIND_TABLE = {{ grind_table|tojson }};
       (() => {
         const stamp = document.getElementById('session-stamp');
         if (stamp) {

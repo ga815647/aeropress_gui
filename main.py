@@ -4,6 +4,7 @@ import argparse
 import sys
 
 import constants
+from models import grind
 from models.ideal import available_roasts
 from optimizer import optimize
 from output.export import export_csv, export_json
@@ -29,6 +30,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="沖煮水溫 °C。省略 → 該焙度的慣例預設（constants.DEFAULT_TEMP）。",
     )
     parser.add_argument("--top", type=int, default=3)
+    parser.add_argument(
+        "--grinder",
+        default=grind.NATIVE,
+        choices=grind.supported(),
+        help="顯示用磨豆機刻度單位。模型一律在 ZP6 軸上搜尋；非 ZP6 會換算顯示"
+        "（同時保留 ZP6 原值以利溯源）。預設 zp6。",
+    )
     parser.add_argument("--output", default="terminal", choices=["terminal", "json", "csv"])
     parser.add_argument("--radar", action="store_true")
     return parser
@@ -50,11 +58,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.output == "terminal":
-        print_terminal(results, args.roast, temp)
+        print_terminal(results, args.roast, temp, grinder=args.grinder)
     elif args.output == "json":
-        export_json(results, args.roast, temp)
+        export_json(results, args.roast, temp, grinder=args.grinder)
     elif args.output == "csv":
-        export_csv(results, args.roast)
+        export_csv(results, args.roast, grinder=args.grinder)
 
     if args.radar:
         plot_radar(results)

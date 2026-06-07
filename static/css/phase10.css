@@ -344,6 +344,68 @@ body[data-mode="loop"] #submit-button { display: none; }
   margin-left: 4px;
 }
 
+/* ── bidirectional grind converter widget ─────────────────────── */
+.grind-converter {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  padding: var(--s-2) var(--s-3);
+  margin-bottom: var(--s-3);
+  background: var(--paper);
+  border: 1px dashed var(--rule);
+}
+.grind-converter-label {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  letter-spacing: var(--track-wide);
+  color: var(--ink-mute);
+  text-transform: uppercase;
+}
+.grind-converter-from {
+  font-family: var(--font-body);
+  font-size: var(--t-xs);
+  padding: 2px var(--s-2);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+}
+.grind-converter-input {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  width: 5em;
+  padding: 2px var(--s-2);
+  background: var(--paper-soft);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+}
+.grind-converter-arrow {
+  font-family: var(--font-mono);
+  font-size: var(--t-xs);
+  color: var(--ink-faint);
+}
+.grind-converter-output {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.conv-chip {
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  padding: 1px var(--s-2);
+  background: var(--paper-shade);
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.conv-chip-name { color: var(--ink-mute); }
+.conv-err {
+  font-family: var(--font-body);
+  font-size: var(--t-2xs);
+  color: var(--amber-deep);
+}
+
 /* Forte BG mode "champion only" notice in loop view */
 .loop-fortebg-note {
   font-family: var(--font-body);
